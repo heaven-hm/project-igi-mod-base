@@ -1,11 +1,11 @@
 #include "igi_sdk/natives/native_catalogue.hpp"
 #include "igi_sdk/natives/native_runner.hpp"
-#include "igi_sdk/natives/domains/ai.hpp"
-#include "igi_sdk/natives/domains/camera.hpp"
-#include "igi_sdk/natives/domains/graphs.hpp"
-#include "igi_sdk/natives/domains/memory.hpp"
-#include "igi_sdk/natives/domains/soldiers.hpp"
-#include "igi_sdk/natives/domains/vehicles.hpp"
+#include "igi_sdk/natives/domains/ai/ai.hpp"
+#include "igi_sdk/natives/domains/camera/camera.hpp"
+#include "igi_sdk/natives/domains/graphs/graphs.hpp"
+#include "igi_sdk/natives/domains/memory/memory.hpp"
+#include "igi_sdk/natives/domains/soldiers/soldiers.hpp"
+#include "igi_sdk/natives/domains/vehicles/vehicles.hpp"
 
 #include <fstream>
 #include <iostream>

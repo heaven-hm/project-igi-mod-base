@@ -1,3 +1,4 @@
+#include "igi_sdk/config/menu_config.hpp"
 #include "igi_sdk/ui/menu_manager.hpp"
 #include "igi_sdk/runtime/scheduler.hpp"
 
@@ -13,7 +14,14 @@ void menuManagerSchedulerBoundaryTest();
 void menuManagerInputRepeatTest();
 void menuManagerShutdownTest();
 
+void menuConfigTest() {
+    assert(igi::parseDirectInputKey("F5") == 0x3F);
+    assert(igi::parseDirectInputKey("f6") == 0x40);
+    assert(igi::parseDirectInputKey("unknown", 0x3F) == 0x3F);
+}
+
 void menuManagerModelTest() {
+    menuConfigTest();
     igi::Scheduler scheduler;
     igi::MenuManager menuManager(scheduler);
     menuManager.createMenu("main", "Main");
