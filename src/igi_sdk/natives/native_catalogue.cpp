@@ -5,6 +5,18 @@
 #include <string>
 #include <unordered_set>
 
+namespace igi {
+NativeDomain nativeDomainForName(std::string_view name) noexcept {
+    if (name.starts_with("AI_") || name.starts_with("AIFunction_") || name.starts_with("AIAction_")) return NativeDomain::AI;
+    if (name.starts_with("VEHICLE_") || name.starts_with("Vehicle_") || name.starts_with("CAR_")) return NativeDomain::Vehicles;
+    if (name.starts_with("CAMERA_") || name.starts_with("Camera_") || name.starts_with("HUMAN_CAM")) return NativeDomain::Camera;
+    if (name.starts_with("GRAPH_") || name.starts_with("Graph_") || name.starts_with("QGRAPH_")) return NativeDomain::Graphs;
+    if (name.starts_with("MEMORY_") || name.starts_with("Memory_") || name.starts_with("MEM_") || name.starts_with("Mem_")) return NativeDomain::Memory;
+    if (name.starts_with("SOLDIER_") || name.starts_with("Soldier_") || name.starts_with("HUMAN_") || name.starts_with("Human") || name.starts_with("PLAYER_")) return NativeDomain::Soldiers;
+    return NativeDomain::Other;
+}
+}
+
 namespace {
 bool parseAddress(std::string_view source, std::uint32_t& address) {
     unsigned parsed = 0;
@@ -45,6 +57,14 @@ bool NativeCatalogue::load(std::istream& input) {
     }
     records_ = std::move(parsed);
     return !records_.empty();
+}
+
+std::size_t NativeCatalogue::count(NativeDomain domain) const noexcept {
+    std::size_t result = 0;
+    for (const NativeRecord& record : records_) {
+        if (nativeDomainForName(record.name) == domain) ++result;
+    }
+    return result;
 }
 
 const NativeRecord* NativeCatalogue::findByAddress(std::uint32_t address) const noexcept {

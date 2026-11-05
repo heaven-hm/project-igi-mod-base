@@ -19,7 +19,8 @@ an arbitrary memory writer, or a general-purpose process scanner.
 project-igi-natives-sdk/
 ├── include/igi_sdk/
 │   ├── logging/       public logging API
-│   ├── natives/       native address/signature catalogue API
+│   ├── natives/       catalogue, runner, and domain APIs
+│   │   └── domains/   AI, soldiers, vehicles, camera, graphs, memory
 │   ├── runtime/       scheduler, hook, target profile, DLL lifecycle
 │   └── ui/            renderer-independent MenuManager API
 ├── src/igi_sdk/       implementations with the same module layout
@@ -37,8 +38,20 @@ project-igi-natives-sdk/
 ```
 
 The `legacy/` directory is historical reference material and is not compiled
-into the active SDK. New code belongs in `include/igi_sdk/` and
-`src/igi_sdk/`; do not add new modules under `legacy/`.
+into the active SDK. Its old executor, MinHook wrappers, and game-specific
+helpers remain there only for attribution and migration review. New code
+belongs in `include/igi_sdk/` and `src/igi_sdk/`; do not add new modules under
+`legacy/`.
+
+The internal `Igi1MenuManager` model is based on the decoded retail files
+`ingamemenu.qvm` and `MAINMENU.QVM`. Their structure is represented as
+`MenuManager` → numbered `MenuScreen`/`DialogWindow` → `MenuFrame` → widgets.
+The widget API includes the retail `MenuText`, `MenuTextConditional`,
+`SlideBar`, `ListBox`, `ToggleBox`, `InputBox`, `AsciiBox`, `ScrollListBox`,
+`PictureBox`, `TextBox`, `TypeWriterBox`, and `ControlsMenu` components.
+Screen transitions preserve the retail `PushScreen`, `RequestScreen`,
+`PopScreen`, popup, and leave-menu concepts. The source evidence is retained
+outside the repository because game assets are not redistributed.
 
 The demo directory contains examples only. `internal-menumanager` is the
 in-process Windows DLL shape requested by the original specification. The
@@ -92,10 +105,16 @@ cmake --build /tmp/igi-sdk-macos-demos -j2
 ```
 
 On Windows the internal target is emitted as `IGI-MenuManager-Internal.dll`.
-It exports `IGI_MenuManager_Internal_Initialize` and
-`IGI_MenuManager_Internal_Shutdown`; use it as a small reference for a mod
-DLL's normal startup/shutdown path. The external target is emitted as
-`IGI-MenuManager-External.exe` and is a catalogue inspector, not an injector.
+It exports `IGI_MenuManager_Internal_Initialize`,
+`IGI_MenuManager_Internal_RunFrame`, and
+`IGI_MenuManager_Internal_Shutdown`; use it as a complete reference for a mod
+DLL's startup, menu registration, frame scheduling, and shutdown path. It is
+also built on macOS as `libIGI-MenuManager-Internal.dylib`; there it runs the
+menu and scheduler without installing the Windows game hook. The external
+target is emitted as `IGI-MenuManager-External.exe` on Windows or
+`IGI-MenuManager-External` on macOS. It loads every shipped record, reports
+domain counts, resolves `Game_Start` through `NativeRunner`, and runs that
+resolution callback through `Scheduler`.
 
 ## Build and test the Windows x86 DLL
 
@@ -120,6 +139,49 @@ unsigned long long WINAPI IGI_SDK_GetGameHookInvocationCount();
 Call `IGI_SDK_Initialize` after the DLL has finished loading, never from
 `DllMain`. Call `IGI_SDK_Shutdown` before unloading. The runtime validates the
 supported executable hash and `Game_RunHandler` prologue before patching.
+
+### Loading the internal demo
+
+`IGI-MenuManager-Internal.dll` is a complete in-process shared-library demo,
+not a standalone executable. An authorized mod loader must load it into the
+same 32-bit IGI process, then call the exported functions from its normal
+plugin lifecycle:
+
+```cpp
+using Initialize = bool (*)();
+using RunFrame = std::size_t (*)();
+using Shutdown = void (*)();
+
+// Resolve these from IGI-MenuManager-Internal.dll after the game is ready.
+Initialize initialize = /* loader symbol lookup */;
+RunFrame runFrame = /* loader symbol lookup */;
+Shutdown shutdown = /* loader symbol lookup */;
+
+initialize();
+// The real Windows runtime hook drains the scheduler. RunFrame is also
+// exported for a host/plugin harness and portable demo testing.
+shutdown();
+```
+
+Do not call initialization from `DllMain`. The repository does not ship a
+remote-process injector. Use the loader already authorized for the user's own
+game installation and match the game's 32-bit architecture. On macOS, build
+`libIGI-MenuManager-Internal.dylib` and load it from a same-process test host
+with `dlopen`/`dlsym`; it exercises the menu and scheduler but does not patch
+or inject into the Windows IGI executable.
+
+### Running the external example
+
+The external example is a normal process and requires no injection:
+
+```sh
+./IGI-MenuManager-External /path/to/neonix-igi-re-signatures.tsv
+```
+
+It loads all records, reports domain counts, resolves a native by name, and
+executes that metadata callback through `Scheduler`. It deliberately does not
+attach to another process or write game memory. Any future external control
+must use a separately reviewed IPC protocol shared with an in-process mod.
 
 ## Creating an IGI 1 mod
 
@@ -174,8 +236,6 @@ handler first and then drains SDK tasks on the game thread.
 reference. `Game_Update` at `0x00401050` is catalogued but is not used as the
 SDK hook because it dispatches the active task handler indirectly.
 
-The SDK never uses `Draw`, `MenuManager_Draw`, or `TextPrintDetour()` as its
-gameplay execution hook.
 
 ### macOS
 
@@ -183,16 +243,6 @@ macOS is a development/test platform for portable SDK modules. Build and run
 `igi_sdk_tests` there to validate behavior. The current IGI 1 hook uses Windows
 x86 executable patching and therefore intentionally refuses installation on
 macOS. Do not claim macOS in-process IGI injection support from this build.
-
-## Native catalogue
-
-`data/IGI1/neonix-igi-re-signatures.tsv` contains all imported IGI-RE address,
-name, source-kind, and signature records. `NativeCatalogue` treats them as
-`Catalogued`; an address is not callable merely because it appears in the
-table. A future wrapper must independently verify its function body, calling
-convention, arguments, return value, and target-build behavior.
-
-No IGI-RE implementation body is copied into the active SDK.
 
 ## Verification tools
 
@@ -206,18 +256,6 @@ cadence evidence. The second checks the supported executable hash, hook
 prologues, calling convention metadata, task-table xrefs, and `Game_Update`
 dispatch shape. The exported invocation counter can be sampled in a live game
 to measure actual cadence.
-
-## Branches and releases
-
-The repository uses three branches:
-
-- `master` — stable branch
-- `develop` — active integration branch
-- `feature` — focused feature work
-
-Build directories, binaries, and caches are not committed. Windows and macOS
-artifacts are built in temporary Release directories and published only after
-manual testing through GitHub Releases.
 
 ## License and credits
 

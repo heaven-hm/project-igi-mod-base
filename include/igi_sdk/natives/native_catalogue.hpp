@@ -7,6 +7,10 @@
 #include <vector>
 
 namespace igi {
+enum class NativeDomain { AI, Soldiers, Vehicles, Camera, Graphs, Memory, Other };
+
+NativeDomain nativeDomainForName(std::string_view name) noexcept;
+
 enum class NativeVerification { Catalogued, Verified, Exposed };
 
 struct NativeRecord {
@@ -22,6 +26,8 @@ class NativeCatalogue final {
 public:
     bool load(std::istream& input);
     std::size_t size() const noexcept { return records_.size(); }
+    const std::vector<NativeRecord>& records() const noexcept { return records_; }
+    std::size_t count(NativeDomain domain) const noexcept;
     const NativeRecord* findByAddress(std::uint32_t address) const noexcept;
     const NativeRecord* findByName(std::string_view name) const noexcept;
 

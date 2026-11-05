@@ -8,7 +8,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_library(igi_sdk STATIC
     src/igi_sdk/logging/logging.cpp
     src/igi_sdk/ui/menu_manager.cpp
+    src/igi_sdk/ui/igi1_menu_manager.cpp
     src/igi_sdk/natives/native_catalogue.cpp
+    src/igi_sdk/natives/native_runner.cpp
     src/igi_sdk/runtime/scheduler.cpp
     src/igi_sdk/runtime/target_profile.cpp
     src/igi_sdk/runtime/runtime.cpp

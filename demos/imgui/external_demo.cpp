@@ -1,4 +1,11 @@
 #include "igi_sdk/natives/native_catalogue.hpp"
+#include "igi_sdk/natives/native_runner.hpp"
+#include "igi_sdk/natives/domains/ai.hpp"
+#include "igi_sdk/natives/domains/camera.hpp"
+#include "igi_sdk/natives/domains/graphs.hpp"
+#include "igi_sdk/natives/domains/memory.hpp"
+#include "igi_sdk/natives/domains/soldiers.hpp"
+#include "igi_sdk/natives/domains/vehicles.hpp"
 
 #include <fstream>
 #include <iostream>
@@ -18,6 +25,22 @@ int main(int argc, char** argv) {
 
     std::cout << "IGI MenuManager external-style companion\n"
               << "Catalogued IGI 1 records: " << catalogue.size() << '\n'
-              << "This process does not attach to or write to the game.\n";
+              << "AI=" << catalogue.count(igi::natives::ai::domain)
+              << " soldiers=" << catalogue.count(igi::natives::soldiers::domain)
+              << " vehicles=" << catalogue.count(igi::natives::vehicles::domain)
+              << " camera=" << catalogue.count(igi::natives::camera::domain)
+              << " graphs=" << catalogue.count(igi::natives::graphs::domain)
+              << " memory=" << catalogue.count(igi::natives::memory::domain) << '\n';
+
+    igi::Scheduler scheduler;
+    scheduler.bindGameThread();
+    igi::NativeRunner runner(catalogue, scheduler);
+    runner.queueResolution("Game_Start", [](const igi::NativeRecord& record) {
+        std::cout << "Resolved native: " << record.name << " @ 0x"
+                  << std::hex << record.address << std::dec << '\n'
+                  << "Signature: " << record.signature << '\n';
+    });
+    scheduler.runPending();
+    std::cout << "This process does not attach to or write to the game.\n";
     return 0;
 }

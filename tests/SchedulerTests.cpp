@@ -1,10 +1,12 @@
 #include "igi_sdk/runtime/scheduler.hpp"
 #include "igi_sdk/logging/logging.hpp"
 #include "igi_sdk/natives/native_catalogue.hpp"
+#include "igi_sdk/natives/native_runner.hpp"
 #include "igi_sdk/runtime/hook_manager.hpp"
 #include "igi_sdk/runtime/runtime.hpp"
 #include "igi_sdk/runtime/scheduler.hpp"
 #include "igi_sdk/ui/menu_manager.hpp"
+#include "igi_sdk/ui/igi1_menu_manager.hpp"
 #include "igi_sdk/natives/native_catalogue.hpp"
 
 #include <cassert>
@@ -41,6 +43,25 @@ int main() {
     igi::NativeCatalogue catalogue;
     assert(catalogue.load(catalogueFile));
     assert(catalogue.size() == 7068);
+    assert(catalogue.count(igi::NativeDomain::AI) > 0);
+    assert(catalogue.count(igi::NativeDomain::Soldiers) > 0);
+    assert(catalogue.count(igi::NativeDomain::Camera) > 0);
+    assert(catalogue.count(igi::NativeDomain::Graphs) > 0);
+    assert(catalogue.count(igi::NativeDomain::Memory) > 0);
+    bool resolved = false;
+    igi::NativeRunner runner(catalogue, scheduler);
+    assert(runner.queueResolution("Game_Start", [&](const igi::NativeRecord& record) {
+        resolved = record.address == 0x00401000;
+    }) != 0);
+    assert(scheduler.runPending() == 1 && resolved);
+    auto mainMenu = igi::Igi1MenuManager::create(igi::Igi1MenuSet::Main);
+    assert(mainMenu.currentScreen() != nullptr);
+    assert(mainMenu.currentScreen()->id == 900);
+    assert(mainMenu.currentScreen()->title == "Main Menu");
+    assert(mainMenu.pushScreen(904));
+    assert(mainMenu.currentScreen()->title == "Configuration");
+    assert(mainMenu.popScreen(true));
+    assert(mainMenu.currentScreen()->id == 900);
     const auto* gameRunHandler = catalogue.findByAddress(0x00416260);
     assert(gameRunHandler != nullptr);
     assert(gameRunHandler->name == "Game_RunHandler");
