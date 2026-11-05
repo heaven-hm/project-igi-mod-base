@@ -11,14 +11,13 @@
 
 #if defined(_WIN32) && (defined(__i386__) || defined(_M_IX86))
 #include <windows.h>
+#include <tlhelp32.h>
+
+#include <vector>
+
 namespace {
 igi::Scheduler* activeScheduler = nullptr;
-#if defined(_MSC_VER)
 extern "C" void* igiGameRunTrampoline = nullptr;
-#else
-extern "C" void* igiGameRunTrampoline;
-void* igiGameRunTrampoline = nullptr;
-#endif
 // Game_RunHandler starts with `push ebx; push esi; push edi; call rel32`, so the
 // displaced prologue is 8 bytes: three 1-byte pushes plus a 5-byte near call.
 constexpr std::size_t hookBytes = 8;
@@ -30,16 +29,38 @@ extern "C" void __cdecl igiGameRunScheduler() noexcept;
 // compiled scheduler realigns the stack before it touches SSE state.
 extern "C" __attribute__((force_align_arg_pointer)) void __cdecl igiGameRunScheduler() noexcept;
 #endif
+// Nothing of the displaced prologue has executed yet, and Game_RunHandler is
+// cdecl, so a whole C function may not silently clobber the incoming register
+// state. Save EFLAGS/EAX/ECX/EDX around the scheduler, then tail jump into the
+// trampoline so the handler returns directly to its own caller.
 #if defined(_MSC_VER)
 extern "C" __declspec(naked) void gameRunHandlerDetour() {
-    __asm { call igiGameRunScheduler; call dword ptr [igiGameRunTrampoline]; ret }
+    __asm {
+        pushfd
+        push eax
+        push ecx
+        push edx
+        call igiGameRunScheduler
+        pop edx
+        pop ecx
+        pop eax
+        popfd
+        jmp dword ptr [igiGameRunTrampoline]
+    }
 }
 #else
 extern "C" __attribute__((naked)) void gameRunHandlerDetour() {
     __asm__ volatile(
+        "pushfl\n\t"
+        "pushl %eax\n\t"
+        "pushl %ecx\n\t"
+        "pushl %edx\n\t"
         "call _igiGameRunScheduler\n\t"
-        "call *_igiGameRunTrampoline\n\t"
-        "ret\n\t");
+        "popl %edx\n\t"
+        "popl %ecx\n\t"
+        "popl %eax\n\t"
+        "popfl\n\t"
+        "jmp *_igiGameRunTrampoline\n\t");
 }
 #endif
 #if defined(_MSC_VER)
@@ -49,6 +70,37 @@ extern "C" __attribute__((force_align_arg_pointer)) void __cdecl igiGameRunSched
     activeScheduler->runPendingFromGameHook();
 }
 #endif
+
+// The game thread executes the bytes being patched on every frame, so the write
+// must never be observed half-applied. Suspend the peers, patch, flush, resume.
+std::vector<HANDLE> suspendPeerThreads() noexcept {
+    std::vector<HANDLE> suspended;
+    const DWORD processId = GetCurrentProcessId();
+    const DWORD selfId = GetCurrentThreadId();
+    const HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+    if (snapshot == INVALID_HANDLE_VALUE) return suspended;
+    THREADENTRY32 entry{};
+    entry.dwSize = sizeof(entry);
+    for (BOOL more = Thread32First(snapshot, &entry); more; more = Thread32Next(snapshot, &entry)) {
+        if (entry.th32OwnerProcessID != processId || entry.th32ThreadID == selfId) continue;
+        const HANDLE thread = OpenThread(THREAD_SUSPEND_RESUME, FALSE, entry.th32ThreadID);
+        if (!thread) continue;
+        if (SuspendThread(thread) == static_cast<DWORD>(-1))
+            CloseHandle(thread);
+        else
+            suspended.push_back(thread);
+    }
+    CloseHandle(snapshot);
+    return suspended;
+}
+
+void resumePeerThreads(std::vector<HANDLE>& threads) noexcept {
+    for (const HANDLE thread : threads) {
+        ResumeThread(thread);
+        CloseHandle(thread);
+    }
+    threads.clear();
+}
 
 // `push imm32; ret` is an absolute jump that leaves every register untouched.
 // `mov eax, imm32; jmp eax` would destroy EAX at the handler's entry point.
@@ -136,11 +188,14 @@ bool HookManager::installPrimaryGameRunHandler() {
         return false;
     }
     log(LogLevel::Debug, "Game_RunHandler hook: target memory writable");
+    log(LogLevel::Debug, "Game_RunHandler hook: suspending peer threads for the patch");
+    auto suspendedThreads = suspendPeerThreads();
     writeAbsoluteJump(target, reinterpret_cast<std::uintptr_t>(&gameRunHandlerDetour));
     FlushInstructionCache(GetCurrentProcess(), target, hookBytes);
     if (!VirtualProtect(target, hookBytes, oldProtection, &oldProtection)) {
         log(LogLevel::Warning, "IGI 1 Game_RunHandler protection could not be restored");
     }
+    resumePeerThreads(suspendedThreads);
     trampoline_ = trampoline;
     installed_ = true;
     log(LogLevel::Debug, "Game_RunHandler hook: patch installed and instruction cache flushed");
