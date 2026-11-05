@@ -23,7 +23,16 @@ target_compile_definitions(igi_sdk PUBLIC IGI_SDK_IGI1_ONLY=1)
 option(IGI_SDK_BUILD_DEMOS "Build the internal and external-style demo targets" ON)
 
 if(IGI_SDK_BUILD_DEMOS)
-    add_library(igi_menu_manager_internal SHARED demos/internal-menumanager/internal_demo.cpp)
+    set(IGI_INTERNAL_MENU_PLATFORM demos/internal-menumanager/platform_linux.cpp)
+    if(APPLE)
+        set(IGI_INTERNAL_MENU_PLATFORM demos/internal-menumanager/platform_macos.cpp)
+    elseif(WIN32)
+        set(IGI_INTERNAL_MENU_PLATFORM demos/internal-menumanager/platform_windows.cpp)
+    endif()
+    add_library(igi_menu_manager_internal SHARED
+        demos/internal-menumanager/internal_demo.cpp
+        ${IGI_INTERNAL_MENU_PLATFORM}
+    )
     target_link_libraries(igi_menu_manager_internal PRIVATE igi_sdk)
     target_include_directories(igi_menu_manager_internal PRIVATE include)
     set_target_properties(igi_menu_manager_internal PROPERTIES OUTPUT_NAME "IGI-MenuManager-Internal" PREFIX "")
