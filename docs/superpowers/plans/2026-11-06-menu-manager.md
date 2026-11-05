@@ -30,7 +30,7 @@
 - Consumes: `igi::Scheduler` from `include/IGI/Scheduler.hpp`.
 - Produces: `igi::MenuManager`, `igi::MenuItem`, `igi::MenuSnapshot`, `igi::MenuItemKind`, and `igi::MenuInput`.
 
-- [ ] **Step 1: Write the failing model test**
+- [x] **Step 1: Write the failing model test**
 
 ```cpp
 igi::Scheduler scheduler;
@@ -43,13 +43,13 @@ assert(snapshot.items.size() == 1);
 assert(snapshot.items[0].kind == igi::MenuItemKind::Info);
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `cmake --build build --target igi_sdk_tests && ctest --test-dir build --output-on-failure`
 
 Expected: compilation failure because `IGI/MenuManager.hpp` does not exist.
 
-- [ ] **Step 3: Implement the minimal model**
+- [x] **Step 3: Implement the minimal model**
 
 ```cpp
 enum class MenuItemKind { Action, Toggle, Integer, Float, List, Information, Separator, Submenu };
@@ -59,13 +59,13 @@ class MenuManager { public: explicit MenuManager(Scheduler&); void createMenu(st
 
 Keep all menu lookup failures non-throwing and return `false` from mutation methods when an id is unknown.
 
-- [ ] **Step 4: Run the model test to verify it passes**
+- [x] **Step 4: Run the model test to verify it passes**
 
 Run: `cmake --build build -j2 && ctest --test-dir build --output-on-failure`
 
 Expected: all existing tests and the new MenuManager model test pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add CMakeLists.txt include/IGI/MenuManager.hpp src/IGI/MenuManager.cpp tests/MenuManagerTests.cpp
