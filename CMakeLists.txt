@@ -16,6 +16,7 @@ add_library(igi_sdk STATIC
     src/igi_sdk/runtime/target_profile.cpp
     src/igi_sdk/runtime/runtime.cpp
     src/igi_sdk/runtime/hook_manager.cpp
+    src/igi_sdk/runtime/macos_hook_backend.cpp
 )
 target_include_directories(igi_sdk PUBLIC include)
 target_compile_definitions(igi_sdk PUBLIC IGI_SDK_IGI1_ONLY=1)
@@ -51,6 +52,8 @@ if(WIN32)
     target_link_libraries(igi_sdk_igi1 PRIVATE igi_sdk)
     target_compile_definitions(igi_sdk_igi1 PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
     set_target_properties(igi_sdk_igi1 PROPERTIES OUTPUT_NAME "IGI-Natives-SDK-IGI1" PREFIX "")
+    add_executable(igi_sdk_win32_loader tools/win32_loader.cpp)
+    set_target_properties(igi_sdk_win32_loader PROPERTIES OUTPUT_NAME "IGI-SDK-Loader")
 else()
     add_library(igi_sdk_igi1 SHARED src/igi_sdk/runtime/portable_exports.cpp)
     target_link_libraries(igi_sdk_igi1 PRIVATE igi_sdk)

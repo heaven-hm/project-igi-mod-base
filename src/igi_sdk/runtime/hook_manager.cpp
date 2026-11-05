@@ -3,6 +3,7 @@
 #include "igi_sdk/runtime/igi1_hooks.hpp"
 #include "igi_sdk/logging/logging.hpp"
 #include "igi_sdk/runtime/target_profile.hpp"
+#include "macos_hook_backend.hpp"
 
 #include <cstring>
 
@@ -35,7 +36,9 @@ extern "C" void __cdecl igiGameRunScheduler() noexcept { activeScheduler->runPen
 
 namespace igi {
 bool HookManager::installPrimaryGameRunHandler() {
-#if defined(_WIN32) && (defined(__i386__) || defined(_M_IX86))
+#if defined(__APPLE__)
+    return macos::installGameTickHook(scheduler_, trampoline_);
+#elif defined(_WIN32) && (defined(__i386__) || defined(_M_IX86))
     if (installed_) {
         log(LogLevel::Warning, "IGI 1 Game_RunHandler hook is already installed");
         return false;
@@ -88,7 +91,9 @@ bool HookManager::installPrimaryGameRunHandler() {
 }
 
 void HookManager::uninstall() noexcept {
-#if defined(_WIN32) && (defined(__i386__) || defined(_M_IX86))
+#if defined(__APPLE__)
+    macos::uninstallGameTickHook(trampoline_);
+#elif defined(_WIN32) && (defined(__i386__) || defined(_M_IX86))
     if (installed_) {
         auto* target = reinterpret_cast<std::uint8_t*>(igi1::gameRunHandler);
         constexpr std::uint8_t prologue[] = {0x53, 0x56, 0x57, 0xE8, 0x78, 0x01, 0x00};

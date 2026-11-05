@@ -21,6 +21,35 @@ bool parseBool(const std::string& value, bool fallback) {
 void setInt(const std::string& value, std::int32_t& target) {
     try { target = std::stoi(value); } catch (...) {}
 }
+
+std::vector<std::string> splitCsv(const std::string& value) {
+    std::vector<std::string> result;
+    std::size_t start = 0;
+    while (start <= value.size()) {
+        const auto end = value.find(',', start);
+        const auto item = trim(value.substr(start, end - start));
+        if (!item.empty()) result.push_back(item);
+        if (end == std::string::npos) break;
+        start = end + 1;
+    }
+    return result;
+}
+
+igi::ModMenuItemKind parseKind(const std::string& value) {
+    if (value == "toggle") return igi::ModMenuItemKind::Toggle;
+    if (value == "list") return igi::ModMenuItemKind::List;
+    if (value == "slider") return igi::ModMenuItemKind::Slider;
+    return igi::ModMenuItemKind::Action;
+}
+
+void addItem(const std::string& id, const std::string& value, std::vector<igi::ModMenuItemConfig>& items) {
+    const auto fields = splitCsv(value);
+    if (fields.size() < 3) return;
+    igi::ModMenuItemConfig item{id, parseKind(fields[0]), fields[1], fields[2]};
+    if (fields.size() > 3) item.values.assign(fields.begin() + 3, fields.end());
+    item.defaultToggle = !item.values.empty() && item.values.front() == "true";
+    items.push_back(std::move(item));
+}
 }
 
 namespace igi {
@@ -43,18 +72,21 @@ MenuConfig loadMenuConfig(const std::filesystem::path& path) {
 
     std::string line;
     bool inMenuSection = false;
+    bool inItemsSection = false;
     while (std::getline(file, line)) {
         line = trim(line);
         if (line.empty() || line.front() == ';' || line.front() == '#') continue;
         if (line.front() == '[' && line.back() == ']') {
             inMenuSection = line == "[mod_menu]";
+            inItemsSection = line == "[mod_menu.items]";
             continue;
         }
-        if (!inMenuSection) continue;
         const auto separator = line.find('=');
         if (separator == std::string::npos) continue;
         const std::string key = trim(line.substr(0, separator));
         const std::string value = trim(line.substr(separator + 1));
+        if (inItemsSection) { addItem(key, value, config.items); continue; }
+        if (!inMenuSection) continue;
         if (key == "enabled") config.enabled = parseBool(value, config.enabled);
         else if (key == "hotkey") config.hotkey = parseDirectInputKey(value, config.hotkey);
         else if (key == "screen_id") setInt(value, config.screenId);

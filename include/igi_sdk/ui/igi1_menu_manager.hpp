@@ -6,6 +6,7 @@
 #include <vector>
 
 namespace igi {
+struct MenuConfig;
 enum class Igi1MenuSet { Main, InGame };
 
 enum class Igi1WidgetKind {
@@ -53,6 +54,7 @@ struct Igi1MenuScreen {
 class Igi1MenuManager final {
 public:
     static Igi1MenuManager create(Igi1MenuSet set);
+    static Igi1MenuManager create(Igi1MenuSet set, const MenuConfig& config);
 
     Igi1MenuSet menuSet() const noexcept { return menuSet_; }
     const std::vector<Igi1MenuScreen>& screens() const noexcept { return screens_; }
