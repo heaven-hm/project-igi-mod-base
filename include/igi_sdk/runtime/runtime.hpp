@@ -1,13 +1,16 @@
 #pragma once
 
 #include "igi_sdk/runtime/hook_manager.hpp"
+#include "igi_sdk/runtime/igi1_hooks.hpp"
 
 #include <cstdint>
 
 namespace igi {
 class Runtime final {
 public:
-    bool initialize();
+    // `TextDraw` is the per-frame draw tick; `GameRunHandler` is the older
+    // task-slot-1 target and is kept selectable from config.ini.
+    bool initialize(igi1::TickHook hook = igi1::TickHook::TextDraw);
     void shutdown() noexcept;
     Scheduler& scheduler() noexcept { return scheduler_; }
     std::uint64_t gameHookInvocationCount() const noexcept {

@@ -9,12 +9,10 @@
 #include <cstdio>
 #include <cstring>
 #include <limits>
+#include <string>
 
 #if defined(_WIN32) && (defined(__i386__) || defined(_M_IX86))
 #include <windows.h>
-#include <tlhelp32.h>
-
-#include <vector>
 
 namespace {
 igi::Scheduler* activeScheduler = nullptr;
@@ -37,11 +35,30 @@ struct HookTarget {
     std::size_t relocatedCall; // offset of an E8 inside `prologue`, or 0 for none
 };
 
+// Display_EndFrame opens with `call Scene_DrawAll` (0x497700) as its first
+// instruction, so the displaced region is that call and its rel32 must be
+// relocated into the trampoline.
+constexpr std::uint8_t displayEndFramePrologue[] = {0xE8, 0xDB, 0x59, 0x00, 0x00};
+
+// Screen_Draw opens with `mov 0xA5EA65,%al` (five bytes with an absolute
+// operand, which stays valid at the fixed image base) and then `push esi`.
+// The displaced region contains no branch, so nothing needs relocating.
+constexpr std::uint8_t screenDrawPrologue[] = {0xA0, 0x65, 0xEA, 0xA5, 0x00};
+
+// Offset 0 is a valid relocation site, so "no relocated call" needs its own
+// sentinel instead of 0.
+constexpr std::size_t noRelocatedCall = static_cast<std::size_t>(-1);
+
 constexpr HookTarget gameRunHandlerTarget{
     "Game_RunHandler", igi::igi1::gameRunHandler, gameRunHandlerPrologue,
     sizeof(gameRunHandlerPrologue), 3};
 constexpr HookTarget textDrawTarget{
-    "Text_Draw", igi::igi1::textDraw, textDrawPrologue, sizeof(textDrawPrologue), 0};
+    "Text_Draw", igi::igi1::textDraw, textDrawPrologue, sizeof(textDrawPrologue), noRelocatedCall};
+constexpr HookTarget screenDrawTarget{
+    "Screen_Draw", igi::igi1::screenDraw, screenDrawPrologue, sizeof(screenDrawPrologue), noRelocatedCall};
+constexpr HookTarget displayEndFrameTarget{
+    "Display_EndFrame", igi::igi1::displayEndFrame, displayEndFramePrologue,
+    sizeof(displayEndFramePrologue), 0};
 
 // Nothing of the displaced prologue has executed yet, and both targets are
 // cdecl, so a whole C function may not silently clobber the incoming register
@@ -91,36 +108,10 @@ extern "C" __attribute__((force_align_arg_pointer)) void __cdecl igiGameRunSched
 }
 #endif
 
-// The game thread executes the bytes being patched on every frame, so the write
-// must never be observed half-applied. Suspend the peers, patch, flush, resume.
-std::vector<HANDLE> suspendPeerThreads() noexcept {
-    std::vector<HANDLE> suspended;
-    const DWORD processId = GetCurrentProcessId();
-    const DWORD selfId = GetCurrentThreadId();
-    const HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
-    if (snapshot == INVALID_HANDLE_VALUE) return suspended;
-    THREADENTRY32 entry{};
-    entry.dwSize = sizeof(entry);
-    for (BOOL more = Thread32First(snapshot, &entry); more; more = Thread32Next(snapshot, &entry)) {
-        if (entry.th32OwnerProcessID != processId || entry.th32ThreadID == selfId) continue;
-        const HANDLE thread = OpenThread(THREAD_SUSPEND_RESUME, FALSE, entry.th32ThreadID);
-        if (!thread) continue;
-        if (SuspendThread(thread) == static_cast<DWORD>(-1))
-            CloseHandle(thread);
-        else
-            suspended.push_back(thread);
-    }
-    CloseHandle(snapshot);
-    return suspended;
-}
-
-void resumePeerThreads(std::vector<HANDLE>& threads) noexcept {
-    for (const HANDLE thread : threads) {
-        ResumeThread(thread);
-        CloseHandle(thread);
-    }
-    threads.clear();
-}
+// The patch is written in one pass. Suspending the peer threads first was tried
+// and deadlocked: a suspended thread can hold the CRT heap lock that the suspend
+// bookkeeping itself needs. The jump is written last, so a thread that is inside
+// the prologue either finishes the original instruction or takes the detour.
 
 // A direct `jmp rel32` is five bytes, which is the whole Text_Draw prologue and
 // fits inside the eight-byte Game_RunHandler one. It also leaves every register
@@ -145,28 +136,31 @@ bool writeJump(std::uint8_t* target, std::size_t displaced, std::uintptr_t desti
     return true;
 }
 
-void logMessage(const char* text, const char* name = nullptr, std::uintptr_t value = 0) noexcept {
+void logStep(const char* name, const char* text) noexcept {
     char message[192]{};
-    if (name)
-        std::snprintf(message, sizeof(message), "%s hook: %s0x%08lX", name, text,
-                      static_cast<unsigned long>(value));
-    else
-        std::snprintf(message, sizeof(message), "%s", text);
+    std::snprintf(message, sizeof(message), "%s hook: %s", name, text);
+    igi::log(igi::LogLevel::Debug, message);
+}
+
+void logStepValue(const char* name, const char* text, std::uintptr_t value) noexcept {
+    char message[192]{};
+    std::snprintf(message, sizeof(message), "%s hook: %s0x%08lX", name, text,
+                  static_cast<unsigned long>(value));
     igi::log(igi::LogLevel::Debug, message);
 }
 
 bool installTarget(const HookTarget& spec, igi::Scheduler& scheduler, void*& installedTrampoline) {
     using igi::LogLevel;
 
-    logMessage("begin installation", spec.name);
+    logStep(spec.name, "begin installation");
     if (!igi::igi1::isSupportedExecutable()) {
         igi::log(LogLevel::Error, "IGI 1 executable SHA-256 mismatch; hook refused");
         return false;
     }
-    logMessage("executable hash verified", spec.name);
+    logStep(spec.name, "executable hash verified");
 
     auto* target = reinterpret_cast<std::uint8_t*>(static_cast<std::uintptr_t>(spec.address));
-    logMessage("target=", spec.name, spec.address);
+    logStepValue(spec.name, "target=", spec.address);
 
     if (std::memcmp(target, spec.prologue, spec.displaced) != 0) {
         char message[192]{};
@@ -174,7 +168,7 @@ bool installTarget(const HookTarget& spec, igi::Scheduler& scheduler, void*& ins
         igi::log(LogLevel::Error, message);
         return false;
     }
-    logMessage("target prologue verified", spec.name);
+    logStep(spec.name, "target prologue verified");
 
     auto* trampoline = static_cast<std::uint8_t*>(
         VirtualAlloc(nullptr, 32, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
@@ -182,11 +176,11 @@ bool installTarget(const HookTarget& spec, igi::Scheduler& scheduler, void*& ins
         igi::log(LogLevel::Error, "IGI 1 hook trampoline allocation failed");
         return false;
     }
-    logMessage("trampoline=", spec.name, reinterpret_cast<std::uintptr_t>(trampoline));
+    logStepValue(spec.name, "trampoline=", reinterpret_cast<std::uintptr_t>(trampoline));
 
     std::memcpy(trampoline, spec.prologue, spec.displaced);
 
-    if (spec.relocatedCall != 0) {
+    if (spec.relocatedCall != noRelocatedCall) {
         const auto* callSite = target + spec.relocatedCall;
         const auto destination = reinterpret_cast<std::uintptr_t>(callSite + 5) +
                                  static_cast<std::intptr_t>(*reinterpret_cast<const std::int32_t*>(callSite + 1));
@@ -202,7 +196,7 @@ bool installTarget(const HookTarget& spec, igi::Scheduler& scheduler, void*& ins
         trampoline[spec.relocatedCall] = 0xE8;
         const auto rel32 = static_cast<std::int32_t>(rel);
         std::memcpy(trampoline + spec.relocatedCall + 1, &rel32, sizeof(rel32));
-        logMessage("original call=", spec.name, destination);
+        logStepValue(spec.name, "original call=", destination);
     }
 
     const auto continuation = reinterpret_cast<std::uintptr_t>(target + spec.displaced);
@@ -221,7 +215,7 @@ bool installTarget(const HookTarget& spec, igi::Scheduler& scheduler, void*& ins
 
     activeScheduler = &scheduler;
     igiGameRunTrampoline = trampoline;
-    logMessage("detour=", spec.name, reinterpret_cast<std::uintptr_t>(&gameRunHandlerDetour));
+    logStepValue(spec.name, "detour=", reinterpret_cast<std::uintptr_t>(&gameRunHandlerDetour));
 
     DWORD oldProtection = 0;
     if (!VirtualProtect(target, spec.displaced, PAGE_EXECUTE_READWRITE, &oldProtection)) {
@@ -231,12 +225,10 @@ bool installTarget(const HookTarget& spec, igi::Scheduler& scheduler, void*& ins
         igi::log(LogLevel::Error, "could not make the IGI 1 hook target writable");
         return false;
     }
-    logMessage("target memory writable", spec.name);
-    logMessage("suspending peer threads for the patch", spec.name);
+    logStep(spec.name, "target memory writable");
+    logStep(spec.name, "writing the patch");
 
-    auto suspendedThreads = suspendPeerThreads();
     if (!writeJump(target, spec.displaced, reinterpret_cast<std::uintptr_t>(&gameRunHandlerDetour))) {
-        resumePeerThreads(suspendedThreads);
         VirtualProtect(target, spec.displaced, oldProtection, &oldProtection);
         igiGameRunTrampoline = nullptr;
         activeScheduler = nullptr;
@@ -248,56 +240,52 @@ bool installTarget(const HookTarget& spec, igi::Scheduler& scheduler, void*& ins
     if (!VirtualProtect(target, spec.displaced, oldProtection, &oldProtection)) {
         igi::log(LogLevel::Warning, "IGI 1 hook protection could not be restored");
     }
-    resumePeerThreads(suspendedThreads);
 
     installedTrampoline = trampoline;
-    logMessage("patch installed and instruction cache flushed", spec.name);
+    logStep(spec.name, "patch installed and instruction cache flushed");
     return true;
 }
 } // namespace
 #endif
 
 namespace igi {
-bool HookManager::installTextDrawHook() {
+bool HookManager::installTickHook(igi1::TickHook hook) {
 #if defined(__APPLE__)
+    (void)hook;
     return macos::installGameTickHook(scheduler_, trampoline_);
 #elif defined(_WIN32) && (defined(__i386__) || defined(_M_IX86))
     if (installed_) {
         log(LogLevel::Warning, "IGI 1 hook is already installed");
         return false;
     }
+    const HookTarget& spec = hook == igi1::TickHook::GameRunHandler  ? gameRunHandlerTarget
+                           : hook == igi1::TickHook::TextDraw        ? textDrawTarget
+                           : hook == igi1::TickHook::DisplayEndFrame ? displayEndFrameTarget
+                                                                     : screenDrawTarget;
     void* trampoline = nullptr;
-    if (!installTarget(textDrawTarget, scheduler_, trampoline)) return false;
+    if (!installTarget(spec, scheduler_, trampoline)) return false;
     trampoline_ = trampoline;
-    targetSpec_ = &textDrawTarget;
+    targetSpec_ = &spec;
     installed_ = true;
-    log(LogLevel::Info, "IGI 1 Text_Draw scheduler hook installed");
+    log(LogLevel::Info, std::string("IGI 1 ") + spec.name + " scheduler hook installed");
     return true;
 #else
+    (void)hook;
     log(LogLevel::Warning, "IGI 1 hook installation requires a Windows x86 build");
     return false;
 #endif
 }
 
+bool HookManager::installDisplayEndFrameHook() {
+    return installTickHook(igi1::TickHook::DisplayEndFrame);
+}
+
+bool HookManager::installTextDrawHook() {
+    return installTickHook(igi1::TickHook::TextDraw);
+}
+
 bool HookManager::installPrimaryGameRunHandler() {
-#if defined(__APPLE__)
-    return macos::installGameTickHook(scheduler_, trampoline_);
-#elif defined(_WIN32) && (defined(__i386__) || defined(_M_IX86))
-    if (installed_) {
-        log(LogLevel::Warning, "IGI 1 hook is already installed");
-        return false;
-    }
-    void* trampoline = nullptr;
-    if (!installTarget(gameRunHandlerTarget, scheduler_, trampoline)) return false;
-    trampoline_ = trampoline;
-    targetSpec_ = &gameRunHandlerTarget;
-    installed_ = true;
-    log(LogLevel::Info, "IGI 1 Game_RunHandler scheduler hook installed");
-    return true;
-#else
-    log(LogLevel::Warning, "IGI 1 hook installation requires a Windows x86 build");
-    return false;
-#endif
+    return installTickHook(igi1::TickHook::GameRunHandler);
 }
 
 void HookManager::uninstall() noexcept {

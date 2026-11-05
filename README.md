@@ -184,8 +184,9 @@ initialize();
 shutdown();
 ```
 
-Do not call initialization from `DllMain`. The repository does not ship a
-remote-process injector. Use the loader already authorized for the user's own
+Do not call initialization from `DllMain`. The SDK ships a 32-bit injector
+(`IGI1-Injector.exe`) and a Wine wrapper under `tools/`; see
+[Injecting into the game](#injecting-into-the-game). Use it only on your own
 game installation and match the game's 32-bit architecture. On macOS, build
 `libIGI-MenuManager-Internal.dylib` and load it from a same-process test host
 with `dlopen`/`dlsym`; it exercises the menu and scheduler but does not patch
@@ -204,9 +205,9 @@ executes that metadata callback through `Scheduler`. It deliberately does not
 attach to another process or write game memory. Any future external control
 must use a separately reviewed IPC protocol shared with an in-process mod.
 
-The internal demo's IGI 1 mod screen contains ten example options: weather,
-all weapons, sound profile, free camera, invulnerability, unlimited ammo,
-enemy visibility, player speed, mission teleport, and runtime logging. These
+The internal demo's IGI 1 mod screen contains eight options driven by
+`config.ini`: weather, all weapons, frame limit, free camera, unlimited ammo,
+invulnerability, player speed, and runtime logs. These
 are menu action definitions tied to the SDK scheduler boundary. A mod must
 bind each action to a separately verified native wrapper before it changes
 game state; the demo never calls an unverified address just because a name is
@@ -257,9 +258,24 @@ changing feature logic.
 
 ### Windows
 
-Windows x86 is the supported injected-runtime target. The primary scheduler
-hook is `Game_RunHandler` at `0x00416260`. The detour drains SDK tasks on the
-game thread, then executes the original handler through a trampoline.
+Windows x86 is the supported injected-runtime target. The default scheduler
+hook is `Screen_Draw` at `0x004E7400`, the screen-level frame function:
+
+```c
+void Screen_Draw(Task *t) {
+    Display_NextFrame();
+    CALL_CHILDREN(t, Screen_GetDrawEvent(), 1);
+    Display_EndFrame();
+    gScreenFrame++;
+}
+```
+
+Its first instruction is the five-byte `mov 0xA5EA65,%al`, so the patch is a
+five-byte `jmp rel32` that touches no register or flag, and nothing needs
+relocating in the trampoline. `display_end_frame` (`0x00491D20`, five bytes
+with a relocated `call Scene_DrawAll`), `text_draw` (`0x004B6E60`, five bytes)
+and `game_run_handler` (`0x00416260`, eight bytes, relocated call) stay
+selectable with the `hook` key in `config.ini`.
 
 `Flow_RunHandler` at `0x00402260` is retained as a lifecycle investigation
 reference. `Game_Update` at `0x00401050` is catalogued but is not used as the
@@ -272,6 +288,47 @@ macOS is a development/test platform for portable SDK modules. Build and run
 `igi_sdk_tests` there to validate behavior. The current IGI 1 hook uses Windows
 x86 executable patching and therefore intentionally refuses installation on
 macOS. Do not claim macOS in-process IGI injection support from this build.
+
+## Injecting into the game
+
+`IGI1-Injector.exe` is built with the Windows targets and is a 32-bit x86
+console tool:
+
+```sh
+./IGI1-Injector.exe -l                                   # list processes
+./IGI1-Injector.exe -n igi.exe -i C:\IGI\IGI-MenuManager-Internal.dll -v
+./IGI1-Injector.exe -p 1234 -i C:\IGI\IGI-MenuManager-Internal.dll
+```
+
+Exit codes: `0` success, `2` usage, `3` no matching process, `4` open failed or
+bitness mismatch, `5`/`6` allocation or write failed, `7` remote thread failed,
+`8` `LoadLibraryW` returned zero. A zero module base in the failure line almost
+always means the DLL path is not absolute or the DLL bitness does not match.
+
+Under Wine, use the wrapper so Unix paths are translated to `Z:\` form and the
+injector is found automatically:
+
+```sh
+WINEPREFIX=$HOME/igi-test-prefix ./tools/wine_igi_inject.sh \
+  /Users/you/Downloads/IGI/IGI-MenuManager-Internal.dll igi.exe
+```
+
+`config.ini` beside the DLL controls the runtime:
+
+| key | meaning |
+| --- | --- |
+| `enabled` | master switch for the demo menu |
+| `hotkey` | `F3`-`F8`, matched against DirectInput codes |
+| `hook` | `screen_draw` (default), `display_end_frame`, `text_draw`, `game_run_handler` |
+| `log_level` | `trace`, `debug`, `info`, `warning`, `error`, `critical` |
+| `console` | release builds only; Debug always allocates a console |
+| `screen_id`, `x`, `y`, `width`, `height` | menu screen identity and frame |
+
+`[mod_menu.debug]` and `[mod_menu.release]` are applied only to a build with a
+matching `NDEBUG`, so one file serves both deployments. Log lines carry the
+level, thread and wall clock, for example
+`[IGI SDK][DEBUG][t0001][2026-11-06 05:12:33.412] ...`, and are mirrored to the
+console when one exists.
 
 ## Verification tools
 

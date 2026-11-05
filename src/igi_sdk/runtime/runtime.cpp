@@ -3,9 +3,9 @@
 #include "igi_sdk/logging/logging.hpp"
 
 namespace igi {
-bool Runtime::initialize() {
+bool Runtime::initialize(igi1::TickHook hook) {
     if (initialized_) return true;
-    if (!hooks_.installTextDrawHook()) return false;
+    if (!hooks_.installTickHook(hook)) return false;
     initialized_ = true;
     log(LogLevel::Info, "IGI 1 SDK runtime initialized");
     return true;

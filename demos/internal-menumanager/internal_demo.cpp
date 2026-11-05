@@ -26,7 +26,7 @@ extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_Internal_Initialize() {
     menuConfig = igi::loadMenuConfig("config.ini");
     igi::log(igi::LogLevel::Debug, menuConfig.enabled ? "internal initialize: config enabled" : "internal initialize: config disabled");
 #if defined(_WIN32)
-    if (!runtime.initialize()) {
+    if (!runtime.initialize(menuConfig.hook)) {
         igi::log(igi::LogLevel::Error, "internal initialize: runtime initialization failed");
         return false;
     }

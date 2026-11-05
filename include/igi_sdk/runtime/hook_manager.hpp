@@ -1,5 +1,6 @@
 #pragma once
 
+#include "igi_sdk/runtime/igi1_hooks.hpp"
 #include "igi_sdk/runtime/scheduler.hpp"
 
 #include <cstdint>
@@ -8,8 +9,12 @@ namespace igi {
 class HookManager final {
 public:
     explicit HookManager(Scheduler& scheduler) noexcept : scheduler_(scheduler) {}
-    // Text_Draw (0x4B6E60) runs on the per-frame draw path and its displaced
-    // prologue is five bytes with no branch inside it.
+    // Per-frame tick selection:
+    //   DisplayEndFrame 0x491D20  `call Scene_DrawAll` then the end-frame callbacks
+    //   TextDraw        0x4B6E60  text draw, five bytes, no relocated branch
+    //   GameRunHandler  0x416260  task slot 1, eight bytes with a relocated call
+    bool installTickHook(igi1::TickHook hook);
+    bool installDisplayEndFrameHook();
     bool installTextDrawHook();
     bool installPrimaryGameRunHandler();
     bool installed() const noexcept { return installed_; }
