@@ -83,7 +83,7 @@ git commit -m "feat: add renderer-independent menu model"
 - Consumes: `MenuManager::createMenu`, `MenuManager::snapshot` from Task 1.
 - Produces: `MenuManager::addAction`, `addToggle`, `addInteger`, `addFloat`, `addList`, `addSubmenu`, and `handleInput(MenuInput)`.
 
-- [ ] **Step 1: Write failing navigation tests**
+- [x] **Step 1: Write failing navigation tests**
 
 ```cpp
 menuManager.addToggle("main", "God mode", false, [](bool) {});
@@ -96,13 +96,13 @@ menuManager.handleInput(igi::MenuInput::Right);
 assert(menuManager.snapshot().items[2].numberValue == 11.0);
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `cmake --build build -j2 && ctest --test-dir build --output-on-failure`
 
 Expected: compilation failure because typed insertion and input handling do not exist.
 
-- [ ] **Step 3: Implement navigation semantics**
+- [x] **Step 3: Implement navigation semantics**
 
 ```cpp
 enum class MenuInput { ToggleVisibility, Up, Down, Left, Right, Confirm, Back };
@@ -111,13 +111,13 @@ bool MenuManager::handleInput(MenuInput input);
 
 Skip separators and information rows during selection. Clamp integers/floats to their declared ranges. Cycle list selectors in both directions. `Confirm` toggles booleans, invokes actions, and enters submenus; `Back` returns to the parent menu or hides the root menu.
 
-- [ ] **Step 4: Run tests to verify behavior**
+- [x] **Step 4: Run tests to verify behavior**
 
 Run: `cmake --build build -j2 && ctest --test-dir build --output-on-failure`
 
 Expected: navigation, clamping, list wrapping, and submenu/back tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add include/IGI/MenuManager.hpp src/IGI/MenuManager.cpp tests/MenuManagerTests.cpp
