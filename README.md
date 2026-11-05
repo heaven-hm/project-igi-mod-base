@@ -258,8 +258,8 @@ changing feature logic.
 ### Windows
 
 Windows x86 is the supported injected-runtime target. The primary scheduler
-hook is `Game_RunHandler` at `0x00416260`. The trampoline executes the original
-handler first and then drains SDK tasks on the game thread.
+hook is `Game_RunHandler` at `0x00416260`. The detour drains SDK tasks on the
+game thread, then executes the original handler through a trampoline.
 
 `Flow_RunHandler` at `0x00402260` is retained as a lifecycle investigation
 reference. `Game_Update` at `0x00401050` is catalogued but is not used as the

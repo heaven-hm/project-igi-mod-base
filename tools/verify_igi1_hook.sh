@@ -11,8 +11,9 @@ actual_hash=$(shasum -a 256 "$binary" | awk '{print $1}')
 
 echo "verified SHA-256: $actual_hash"
 
-bytes=$(r2 -2 -q -c 's 0x00416260; p8 7' "$binary" | tr -d '[:space:]')
-[ "$bytes" = "535657e8780100" ] || {
+# The hook displaces 8 bytes: push ebx/esi/edi plus the 5-byte call at +3.
+bytes=$(r2 -2 -q -c 's 0x00416260; p8 8' "$binary" | tr -d '[:space:]')
+[ "$bytes" = "535657e878010000" ] || {
     echo "Game_RunHandler prologue mismatch: $bytes" >&2
     exit 1
 }

@@ -7,9 +7,11 @@
 #include "igi_sdk/runtime/scheduler.hpp"
 #include "igi_sdk/ui/menu_manager.hpp"
 #include "igi_sdk/ui/igi1_menu_manager.hpp"
+#include "igi_sdk/config/menu_config.hpp"
 #include "igi_sdk/natives/native_catalogue.hpp"
 
 #include <cassert>
+#include <cstdio>
 #include <chrono>
 #include <fstream>
 #include <sstream>
@@ -37,8 +39,10 @@ int main() {
     assert(scheduler.runPending() == 1 && count == 2);
     assert(scheduler.cancel(repeating));
     assert(scheduler.runPending() == 0 && count == 2);
-    scheduler.enqueueDelayed(std::chrono::milliseconds(10), [&] { ++count; });
+    const auto delayed = scheduler.enqueueDelayed(std::chrono::milliseconds(10), [&] { ++count; });
     assert(scheduler.runPending() == 0);
+    // The delayed task is still pending; cancel it so later drains are deterministic.
+    assert(scheduler.cancel(delayed));
     std::ifstream catalogueFile(std::string(IGI_SDK_SOURCE_DIR) + "/data/IGI1/neonix-igi-re-signatures.tsv");
     igi::NativeCatalogue catalogue;
     assert(catalogue.load(catalogueFile));
@@ -62,11 +66,18 @@ int main() {
     assert(mainMenu.currentScreen()->title == "Configuration");
     assert(mainMenu.popScreen(true));
     assert(mainMenu.currentScreen()->id == 900);
-    auto modMenu = igi::Igi1MenuManager::create(igi::Igi1MenuSet::InGame);
-    assert(modMenu.pushScreen(990));
-    assert(modMenu.currentScreen()->widgets.size() == 10);
-    assert(modMenu.currentScreen()->widgets[0].label == "Weather: Rain");
+    // The mod menu is data-driven: its widgets come from the shipped config.ini.
+    const auto modConfig = igi::loadMenuConfig(std::string(IGI_SDK_SOURCE_DIR) + "/demos/internal-menumanager/config.ini");
+    if (modConfig.items.empty())
+        std::fprintf(stderr, "menu config did not load from %s/demos/internal-menumanager/config.ini\n", IGI_SDK_SOURCE_DIR);
+    assert(modConfig.items.size() == 8);
+    auto modMenu = igi::Igi1MenuManager::create(igi::Igi1MenuSet::InGame, modConfig);
+    assert(modMenu.pushScreen(modConfig.screenId));
+    assert(modMenu.currentScreen()->widgets.size() == modConfig.items.size());
+    assert(modMenu.currentScreen()->widgets[0].label == "Weather");
+    assert(modMenu.currentScreen()->widgets[0].kind == igi::Igi1WidgetKind::ListBox);
     assert(modMenu.currentScreen()->widgets[3].label == "Free Camera");
+    assert(modMenu.currentScreen()->widgets[3].kind == igi::Igi1WidgetKind::ToggleBox);
     const auto* gameRunHandler = catalogue.findByAddress(0x00416260);
     assert(gameRunHandler != nullptr);
     assert(gameRunHandler->name == "Game_RunHandler");

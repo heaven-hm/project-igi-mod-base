@@ -14,9 +14,12 @@ IGI-RE's `Game_Init` registers `Game_RunHandler` for the run slot and registers 
 
 The MVP hooks only the primary address. Before writing executable memory it
 hashes the loaded main executable with Windows CryptoAPI and requires the exact
-SHA-256 above, then validates the exact prologue. The hook calls a trampoline
-containing the original prologue and resumes `Game_RunHandler+7`, then runs the
-scheduler after the original handler returns. The first successful detour
+SHA-256 above, then validates the exact 8-byte prologue
+(`53 56 57 e8 78 01 00 00`). The patch is `push imm32; ret`, an absolute jump
+that preserves every register. The detour runs the scheduler first, then calls a
+trampoline containing the relocated prologue (`Game_UpdateCheats` call) and
+resumes at `Game_RunHandler+8`. Running the scheduler before the original
+handler keeps the handler's EAX return value intact. The first successful detour
 establishes the scheduler's game-thread identity, rather than incorrectly
 using the DLL loader thread. `Draw`, `MenuManager_Draw`, and
 `TextPrintDetour()` are not used.

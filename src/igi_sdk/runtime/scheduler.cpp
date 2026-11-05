@@ -61,7 +61,11 @@ std::size_t Scheduler::runPending() noexcept {
 }
 
 std::size_t Scheduler::runPendingFromGameHook() noexcept {
-    gameHookInvocations_.fetch_add(1, std::memory_order_relaxed);
+    const auto invocation = gameHookInvocations_.fetch_add(1, std::memory_order_relaxed) + 1;
+#ifndef NDEBUG
+    if (invocation <= 5 || (invocation % 1000) == 0)
+        log(LogLevel::Debug, "scheduler: Game_RunHandler callback entered");
+#endif
     {
         std::lock_guard lock(mutex_);
         if (gameThread_ == std::thread::id{}) {
@@ -72,7 +76,12 @@ std::size_t Scheduler::runPendingFromGameHook() noexcept {
         log(LogLevel::Error, "Game_RunHandler was observed on a second thread; scheduler skipped");
         return 0;
     }
-    return runReadyTasks();
+    const auto ran = runReadyTasks();
+#ifndef NDEBUG
+    if (invocation <= 5 || (invocation % 1000) == 0)
+        log(LogLevel::Debug, "scheduler: Game_RunHandler callback completed");
+#endif
+    return ran;
 }
 
 std::size_t Scheduler::runReadyTasks() noexcept {
