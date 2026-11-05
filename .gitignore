@@ -1,6 +1,9 @@
 build/
 build-*/
+.superpowers/
+release/
 __pycache__/
+*.log
 .DS_Store
 *.user
 *.suo
