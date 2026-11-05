@@ -10,4 +10,24 @@ actual_hash=$(shasum -a 256 "$binary" | awk '{print $1}')
 }
 
 echo "verified SHA-256: $actual_hash"
+
+bytes=$(r2 -2 -q -c 's 0x00416260; p8 7' "$binary" | tr -d '[:space:]')
+[ "$bytes" = "535657e8780100" ] || {
+    echo "Game_RunHandler prologue mismatch: $bytes" >&2
+    exit 1
+}
+
+bytes=$(r2 -2 -q -c 's 0x00402260; p8 7' "$binary" | tr -d '[:space:]')
+[ "$bytes" = "83ec0853555657" ] || {
+    echo "Flow_RunHandler prologue mismatch: $bytes" >&2
+    exit 1
+}
+
+bytes=$(r2 -2 -q -c 's 0x00401050; p8 7' "$binary" | tr -d '[:space:]')
+[ "$bytes" = "558bec566a0068" ] || {
+    echo "Game_Update prologue mismatch: $bytes" >&2
+    exit 1
+}
+
+echo "verified Game_RunHandler, Flow_RunHandler, and Game_Update prologues"
 r2 -2 -q -c 's 0x00416260; pd 7; s 0x00402260; pd 7; s 0x00401050; pd 7' "$binary"
