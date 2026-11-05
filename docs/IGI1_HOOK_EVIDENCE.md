@@ -10,7 +10,7 @@ Static radare2 inspection of the target shows:
 - `Flow_RunHandler` at `0x00402260` begins `83 ec 08 53 55 56 57`. IGI-RE recovers it as `void __cdecl Flow_RunHandler(Flow *flow)`; it schedules simulation and render child-task passes and handles game-flow events. It remains a secondary investigation candidate, not an SDK hook.
 - `Game_Update` at `0x00401050` establishes a `setjmp` recovery point and dispatches the active task-slot-1 handler through the handler table. It is intentionally not selected as the SDK hook.
 
-IGI-RE's `Game_Init` registers `Game_RunHandler` for the run slot and registers `GAME_FREQUENCY` as 30. `Flow_RunHandler` also invokes `FramesSet(30)` when entering/restarting a game. This is source-level evidence for a gameplay cadence of 30 Hz; an in-process counter is still required before claiming measured frequency on this exact executable hash.
+IGI-RE's `Game_Init` registers `Game_RunHandler` for the run slot and registers `GAME_FREQUENCY` as 30. `Flow_RunHandler` also invokes `FramesSet(30)` when entering/restarting a game. This is source-level evidence for a gameplay cadence of 30 Hz; an in-process counter is still required before claiming measured frequency on this exact executable hash. Re-run `tools/verify_igi_re_hook_source.sh` to check these source facts against the local IGI-RE checkout.
 
 The MVP hooks only the primary address. Before writing executable memory it
 hashes the loaded main executable with Windows CryptoAPI and requires the exact
