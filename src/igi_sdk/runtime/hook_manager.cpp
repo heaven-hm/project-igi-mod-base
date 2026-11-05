@@ -101,9 +101,11 @@ bool HookManager::installPrimaryGameRunHandler() {
     logAddress("Game_RunHandler hook: trampoline=", reinterpret_cast<std::uintptr_t>(trampoline));
     // Relocated prologue: pushes, then the original near call, then resume.
     std::memcpy(trampoline, target, 3);
-    // A rel32 call is relative to the end of its own instruction, target + 8.
+    // `E8` sits at target+3, so its rel32 operand starts at target+4 and the
+    // instruction ends at target+8. Reading the operand at +3 would fold the
+    // opcode byte into the displacement (0x178E8 instead of 0x178).
     const auto originalCall = reinterpret_cast<std::uintptr_t>(target + hookBytes) +
-                              static_cast<std::intptr_t>(*reinterpret_cast<const std::int32_t*>(target + 3));
+                              static_cast<std::intptr_t>(*reinterpret_cast<const std::int32_t*>(target + 4));
     logAddress("Game_RunHandler hook: original call=", originalCall);
     const auto trampolineBase = reinterpret_cast<std::intptr_t>(trampoline);
     const auto continuation = reinterpret_cast<std::intptr_t>(target + hookBytes);
