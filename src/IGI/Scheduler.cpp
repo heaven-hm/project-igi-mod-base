@@ -54,6 +54,7 @@ std::size_t Scheduler::runPending() noexcept {
 }
 
 std::size_t Scheduler::runPendingFromGameHook() noexcept {
+    gameHookInvocations_.fetch_add(1, std::memory_order_relaxed);
     {
         std::lock_guard lock(mutex_);
         if (gameThread_ == std::thread::id{}) {

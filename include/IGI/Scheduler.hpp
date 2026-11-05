@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <mutex>
@@ -25,6 +26,9 @@ public:
     // Called exclusively by the verified game update detour. The first call
     // establishes the thread on which all game-affecting tasks may execute.
     std::size_t runPendingFromGameHook() noexcept;
+    std::uint64_t gameHookInvocationCount() const noexcept {
+        return gameHookInvocations_.load(std::memory_order_relaxed);
+    }
 
 private:
     struct Entry {
@@ -39,6 +43,7 @@ private:
     mutable std::mutex mutex_;
     std::thread::id gameThread_;
     TaskId nextId_ = 1;
+    std::atomic<std::uint64_t> gameHookInvocations_{0};
     std::unordered_map<TaskId, Entry> entries_;
 };
 }

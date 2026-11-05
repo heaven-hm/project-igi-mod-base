@@ -20,6 +20,7 @@ int main() {
     hookBoundScheduler.enqueueOnce([&] { ++hookCount; });
     assert(hookBoundScheduler.runPending() == 0 && hookCount == 0);
     assert(hookBoundScheduler.runPendingFromGameHook() == 1 && hookCount == 1);
+    assert(hookBoundScheduler.gameHookInvocationCount() == 1);
     const auto repeating = scheduler.enqueueEveryFrame([&] { ++count; });
     assert(scheduler.runPending() == 1 && count == 2);
     assert(scheduler.cancel(repeating));
