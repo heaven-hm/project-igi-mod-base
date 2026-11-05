@@ -10,6 +10,7 @@
 #include <cassert>
 #include <chrono>
 #include <fstream>
+#include <sstream>
 #include <string>
 
 void menuManagerModelTest();
@@ -45,6 +46,11 @@ int main() {
     assert(gameRunHandler->name == "Game_RunHandler");
     assert(gameRunHandler->signature == "void Game_RunHandler(Game *g)");
     assert(gameRunHandler->verification == igi::NativeVerification::Catalogued);
+    std::istringstream duplicateRecords(
+        "00400000\tFirst\tmanual\tentry\tvoid First(void)\n"
+        "00400000\tSecond\tmanual\tentry\tvoid Second(void)\n");
+    igi::NativeCatalogue duplicateCatalogue;
+    assert(!duplicateCatalogue.load(duplicateRecords));
     menuManagerModelTest();
     return 0;
 }

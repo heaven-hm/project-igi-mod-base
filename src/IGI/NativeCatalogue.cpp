@@ -3,6 +3,7 @@
 #include <charconv>
 #include <istream>
 #include <string>
+#include <unordered_set>
 
 namespace {
 bool parseAddress(std::string_view source, std::uint32_t& address) {
@@ -17,6 +18,7 @@ bool parseAddress(std::string_view source, std::uint32_t& address) {
 namespace igi {
 bool NativeCatalogue::load(std::istream& input) {
     std::vector<NativeRecord> parsed;
+    std::unordered_set<std::uint32_t> addresses;
     std::string line;
     while (std::getline(input, line)) {
         if (line.empty() || line.front() == '#') continue;
@@ -34,6 +36,8 @@ bool NativeCatalogue::load(std::istream& input) {
         NativeRecord record;
         if (!parseAddress(fields[0], record.address)) return false;
         record.name = std::move(fields[1]);
+        if (record.name.empty() || !addresses.insert(record.address).second)
+            return false;
         record.provenance = std::move(fields[2]);
         record.kind = std::move(fields[3]);
         record.signature = std::move(fields[4]);
