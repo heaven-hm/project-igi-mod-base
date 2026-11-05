@@ -2,6 +2,7 @@
 
 #include "IGI/IGI1Hooks.hpp"
 #include "IGI/Logging.hpp"
+#include "IGI/TargetProfile.hpp"
 
 #include <cstring>
 
@@ -9,20 +10,39 @@
 #include <windows.h>
 namespace {
 igi::Scheduler* activeScheduler = nullptr;
+#if defined(_MSC_VER)
 extern "C" void* igiGameRunTrampoline = nullptr;
+#else
+extern "C" void* igiGameRunTrampoline;
+void* igiGameRunTrampoline = nullptr;
+#endif
 extern "C" void __cdecl igiGameRunScheduler() noexcept;
+#if defined(_MSC_VER)
 extern "C" __declspec(naked) void gameRunHandlerDetour() {
-    __asm { call igiGameRunScheduler; jmp dword ptr [igiGameRunTrampoline] }
+    __asm { call dword ptr [igiGameRunTrampoline]; call igiGameRunScheduler; ret }
 }
-extern "C" void __cdecl igiGameRunScheduler() noexcept { activeScheduler->runPending(); }
+#else
+extern "C" __attribute__((naked)) void gameRunHandlerDetour() {
+    __asm__ volatile(
+        "call *_igiGameRunTrampoline\n\t"
+        "call _igiGameRunScheduler\n\t"
+        "ret\n\t");
+}
+#endif
+extern "C" void __cdecl igiGameRunScheduler() noexcept { activeScheduler->runPendingFromGameHook(); }
 }
 #endif
 
 namespace igi {
 bool HookManager::installPrimaryGameRunHandler() {
 #if defined(_WIN32) && (defined(__i386__) || defined(_M_IX86))
+    if (!igi1::isSupportedExecutable()) {
+        log(LogLevel::Error, "IGI 1 executable SHA-256 mismatch; hook refused");
+        return false;
+    }
     auto* target = reinterpret_cast<std::uint8_t*>(igi1::gameRunHandler);
-    // Verified against the EU/Chinese IGI-RE executable identified by the documented SHA-256.
+    // This target is Game_RunHandler(Game *), a cdecl task-slot-1 handler.
+    // The naked detour preserves its argument stack exactly.
     constexpr std::uint8_t prologue[] = {0x53, 0x56, 0x57, 0xE8, 0x78, 0x01, 0x00};
     if (std::memcmp(target, prologue, sizeof(prologue)) != 0) {
         log(LogLevel::Error, "IGI 1 Game_RunHandler signature mismatch; hook refused");

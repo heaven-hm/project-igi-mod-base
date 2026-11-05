@@ -1,0 +1,16 @@
+Project IGI Natives SDK — IGI 1 MVP
+
+This repository does not distribute Project I.G.I. executables, game assets,
+or other proprietary game content.
+
+Research attribution:
+- Neonix Modding Team / IGI-RE (GPL-2.0-only) supplies the catalogued native
+  addresses/names and signature metadata in `data/IGI1/`. No IGI-RE function
+  implementation source is included in this MVP.
+- heaven-hm/project-igi-natives (MIT) is the planned migration predecessor.
+  Its legacy source baseline is preserved under `legacy/project-igi-natives/`
+  with its original MIT notice; it is excluded from the active build pending
+  module-by-module migration.
+
+Future integrations of Dear ImGui, MinHook, GTLibCpp, or other dependencies
+must add the exact upstream version and license text before shipping code.

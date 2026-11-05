@@ -22,6 +22,9 @@ public:
     bool cancel(TaskId taskId) noexcept;
     void clear() noexcept;
     std::size_t runPending() noexcept;
+    // Called exclusively by the verified game update detour. The first call
+    // establishes the thread on which all game-affecting tasks may execute.
+    std::size_t runPendingFromGameHook() noexcept;
 
 private:
     struct Entry {
@@ -32,6 +35,7 @@ private:
     };
 
     TaskId add(Task task, std::chrono::steady_clock::time_point due, bool everyFrame);
+    std::size_t runReadyTasks() noexcept;
     mutable std::mutex mutex_;
     std::thread::id gameThread_;
     TaskId nextId_ = 1;

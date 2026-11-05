@@ -7,7 +7,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(igi_sdk STATIC
     src/IGI/Logging.cpp
+    src/IGI/NativeCatalogue.cpp
     src/IGI/Scheduler.cpp
+    src/IGI/TargetProfile.cpp
     src/IGI/Runtime.cpp
     src/IGI/HookManager.cpp
 )
@@ -16,10 +18,16 @@ target_compile_definitions(igi_sdk PUBLIC IGI_SDK_IGI1_ONLY=1)
 
 if(WIN32)
     target_compile_definitions(igi_sdk PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_link_libraries(igi_sdk PRIVATE advapi32)
+    add_library(igi_sdk_igi1 SHARED src/IGI/DllExports.cpp)
+    target_link_libraries(igi_sdk_igi1 PRIVATE igi_sdk)
+    target_compile_definitions(igi_sdk_igi1 PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+    set_target_properties(igi_sdk_igi1 PROPERTIES OUTPUT_NAME "IGI-Natives-SDK-IGI1" PREFIX "")
 endif()
 
 add_executable(igi_sdk_tests tests/SchedulerTests.cpp)
 target_link_libraries(igi_sdk_tests PRIVATE igi_sdk)
+target_compile_definitions(igi_sdk_tests PRIVATE IGI_SDK_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
 enable_testing()
 add_test(NAME igi_sdk_tests COMMAND igi_sdk_tests)

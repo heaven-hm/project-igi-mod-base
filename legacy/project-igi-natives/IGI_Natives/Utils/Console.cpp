@@ -1,0 +1,111 @@
+#include "Console.hpp" 
+
+namespace IGI {
+
+	Console::Console() {
+		g_Console = this;
+	}
+
+	Console::~Console() {
+		g_Console = nullptr;
+	}
+
+	void Console::Allocate() {
+
+		if (is_allocated) {
+			return;
+		}
+
+		AllocConsole();
+
+		// Redirect stdout and stderr to console
+		FILE* pCout;
+		FILE* pCerr;
+		freopen_s(&pCout, "CONOUT$", "w", stdout);
+		freopen_s(&pCerr, "CONOUT$", "w", stderr);
+		
+		// Disable buffering to ensure immediate output
+		setvbuf(stdout, NULL, _IONBF, 0);
+		setvbuf(stderr, NULL, _IONBF, 0);
+
+		output_handle = GetStdHandle(STD_OUTPUT_HANDLE);
+
+		const int width = 60;
+		const int height = 50;
+
+		// Add some more scrolling 
+		COORD size;
+		size.X = width;
+		size.Y = height * 10;
+		SetConsoleScreenBufferSize(output_handle, size);
+
+		// Resize our console window 
+		SMALL_RECT rect;
+		rect.Left = rect.Top = 0;
+		rect.Right = width - 1;
+		rect.Bottom = height - 1;
+		SetConsoleWindowInfo(output_handle, TRUE, &rect);
+
+		is_allocated = true;
+	}
+
+	void Console::DeAllocate() {
+
+		if (!is_allocated) {
+			return;
+		}
+
+		// Just free the console - let the system handle stdout/stderr cleanup
+		FreeConsole();
+		
+		// Reset state
+		is_allocated = false;
+		output_handle = INVALID_HANDLE_VALUE;
+	}
+
+	void Console::SetTitle(const string& title) {
+
+		SetConsoleTitle(title.c_str());
+	}
+
+	const string Console::GetTitle() {
+
+		TCHAR title[MAX_PATH];
+		GetConsoleTitle(title, MAX_PATH);
+
+		return title;
+	}
+
+	void Console::Clear() {
+		system("cls");
+	}
+
+	void Console::SetTextColor(const int color) {
+		if (!is_allocated) {
+			return;
+
+		}
+		CONSOLE_SCREEN_BUFFER_INFO screen_buffer;
+		GetConsoleScreenBufferInfo(output_handle, &screen_buffer);
+
+		WORD attributes = screen_buffer.wAttributes & ~FOREGROUND_RED & ~FOREGROUND_GREEN & ~FOREGROUND_BLUE & ~FOREGROUND_INTENSITY;
+		attributes |= color;
+
+		SetConsoleTextAttribute(output_handle, attributes);
+	}
+
+	void Console::SetBackgroundColor(const int color) {
+		if (!is_allocated) {
+			return;
+
+		}
+
+		CONSOLE_SCREEN_BUFFER_INFO screen_buffer;
+		GetConsoleScreenBufferInfo(output_handle, &screen_buffer);
+
+		WORD attributes = screen_buffer.wAttributes & ~BACKGROUND_RED & ~BACKGROUND_GREEN & ~BACKGROUND_BLUE & ~BACKGROUND_INTENSITY;
+		attributes |= color;
+
+		SetConsoleTextAttribute(output_handle, attributes);
+	}
+}

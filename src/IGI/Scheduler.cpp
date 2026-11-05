@@ -50,6 +50,24 @@ void Scheduler::clear() noexcept {
 
 std::size_t Scheduler::runPending() noexcept {
     if (!isGameThread()) return 0;
+    return runReadyTasks();
+}
+
+std::size_t Scheduler::runPendingFromGameHook() noexcept {
+    {
+        std::lock_guard lock(mutex_);
+        if (gameThread_ == std::thread::id{}) {
+            gameThread_ = std::this_thread::get_id();
+        }
+    }
+    if (!isGameThread()) {
+        log(LogLevel::Error, "Game_RunHandler was observed on a second thread; scheduler skipped");
+        return 0;
+    }
+    return runReadyTasks();
+}
+
+std::size_t Scheduler::runReadyTasks() noexcept {
     std::vector<std::pair<TaskId, Task>> ready;
     const auto now = std::chrono::steady_clock::now();
     {

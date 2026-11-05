@@ -1,0 +1,23 @@
+# Neonix IGI-RE catalogue provenance
+
+`neonix-igi-re-names.tsv` is the unmodified native-name/address catalogue
+downloaded from:
+
+`https://github.com/neonixmoddingteam/IGI-RE/blob/main/symbols/names.tsv`
+
+SHA-256: `8655624f9cc3f2e151cb8902ab95f33203d2eae9007ec430cd94850aca80d69f`
+
+`neonix-igi-re-signatures.tsv` is generated with
+`tools/import_igi_re_catalogue.py` from that table and the matching IGI-RE
+`src/` declarations/definitions. It contains only address, name, source,
+kind, and normalized function declaration metadata; no IGI-RE implementation
+code is imported.
+
+All records are `Catalogued` research metadata. A record cannot become a
+stable public wrapper until its target-build address, signature, calling
+convention, and behaviour have been independently verified.
+
+The table has 5,391 function entries. The source import currently recovers
+5,389 signatures; the two remaining entries (`_fsopen` and `_output`) are
+Microsoft C runtime routines for which IGI-RE deliberately provides no C
+rewrite/declaration. They remain catalogued and are never exposed by this SDK.
