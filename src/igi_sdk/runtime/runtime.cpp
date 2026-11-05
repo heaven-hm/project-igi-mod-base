@@ -5,7 +5,7 @@
 namespace igi {
 bool Runtime::initialize() {
     if (initialized_) return true;
-    if (!hooks_.installPrimaryGameRunHandler()) return false;
+    if (!hooks_.installTextDrawHook()) return false;
     initialized_ = true;
     log(LogLevel::Info, "IGI 1 SDK runtime initialized");
     return true;
