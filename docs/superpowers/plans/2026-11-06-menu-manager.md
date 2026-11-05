@@ -185,7 +185,7 @@ git commit -m "feat: schedule menu callbacks on game thread"
 - Consumes: `MenuManager::handleInput` from Task 2 and callback scheduling from Task 3.
 - Produces: `MenuManager::updateInput(MenuInput, std::chrono::milliseconds)` and `MenuManager::shutdown()`.
 
-- [ ] **Step 1: Write failing repeat and shutdown tests**
+- [x] **Step 1: Write failing repeat and shutdown tests**
 
 ```cpp
 menuManager.updateInput(igi::MenuInput::Down, 0ms);
@@ -197,13 +197,13 @@ assert(!menuManager.snapshot().visible);
 assert(!menuManager.handleInput(igi::MenuInput::Confirm));
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `cmake --build build -j2 && ctest --test-dir build --output-on-failure`
 
 Expected: compilation failure because repeat/update and shutdown APIs do not exist.
 
-- [ ] **Step 3: Implement deterministic repeat and shutdown**
+- [x] **Step 3: Implement deterministic repeat and shutdown**
 
 ```cpp
 void MenuManager::updateInput(MenuInput input, std::chrono::milliseconds elapsed);
@@ -212,13 +212,13 @@ void MenuManager::shutdown() noexcept;
 
 Use a 300 ms initial delay and 100 ms repeat interval. Clear all menus and callbacks on shutdown, hide the menu, and reject all later input.
 
-- [ ] **Step 4: Run complete tests and cross-build**
+- [x] **Step 4: Run complete tests and cross-build**
 
 Run: `cmake --build build -j2 && ctest --test-dir build --output-on-failure && cmake --build build-win32 -j2`
 
 Expected: host tests pass and the Windows x86 DLL still links.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add include/IGI/MenuManager.hpp src/IGI/MenuManager.cpp tests/MenuManagerTests.cpp docs/menu-manager.md
