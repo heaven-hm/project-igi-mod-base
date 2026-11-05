@@ -36,6 +36,10 @@ extern "C" void __cdecl igiGameRunScheduler() noexcept { activeScheduler->runPen
 namespace igi {
 bool HookManager::installPrimaryGameRunHandler() {
 #if defined(_WIN32) && (defined(__i386__) || defined(_M_IX86))
+    if (installed_) {
+        log(LogLevel::Warning, "IGI 1 Game_RunHandler hook is already installed");
+        return false;
+    }
     if (!igi1::isSupportedExecutable()) {
         log(LogLevel::Error, "IGI 1 executable SHA-256 mismatch; hook refused");
         return false;
@@ -59,12 +63,20 @@ bool HookManager::installPrimaryGameRunHandler() {
     activeScheduler = &scheduler_;
     igiGameRunTrampoline = trampoline;
     DWORD oldProtection = 0;
-    VirtualProtect(target, 7, PAGE_EXECUTE_READWRITE, &oldProtection);
+    if (!VirtualProtect(target, 7, PAGE_EXECUTE_READWRITE, &oldProtection)) {
+        igiGameRunTrampoline = nullptr;
+        activeScheduler = nullptr;
+        VirtualFree(trampoline, 0, MEM_RELEASE);
+        log(LogLevel::Error, "could not make IGI 1 Game_RunHandler writable");
+        return false;
+    }
     target[0] = 0xE9;
     *reinterpret_cast<std::int32_t*>(target + 1) = static_cast<std::int32_t>(reinterpret_cast<std::uintptr_t>(&gameRunHandlerDetour) - (reinterpret_cast<std::uintptr_t>(target) + 5));
     target[5] = 0x90; target[6] = 0x90;
     FlushInstructionCache(GetCurrentProcess(), target, 7);
-    VirtualProtect(target, 7, oldProtection, &oldProtection);
+    if (!VirtualProtect(target, 7, oldProtection, &oldProtection)) {
+        log(LogLevel::Warning, "IGI 1 Game_RunHandler protection could not be restored");
+    }
     trampoline_ = trampoline;
     installed_ = true;
     log(LogLevel::Info, "IGI 1 Game_RunHandler scheduler hook installed");
