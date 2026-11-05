@@ -8,6 +8,7 @@ void menuManagerModelTest() {
     igi::MenuManager menuManager(scheduler);
     menuManager.createMenu("main", "Main");
     menuManager.addInfo("main", "Status", "Ready");
+    assert(!menuManager.addInfo("unknown", "Ignored", "Ignored"));
     const auto snapshot = menuManager.snapshot();
     assert(snapshot.title == "Main");
     assert(snapshot.items.size() == 1);
