@@ -30,4 +30,30 @@ bytes=$(r2 -2 -q -c 's 0x00401050; p8 7' "$binary" | tr -d '[:space:]')
 }
 
 echo "verified Game_RunHandler, Flow_RunHandler, and Game_Update prologues"
+
+metadata=$(r2 -2 -q -e scr.color=0 -c 'aaa; af @ 0x00416260; af @ 0x00402260; afij @ 0x00416260; afij @ 0x00402260; axt 0x00416260; axt 0x00402260; axt 0x00401050' "$binary")
+printf '%s\n' "$metadata" | grep -Eq '"calltype":"cdecl".*"nargs":1' || {
+    echo "expected cdecl one-argument metadata for Game_RunHandler/Flow_RunHandler" >&2
+    exit 1
+}
+printf '%s\n' "$metadata" | grep -q '0x415632.*fcn\.00416260' || {
+    echo "Game_RunHandler task-table registration xref missing" >&2
+    exit 1
+}
+printf '%s\n' "$metadata" | grep -q '0x401fef.*fcn\.00402260' || {
+    echo "Flow_RunHandler task-table registration xref missing" >&2
+    exit 1
+}
+printf '%s\n' "$metadata" | grep -q '0x48f81b.*fcn\.00401050' || {
+    echo "Game_Update outer call-flow xref missing" >&2
+    exit 1
+}
+
+update_body=$(r2 -2 -q -e scr.color=0 -c 'aaa; pdf @ 0x00401050' "$binary")
+printf '%s\n' "$update_body" | grep -Eq 'call +esi' || {
+    echo "Game_Update indirect task-handler dispatch was not found" >&2
+    exit 1
+}
+
+echo "verified cdecl arguments and task-table call flow"
 r2 -2 -q -c 's 0x00416260; pd 7; s 0x00402260; pd 7; s 0x00401050; pd 7' "$binary"
