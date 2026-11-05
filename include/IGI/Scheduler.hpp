@@ -22,6 +22,7 @@ public:
     TaskId enqueueDelayed(std::chrono::milliseconds delay, Task task);
     bool cancel(TaskId taskId) noexcept;
     void clear() noexcept;
+    void reset() noexcept;
     std::size_t runPending() noexcept;
     // Called exclusively by the verified game update detour. The first call
     // establishes the thread on which all game-affecting tasks may execute.

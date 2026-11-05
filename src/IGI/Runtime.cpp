@@ -13,7 +13,7 @@ bool Runtime::initialize() {
 
 void Runtime::shutdown() noexcept {
     hooks_.uninstall();
-    scheduler_.clear();
+    scheduler_.reset();
     initialized_ = false;
 }
 }

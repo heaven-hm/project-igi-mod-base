@@ -48,6 +48,13 @@ void Scheduler::clear() noexcept {
     entries_.clear();
 }
 
+void Scheduler::reset() noexcept {
+    std::lock_guard lock(mutex_);
+    entries_.clear();
+    gameThread_ = {};
+    gameHookInvocations_.store(0, std::memory_order_relaxed);
+}
+
 std::size_t Scheduler::runPending() noexcept {
     if (!isGameThread()) return 0;
     return runReadyTasks();
