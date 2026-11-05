@@ -2,11 +2,16 @@
 #include "IGI/Scheduler.hpp"
 
 #include <cassert>
+#include <chrono>
 #include <vector>
+
+using namespace std::chrono_literals;
 
 void menuManagerNavigationTest();
 void menuManagerSubmenuAndInvalidIdTest();
 void menuManagerSchedulerBoundaryTest();
+void menuManagerInputRepeatTest();
+void menuManagerShutdownTest();
 
 void menuManagerModelTest() {
     igi::Scheduler scheduler;
@@ -21,6 +26,42 @@ void menuManagerModelTest() {
     menuManagerNavigationTest();
     menuManagerSubmenuAndInvalidIdTest();
     menuManagerSchedulerBoundaryTest();
+    menuManagerInputRepeatTest();
+    menuManagerShutdownTest();
+}
+
+void menuManagerInputRepeatTest() {
+    igi::Scheduler scheduler;
+    igi::MenuManager menuManager(scheduler);
+
+    assert(menuManager.createMenu("main", "Main"));
+    assert(menuManager.addInteger("main", "Distance", 0, 0, 10, 1, [](int) {}));
+
+    menuManager.updateInput(igi::MenuInput::Right, 0ms);
+    assert(menuManager.snapshot().items[0].numberValue == 1.0);
+    menuManager.updateInput(igi::MenuInput::Right, 299ms);
+    assert(menuManager.snapshot().items[0].numberValue == 1.0);
+    menuManager.updateInput(igi::MenuInput::Right, 1ms);
+    assert(menuManager.snapshot().items[0].numberValue == 2.0);
+    menuManager.updateInput(igi::MenuInput::Right, 99ms);
+    assert(menuManager.snapshot().items[0].numberValue == 2.0);
+    menuManager.updateInput(igi::MenuInput::Right, 1ms);
+    assert(menuManager.snapshot().items[0].numberValue == 3.0);
+}
+
+void menuManagerShutdownTest() {
+    igi::Scheduler scheduler;
+    igi::MenuManager menuManager(scheduler);
+
+    assert(menuManager.createMenu("main", "Main"));
+    assert(menuManager.addInfo("main", "Status", "Ready"));
+    menuManager.shutdown();
+
+    const auto snapshot = menuManager.snapshot();
+    assert(snapshot.items.empty());
+    assert(!snapshot.visible);
+    assert(!menuManager.handleInput(igi::MenuInput::Confirm));
+    assert(!menuManager.handleInput(igi::MenuInput::ToggleVisibility));
 }
 
 void menuManagerSchedulerBoundaryTest() {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <chrono>
 #include <functional>
 #include <optional>
 #include <string>
@@ -46,6 +47,8 @@ public:
                  std::size_t initialIndex, std::function<void(std::size_t)> callback);
     bool addSubmenu(std::string_view menuId, std::string label, std::string_view submenuId);
     bool handleInput(MenuInput input);
+    void updateInput(MenuInput input, std::chrono::milliseconds elapsed);
+    void shutdown() noexcept;
     MenuSnapshot snapshot() const;
 
 private:
@@ -75,11 +78,16 @@ private:
     bool moveSelection(int direction) noexcept;
     bool adjustSelectedValue(int direction) noexcept;
     static bool isSelectable(MenuItemKind kind) noexcept;
+    static bool isRepeatable(MenuInput input) noexcept;
 
     Scheduler& scheduler_;
     std::vector<Menu> menus_;
     std::vector<std::size_t> menuStack_;
     std::size_t activeMenuIndex_ = 0;
     bool visible_ = true;
+    bool shutdown_ = false;
+    std::optional<MenuInput> repeatingInput_;
+    std::chrono::milliseconds repeatElapsed_{0};
+    bool repeatStarted_ = false;
 };
 }

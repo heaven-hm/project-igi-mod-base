@@ -10,7 +10,7 @@ namespace igi {
 MenuManager::MenuManager(Scheduler& scheduler) noexcept : scheduler_(scheduler) {}
 
 bool MenuManager::createMenu(std::string id, std::string title) {
-    if (findMenu(id) != nullptr) return false;
+    if (shutdown_ || findMenu(id) != nullptr) return false;
     try {
         menus_.push_back(Menu{std::move(id), std::move(title), {}, 0});
         activeMenuIndex_ = menus_.size() - 1;
@@ -121,6 +121,7 @@ bool MenuManager::addSubmenu(std::string_view menuId, std::string label, std::st
 }
 
 bool MenuManager::handleInput(MenuInput input) {
+    if (shutdown_) return false;
     if (input == MenuInput::ToggleVisibility) {
         if (menus_.empty()) return false;
         visible_ = !visible_;
@@ -168,6 +169,52 @@ bool MenuManager::handleInput(MenuInput input) {
     case MenuInput::ToggleVisibility: return false;
     }
     return false;
+}
+
+void MenuManager::updateInput(MenuInput input, std::chrono::milliseconds elapsed) {
+    if (shutdown_ || menus_.empty() || !visible_) return;
+
+    if (!isRepeatable(input)) {
+        repeatingInput_.reset();
+        repeatElapsed_ = std::chrono::milliseconds{0};
+        repeatStarted_ = false;
+        handleInput(input);
+        return;
+    }
+
+    if (!repeatingInput_.has_value() || *repeatingInput_ != input) {
+        repeatingInput_ = input;
+        repeatElapsed_ = std::chrono::milliseconds{0};
+        repeatStarted_ = false;
+        handleInput(input);
+        return;
+    }
+
+    if (elapsed.count() <= 0) return;
+    repeatElapsed_ += elapsed;
+    constexpr auto initialDelay = std::chrono::milliseconds{300};
+    constexpr auto repeatInterval = std::chrono::milliseconds{100};
+    if (!repeatStarted_) {
+        if (repeatElapsed_ < initialDelay) return;
+        repeatElapsed_ -= initialDelay;
+        repeatStarted_ = true;
+        handleInput(input);
+    }
+    while (repeatElapsed_ >= repeatInterval) {
+        repeatElapsed_ -= repeatInterval;
+        handleInput(input);
+    }
+}
+
+void MenuManager::shutdown() noexcept {
+    menus_.clear();
+    menuStack_.clear();
+    activeMenuIndex_ = 0;
+    visible_ = false;
+    shutdown_ = true;
+    repeatingInput_.reset();
+    repeatElapsed_ = std::chrono::milliseconds{0};
+    repeatStarted_ = false;
 }
 
 MenuSnapshot MenuManager::snapshot() const {
@@ -246,5 +293,9 @@ bool MenuManager::adjustSelectedValue(int direction) noexcept {
 
 bool MenuManager::isSelectable(MenuItemKind kind) noexcept {
     return kind != MenuItemKind::Info && kind != MenuItemKind::Separator;
+}
+
+bool MenuManager::isRepeatable(MenuInput input) noexcept {
+    return input == MenuInput::Up || input == MenuInput::Down || input == MenuInput::Left || input == MenuInput::Right;
 }
 }
