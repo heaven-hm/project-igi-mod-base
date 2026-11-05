@@ -135,7 +135,7 @@ git commit -m "feat: add menu navigation and typed items"
 - Consumes: `Scheduler::enqueueOnce`, `Scheduler::runPendingFromGameHook`, and all typed item callbacks from Task 2.
 - Produces: callback execution semantics: mutations enqueue callbacks; callbacks do not run during `handleInput`.
 
-- [ ] **Step 1: Write the failing scheduler-boundary test**
+- [x] **Step 1: Write the failing scheduler-boundary test**
 
 ```cpp
 int calls = 0;
@@ -146,13 +146,13 @@ scheduler.runPendingFromGameHook();
 assert(calls == 1);
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `cmake --build build -j2 && ctest --test-dir build --output-on-failure`
 
 Expected: assertion failure because the callback currently executes inline or is not scheduled.
 
-- [ ] **Step 3: Enqueue every feature callback**
+- [x] **Step 3: Enqueue every feature callback**
 
 ```cpp
 scheduler_.enqueueOnce([callback = item.action] { callback(); });
@@ -160,13 +160,13 @@ scheduler_.enqueueOnce([callback = item.action] { callback(); });
 
 Capture the changed value by value for toggle, integer, float, and list callbacks. If `enqueueOnce` returns zero, preserve the visual value but return `false` from `handleInput` and log a warning.
 
-- [ ] **Step 4: Run scheduler-boundary tests**
+- [x] **Step 4: Run scheduler-boundary tests**
 
 Run: `cmake --build build -j2 && ctest --test-dir build --output-on-failure`
 
 Expected: callbacks run exactly once only after the scheduler is entered through its game-hook method.
 
-- [ ] **Step 5: Document and commit**
+- [x] **Step 5: Document and commit**
 
 ```bash
 git add src/IGI/MenuManager.cpp tests/MenuManagerTests.cpp docs/architecture.md
