@@ -51,6 +51,11 @@ int main() {
         "00400000\tSecond\tmanual\tentry\tvoid Second(void)\n");
     igi::NativeCatalogue duplicateCatalogue;
     assert(!duplicateCatalogue.load(duplicateRecords));
+    std::istringstream aliasedRecords(
+        "00400000\tSharedName\tmanual\tentry\tvoid SharedName(void)\n"
+        "00400001\tSharedName\tmanual\tentry\tvoid SharedName(void)\n");
+    igi::NativeCatalogue aliasedCatalogue;
+    assert(aliasedCatalogue.load(aliasedRecords) && aliasedCatalogue.size() == 2);
     menuManagerModelTest();
     return 0;
 }
