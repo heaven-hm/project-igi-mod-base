@@ -1,6 +1,6 @@
 #pragma once
 
-#include "IGI/HookManager.hpp"
+#include "igi_sdk/runtime/hook_manager.hpp"
 
 #include <cstdint>
 

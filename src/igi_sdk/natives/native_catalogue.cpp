@@ -1,4 +1,4 @@
-#include "IGI/NativeCatalogue.hpp"
+#include "igi_sdk/natives/native_catalogue.hpp"
 
 #include <charconv>
 #include <istream>

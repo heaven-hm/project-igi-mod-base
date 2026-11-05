@@ -1,6 +1,6 @@
 #pragma once
 
-#include "IGI/Scheduler.hpp"
+#include "igi_sdk/runtime/scheduler.hpp"
 
 #include <cstdint>
 

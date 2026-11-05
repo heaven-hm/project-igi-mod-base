@@ -1,6 +1,6 @@
-#include "IGI/Runtime.hpp"
+#include "igi_sdk/runtime/runtime.hpp"
 
-#include "IGI/Logging.hpp"
+#include "igi_sdk/logging/logging.hpp"
 
 namespace igi {
 bool Runtime::initialize() {

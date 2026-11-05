@@ -1,9 +1,10 @@
 # IGI 1 MVP architecture
 
-Public headers are grouped by responsibility using the BigBase-style module
-paths `IGI/UI`, `IGI/Runtime`, `IGI/Natives`, and `IGI/Logging`. The original
-flat headers remain compatibility entry points; the grouped headers forward to
-the single implementation so the SDK does not maintain duplicate APIs.
+Public headers are grouped by responsibility using the module paths
+`igi_sdk/ui`, `igi_sdk/runtime`, `igi_sdk/natives`, and `igi_sdk/logging`.
+Implementations use the same layout under `src/igi_sdk`, so include paths and
+source ownership are easy to discover on both case-sensitive and
+case-insensitive filesystems.
 
 ## Source roles
 

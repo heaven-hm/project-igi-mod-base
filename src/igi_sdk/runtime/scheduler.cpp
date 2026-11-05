@@ -1,6 +1,6 @@
-#include "IGI/Scheduler.hpp"
+#include "igi_sdk/runtime/scheduler.hpp"
 
-#include "IGI/Logging.hpp"
+#include "igi_sdk/logging/logging.hpp"
 
 #include <vector>
 

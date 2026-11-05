@@ -1,6 +1,6 @@
-#include "IGI/TargetProfile.hpp"
+#include "igi_sdk/runtime/target_profile.hpp"
 
-#include "IGI/IGI1Hooks.hpp"
+#include "igi_sdk/runtime/igi1_hooks.hpp"
 
 #include <array>
 #include <cstring>

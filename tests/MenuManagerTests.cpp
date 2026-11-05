@@ -1,5 +1,5 @@
-#include "IGI/MenuManager.hpp"
-#include "IGI/Scheduler.hpp"
+#include "igi_sdk/ui/menu_manager.hpp"
+#include "igi_sdk/runtime/scheduler.hpp"
 
 #include <cassert>
 #include <chrono>

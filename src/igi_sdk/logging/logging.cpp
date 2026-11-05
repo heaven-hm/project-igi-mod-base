@@ -1,4 +1,4 @@
-#include "IGI/Logging.hpp"
+#include "igi_sdk/logging/logging.hpp"
 
 #include <cstdio>
 #include <mutex>

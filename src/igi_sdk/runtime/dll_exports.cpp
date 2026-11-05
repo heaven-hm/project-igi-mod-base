@@ -1,4 +1,4 @@
-#include "IGI/Runtime.hpp"
+#include "igi_sdk/runtime/runtime.hpp"
 
 #if defined(_WIN32)
 #include <windows.h>

@@ -1,11 +1,11 @@
-#include "IGI/Scheduler.hpp"
-#include "IGI/Logging/Logging.hpp"
-#include "IGI/Natives/NativeCatalogue.hpp"
-#include "IGI/Runtime/HookManager.hpp"
-#include "IGI/Runtime/Runtime.hpp"
-#include "IGI/Runtime/Scheduler.hpp"
-#include "IGI/UI/MenuManager.hpp"
-#include "IGI/NativeCatalogue.hpp"
+#include "igi_sdk/runtime/scheduler.hpp"
+#include "igi_sdk/logging/logging.hpp"
+#include "igi_sdk/natives/native_catalogue.hpp"
+#include "igi_sdk/runtime/hook_manager.hpp"
+#include "igi_sdk/runtime/runtime.hpp"
+#include "igi_sdk/runtime/scheduler.hpp"
+#include "igi_sdk/ui/menu_manager.hpp"
+#include "igi_sdk/natives/native_catalogue.hpp"
 
 #include <cassert>
 #include <chrono>

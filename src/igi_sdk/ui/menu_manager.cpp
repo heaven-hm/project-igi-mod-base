@@ -1,7 +1,7 @@
-#include "IGI/MenuManager.hpp"
+#include "igi_sdk/ui/menu_manager.hpp"
 
-#include "IGI/Logging.hpp"
-#include "IGI/Scheduler.hpp"
+#include "igi_sdk/logging/logging.hpp"
+#include "igi_sdk/runtime/scheduler.hpp"
 
 #include <algorithm>
 #include <utility>

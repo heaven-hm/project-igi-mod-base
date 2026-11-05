@@ -1,8 +1,8 @@
-#include "IGI/HookManager.hpp"
+#include "igi_sdk/runtime/hook_manager.hpp"
 
-#include "IGI/IGI1Hooks.hpp"
-#include "IGI/Logging.hpp"
-#include "IGI/TargetProfile.hpp"
+#include "igi_sdk/runtime/igi1_hooks.hpp"
+#include "igi_sdk/logging/logging.hpp"
+#include "igi_sdk/runtime/target_profile.hpp"
 
 #include <cstring>
 
