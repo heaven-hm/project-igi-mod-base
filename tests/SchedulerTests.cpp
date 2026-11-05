@@ -62,6 +62,11 @@ int main() {
     assert(mainMenu.currentScreen()->title == "Configuration");
     assert(mainMenu.popScreen(true));
     assert(mainMenu.currentScreen()->id == 900);
+    auto modMenu = igi::Igi1MenuManager::create(igi::Igi1MenuSet::InGame);
+    assert(modMenu.pushScreen(990));
+    assert(modMenu.currentScreen()->widgets.size() == 10);
+    assert(modMenu.currentScreen()->widgets[0].label == "Weather: Rain");
+    assert(modMenu.currentScreen()->widgets[3].label == "Free Camera");
     const auto* gameRunHandler = catalogue.findByAddress(0x00416260);
     assert(gameRunHandler != nullptr);
     assert(gameRunHandler->name == "Game_RunHandler");

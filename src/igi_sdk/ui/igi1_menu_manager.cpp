@@ -42,6 +42,21 @@ Igi1MenuScreen configurationScreen() {
     screen.widgets.push_back(text("Vita", "Vita", "MenuManager_RequestScreen(980, FALSE)"));
     return screen;
 }
+
+Igi1MenuScreen modScreen() {
+    Igi1MenuScreen screen{990, "IGI SDK Mod Menu", "mainmenu.pic", "MenuManager_PopScreen(FALSE)", {}};
+    screen.widgets.push_back(text("weather", "Weather: Rain", "IGI_SDK_SetWeather(\"rain\")"));
+    screen.widgets.push_back(text("weapons", "Give All Weapons", "IGI_SDK_GiveAllWeapons()"));
+    screen.widgets.push_back(text("sound", "Sound Profile", "IGI_SDK_SetSoundProfile()"));
+    screen.widgets.push_back(text("camera", "Free Camera", "IGI_SDK_ToggleFreeCamera()"));
+    screen.widgets.push_back(text("god", "Invulnerability", "IGI_SDK_ToggleInvulnerability()"));
+    screen.widgets.push_back(text("ammo", "Unlimited Ammo", "HumanPlayer_SetUnlimitedAmmo()"));
+    screen.widgets.push_back(text("visibility", "Enemy Visibility", "IGI_SDK_ToggleEnemyVisibility()"));
+    screen.widgets.push_back(text("speed", "Player Speed", "IGI_SDK_SetPlayerSpeed()"));
+    screen.widgets.push_back(text("teleport", "Mission Teleport", "IGI_SDK_OpenTeleport()"));
+    screen.widgets.push_back(text("logs", "Runtime Logs", "IGI_SDK_ToggleRuntimeLogs()"));
+    return screen;
+}
 }
 
 namespace igi {
@@ -52,6 +67,7 @@ Igi1MenuManager Igi1MenuManager::create(Igi1MenuSet set) {
     if (set == Igi1MenuSet::InGame) {
         manager.screens_.push_back(Igi1MenuScreen{902, "Sound Configuration", "mainmenu.pic", "MenuManager_PopScreen(FALSE)", {}});
         manager.screens_.push_back(Igi1MenuScreen{903, "Controls Configuration", "mainmenu.pic", "MenuManager_PopScreen(FALSE)", {}});
+        manager.screens_.push_back(modScreen());
     }
     manager.screens_.push_back(Igi1MenuScreen{931, "Quit Main Menu", "", "MenuManager_LeaveMenus(0, MENUMANAGER_QUIT)", {}});
     manager.screens_.push_back(Igi1MenuScreen{932, "Restart Mission", "", "MenuManager_LeaveMenus(900, MENUMANAGER_RESTARTLEVEL)", {}});

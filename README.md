@@ -73,6 +73,11 @@ macOS:
 - Apple Clang and Command Line Tools
 - CMake from Homebrew or the system installation
 
+Linux:
+
+- GCC or Clang with C++20 support
+- CMake and a native build tool such as Ninja or Make
+
 Windows IGI 1 DLL:
 
 - 32-bit Windows C++ toolchain, or a MinGW-w64 i686 cross-compiler
@@ -90,9 +95,27 @@ ctest --test-dir /tmp/igi-sdk-macos-release --output-on-failure
 ```
 
 The macOS build produces the portable static library `libigi_sdk.a` and the
+portable `IGI-Natives-SDK-IGI1.dylib` export library plus the
 `igi_sdk_tests` executable. The tests cover scheduler thread binding, native
 catalogue loading and deduplication, MenuManager behavior, callbacks, repeat
 input, and shutdown.
+
+## Build and test on Linux
+
+The Linux build produces `libigi_sdk.a`,
+`libIGI-Natives-SDK-IGI1.so`, the internal shared-library demo, the external
+companion, and the portable test executable:
+
+```sh
+cmake -S . -B /tmp/igi-sdk-linux-release -DCMAKE_BUILD_TYPE=Release
+cmake --build /tmp/igi-sdk-linux-release --parallel
+ctest --test-dir /tmp/igi-sdk-linux-release --output-on-failure
+```
+
+Linux uses the same portable scheduler, native catalogue, runner, IGI 1 QVM
+menu model, logging, and demo ABI as macOS. It does not install the Windows
+x86 executable patch; `HookManager` reports that the Windows hook backend is
+unavailable on Linux.
 
 To build the examples as well, leave the default enabled or set the option
 explicitly:
@@ -182,6 +205,14 @@ It loads all records, reports domain counts, resolves a native by name, and
 executes that metadata callback through `Scheduler`. It deliberately does not
 attach to another process or write game memory. Any future external control
 must use a separately reviewed IPC protocol shared with an in-process mod.
+
+The internal demo's IGI 1 mod screen contains ten example options: weather,
+all weapons, sound profile, free camera, invulnerability, unlimited ammo,
+enemy visibility, player speed, mission teleport, and runtime logging. These
+are menu action definitions tied to the SDK scheduler boundary. A mod must
+bind each action to a separately verified native wrapper before it changes
+game state; the demo never calls an unverified address just because a name is
+present in the catalogue.
 
 ## Creating an IGI 1 mod
 

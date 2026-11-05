@@ -5,6 +5,8 @@
 
 #if defined(_WIN32)
 #define IGI_DEMO_EXPORT __declspec(dllexport)
+#elif defined(__GNUC__) || defined(__clang__)
+#define IGI_DEMO_EXPORT __attribute__((visibility("default")))
 #else
 #define IGI_DEMO_EXPORT
 #endif
@@ -22,7 +24,7 @@ extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_Internal_Initialize() {
 #endif
 
     gameMenu = std::make_unique<igi::Igi1MenuManager>(igi::Igi1MenuManager::create(igi::Igi1MenuSet::InGame));
-    gameMenu->pushScreen(902);
+    gameMenu->pushScreen(990);
     return true;
 }
 

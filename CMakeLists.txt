@@ -41,6 +41,10 @@ if(WIN32)
     target_link_libraries(igi_sdk_igi1 PRIVATE igi_sdk)
     target_compile_definitions(igi_sdk_igi1 PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
     set_target_properties(igi_sdk_igi1 PROPERTIES OUTPUT_NAME "IGI-Natives-SDK-IGI1" PREFIX "")
+else()
+    add_library(igi_sdk_igi1 SHARED src/igi_sdk/runtime/portable_exports.cpp)
+    target_link_libraries(igi_sdk_igi1 PRIVATE igi_sdk)
+    set_target_properties(igi_sdk_igi1 PROPERTIES OUTPUT_NAME "IGI-Natives-SDK-IGI1")
 endif()
 
 add_executable(igi_sdk_tests
