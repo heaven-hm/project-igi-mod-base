@@ -7,6 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(igi_sdk STATIC
     src/IGI/Logging.cpp
+    src/IGI/MenuManager.cpp
     src/IGI/NativeCatalogue.cpp
     src/IGI/Scheduler.cpp
     src/IGI/TargetProfile.cpp
@@ -25,7 +26,10 @@ if(WIN32)
     set_target_properties(igi_sdk_igi1 PROPERTIES OUTPUT_NAME "IGI-Natives-SDK-IGI1" PREFIX "")
 endif()
 
-add_executable(igi_sdk_tests tests/SchedulerTests.cpp)
+add_executable(igi_sdk_tests
+    tests/SchedulerTests.cpp
+    tests/MenuManagerTests.cpp
+)
 target_link_libraries(igi_sdk_tests PRIVATE igi_sdk)
 target_compile_definitions(igi_sdk_tests PRIVATE IGI_SDK_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 

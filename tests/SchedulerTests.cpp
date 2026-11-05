@@ -6,6 +6,8 @@
 #include <fstream>
 #include <string>
 
+void menuManagerModelTest();
+
 int main() {
     igi::Scheduler scheduler;
     scheduler.bindGameThread();
@@ -33,5 +35,6 @@ int main() {
     assert(gameRunHandler->name == "Game_RunHandler");
     assert(gameRunHandler->signature == "void Game_RunHandler(Game *g)");
     assert(gameRunHandler->verification == igi::NativeVerification::Catalogued);
+    menuManagerModelTest();
     return 0;
 }
