@@ -1,4 +1,10 @@
 #include "IGI/Scheduler.hpp"
+#include "IGI/Logging/Logging.hpp"
+#include "IGI/Natives/NativeCatalogue.hpp"
+#include "IGI/Runtime/HookManager.hpp"
+#include "IGI/Runtime/Runtime.hpp"
+#include "IGI/Runtime/Scheduler.hpp"
+#include "IGI/UI/MenuManager.hpp"
 #include "IGI/NativeCatalogue.hpp"
 
 #include <cassert>
