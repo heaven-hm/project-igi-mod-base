@@ -10,7 +10,7 @@ not copied, required in this repository, or redistributed. IGI-RE is a
 GPL-2.0-only research reference; this MVP contains no IGI-RE source, object
 code, or linked library.
 
-The preserved predecessor baseline contains the MinHook public header and
-`nlohmann/json` 3.10.2 header; their notices are under `LICENSES/`. Before
-vendoring Dear ImGui, GTLibCpp, or any additional component, record the exact
-upstream revision and include its applicable notice under `LICENSES/`.
+The license directory retains notices for historical predecessor dependencies;
+their source is not part of this repository. Before vendoring Dear ImGui,
+GTLibCpp, or any additional component, record the exact upstream revision and
+include its applicable notice under `LICENSES/`.

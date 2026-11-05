@@ -9,8 +9,8 @@ material.
 
 The predecessor, `project-igi-natives`, is MIT licensed. Its license text is
 retained verbatim in [LICENSE-PRIOR](LICENSE-PRIOR) and in the third-party
-notice directory. The preserved legacy baseline under `legacy/` remains under
-that MIT license; new SDK files remain governed by the root license.
+notice directory. The predecessor source is not bundled; new SDK files remain
+governed by the root license.
 
 ## Research-only sources
 

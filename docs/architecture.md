@@ -10,7 +10,7 @@ case-insensitive filesystems.
 
 | Source | Role in this SDK | Current treatment |
 | --- | --- | --- |
-| `project-igi-natives` | primary legacy SDK base | Preserved under `legacy/`; migrated module by module under its MIT licence. |
+| `project-igi-natives` | historical design input | Not copied into the build; the active SDK has one `include/igi_sdk` + `src/igi_sdk` implementation tree. |
 | Neonix Modding Team `IGI-RE` | IGI 1 native address/name/signature research | Imported as catalogued metadata only; no implementation source is compiled. |
 | BigBaseV2 | runtime, script-scheduler, hook/lifecycle design reference | Architectural reference only; no code copied. |
 | GTLibCpp | optional generic utility reference | Not linked or exposed; its process-memory surface conflicts with the SDK's native-first public boundary. |

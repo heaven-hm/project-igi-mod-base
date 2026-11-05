@@ -29,7 +29,6 @@ project-igi-natives-sdk/
 │   └── imgui/                 external-style catalogue companion example
 ├── tests/              portable CTest coverage
 ├── data/IGI1/          IGI-RE address/name/signature metadata
-├── legacy/             preserved project-igi-natives predecessor source
 ├── tools/              verification and catalogue-import scripts
 ├── docs/               focused architecture, licensing, and runtime notes
 ├── CMakeLists.txt
@@ -37,11 +36,10 @@ project-igi-natives-sdk/
 └── CHANGELOG.md
 ```
 
-The `legacy/` directory is historical reference material and is not compiled
-into the active SDK. Its old executor, MinHook wrappers, and game-specific
-helpers remain there only for attribution and migration review. New code
-belongs in `include/igi_sdk/` and `src/igi_sdk/`; do not add new modules under
-`legacy/`.
+There is one SDK implementation in this repository. Public headers live under
+`include/igi_sdk/` and implementations live under `src/igi_sdk/`; the two trees
+use the same module names. The old `legacy/project-igi-natives` duplicate is
+not part of the SDK and is intentionally not included.
 
 The internal `Igi1MenuManager` model is based on the decoded retail files
 `ingamemenu.qvm` and `MAINMENU.QVM`. Their structure is represented as

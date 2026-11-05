@@ -8,9 +8,8 @@ Research attribution:
   addresses/names and signature metadata in `data/IGI1/`. No IGI-RE function
   implementation source is included in this MVP.
 - heaven-hm/project-igi-natives (MIT) is the planned migration predecessor.
-  Its legacy source baseline is preserved under `legacy/project-igi-natives/`
-  with its original MIT notice; it is excluded from the active build pending
-  module-by-module migration.
+  Its historical design informed this SDK, but its source is not bundled in
+  this repository.
 
 Future integrations of Dear ImGui, MinHook, GTLibCpp, or other dependencies
 must add the exact upstream version and license text before shipping code.
