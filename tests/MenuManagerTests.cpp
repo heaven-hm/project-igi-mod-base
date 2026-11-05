@@ -6,6 +6,7 @@
 
 void menuManagerNavigationTest();
 void menuManagerSubmenuAndInvalidIdTest();
+void menuManagerSchedulerBoundaryTest();
 
 void menuManagerModelTest() {
     igi::Scheduler scheduler;
@@ -19,6 +20,20 @@ void menuManagerModelTest() {
     assert(snapshot.items[0].kind == igi::MenuItemKind::Info);
     menuManagerNavigationTest();
     menuManagerSubmenuAndInvalidIdTest();
+    menuManagerSchedulerBoundaryTest();
+}
+
+void menuManagerSchedulerBoundaryTest() {
+    igi::Scheduler scheduler;
+    igi::MenuManager menuManager(scheduler);
+    int calls = 0;
+
+    assert(menuManager.createMenu("main", "Main"));
+    assert(menuManager.addAction("main", "Apply", [&] { ++calls; }));
+    assert(menuManager.handleInput(igi::MenuInput::Confirm));
+    assert(calls == 0);
+    scheduler.runPendingFromGameHook();
+    assert(calls == 1);
 }
 
 void menuManagerNavigationTest() {

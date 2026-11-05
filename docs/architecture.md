@@ -28,6 +28,10 @@ Scheduler executes due SDK tasks with exception containment
 The MVP never schedules through `Draw`, `MenuManager_Draw`, or
 `TextPrintDetour()`.
 
+Menu input only updates the menu's visual state and enqueues feature callbacks;
+those callbacks execute only when `Scheduler::runPendingFromGameHook()` enters
+the verified game-thread boundary.
+
 ## Native states
 
 - **Catalogued**: a Neonix source record is present.

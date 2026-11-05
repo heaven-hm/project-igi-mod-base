@@ -1,5 +1,6 @@
 #include "IGI/MenuManager.hpp"
 
+#include "IGI/Logging.hpp"
 #include "IGI/Scheduler.hpp"
 
 #include <algorithm>
@@ -137,7 +138,20 @@ bool MenuManager::handleInput(MenuInput input) {
         if (menu.items.empty() || menu.selectedIndex >= menu.items.size()) return false;
         MenuEntry& item = menu.items[menu.selectedIndex];
         if (!isSelectable(item.item.kind)) return false;
-        if (item.item.kind == MenuItemKind::Toggle) item.item.boolValue = !item.item.boolValue;
+        if (item.item.kind == MenuItemKind::Action) {
+            if (scheduler_.enqueueOnce([callback = item.action] { callback(); }) == 0) {
+                log(LogLevel::Warning, "menu action callback could not be scheduled");
+                return false;
+            }
+        }
+        if (item.item.kind == MenuItemKind::Toggle) {
+            item.item.boolValue = !item.item.boolValue;
+            const bool value = item.item.boolValue;
+            if (scheduler_.enqueueOnce([callback = item.toggle, value] { callback(value); }) == 0) {
+                log(LogLevel::Warning, "menu toggle callback could not be scheduled");
+                return false;
+            }
+        }
         if (item.item.kind == MenuItemKind::Submenu && item.submenuIndex.has_value()) {
             menuStack_.push_back(activeMenuIndex_);
             activeMenuIndex_ = *item.submenuIndex;
@@ -203,12 +217,30 @@ bool MenuManager::adjustSelectedValue(int direction) noexcept {
     MenuEntry& item = menu.items[menu.selectedIndex];
     if (item.item.kind == MenuItemKind::Integer || item.item.kind == MenuItemKind::Float) {
         item.item.numberValue = std::clamp(item.item.numberValue + direction * item.step, item.minimum, item.maximum);
+        if (item.item.kind == MenuItemKind::Integer) {
+            const int value = static_cast<int>(item.item.numberValue);
+            if (scheduler_.enqueueOnce([callback = item.integer, value] { callback(value); }) == 0) {
+                log(LogLevel::Warning, "menu integer callback could not be scheduled");
+                return false;
+            }
+        } else {
+            const double value = item.item.numberValue;
+            if (scheduler_.enqueueOnce([callback = item.floating, value] { callback(value); }) == 0) {
+                log(LogLevel::Warning, "menu float callback could not be scheduled");
+                return false;
+            }
+        }
         return true;
     }
     if (item.item.kind != MenuItemKind::List || item.listValues.empty()) return false;
     const std::size_t size = item.listValues.size();
     item.item.listIndex = direction > 0 ? (item.item.listIndex + 1) % size : (item.item.listIndex + size - 1) % size;
     item.item.value = item.listValues[item.item.listIndex];
+    const std::size_t value = item.item.listIndex;
+    if (scheduler_.enqueueOnce([callback = item.list, value] { callback(value); }) == 0) {
+        log(LogLevel::Warning, "menu list callback could not be scheduled");
+        return false;
+    }
     return true;
 }
 
