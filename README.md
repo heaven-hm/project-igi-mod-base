@@ -23,6 +23,9 @@ project-igi-natives-sdk/
 │   ├── runtime/       scheduler, hook, target profile, DLL lifecycle
 │   └── ui/            renderer-independent MenuManager API
 ├── src/igi_sdk/       implementations with the same module layout
+├── demos/
+│   ├── internal-menumanager/  in-process MenuManager DLL example
+│   └── imgui/                 external-style catalogue companion example
 ├── tests/              portable CTest coverage
 ├── data/IGI1/          IGI-RE address/name/signature metadata
 ├── legacy/             preserved project-igi-natives predecessor source
@@ -36,6 +39,13 @@ project-igi-natives-sdk/
 The `legacy/` directory is historical reference material and is not compiled
 into the active SDK. New code belongs in `include/igi_sdk/` and
 `src/igi_sdk/`; do not add new modules under `legacy/`.
+
+The demo directory contains examples only. `internal-menumanager` is the
+in-process Windows DLL shape requested by the original specification. The
+`imgui` directory currently contains a safe external-style companion that
+reads the native catalogue; it does not inject, scan, attach to, or write to
+the game. A real out-of-process mod requires a separately reviewed IPC
+contract and is intentionally not implied by this example.
 
 ## Requirements
 
@@ -70,6 +80,22 @@ The macOS build produces the portable static library `libigi_sdk.a` and the
 `igi_sdk_tests` executable. The tests cover scheduler thread binding, native
 catalogue loading and deduplication, MenuManager behavior, callbacks, repeat
 input, and shutdown.
+
+To build the examples as well, leave the default enabled or set the option
+explicitly:
+
+```sh
+cmake -S . -B /tmp/igi-sdk-macos-demos \
+  -DCMAKE_BUILD_TYPE=Release -DIGI_SDK_BUILD_DEMOS=ON
+cmake --build /tmp/igi-sdk-macos-demos -j2
+/tmp/igi-sdk-macos-demos/IGI-MenuManager-External
+```
+
+On Windows the internal target is emitted as `IGI-MenuManager-Internal.dll`.
+It exports `IGI_MenuManager_Internal_Initialize` and
+`IGI_MenuManager_Internal_Shutdown`; use it as a small reference for a mod
+DLL's normal startup/shutdown path. The external target is emitted as
+`IGI-MenuManager-External.exe` and is a catalogue inspector, not an injector.
 
 ## Build and test the Windows x86 DLL
 
@@ -121,6 +147,16 @@ For an internal Windows mod DLL:
 3. Register feature callbacks through `MenuManager` and `Scheduler`.
 4. Render or consume `MenuSnapshot` from a UI layer owned by the mod.
 5. Call `IGI_SDK_Shutdown` before unloading.
+
+For a standalone macOS or Windows companion:
+
+1. Link against the portable `igi_sdk` library.
+2. Read the shipped TSV catalogue with `NativeCatalogue`.
+3. Use an explicit, user-controlled IPC protocol if the companion later needs
+   to communicate with a running mod; do not infer addresses from the TSV and
+   write into another process.
+4. Keep OS-specific process, window, and renderer code outside the portable
+   SDK modules.
 
 Menu callbacks are queued with `Scheduler::enqueueOnce`; they do not execute on
 the input or renderer thread. A future renderer can consume snapshots without

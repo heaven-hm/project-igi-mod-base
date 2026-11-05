@@ -17,6 +17,21 @@ add_library(igi_sdk STATIC
 target_include_directories(igi_sdk PUBLIC include)
 target_compile_definitions(igi_sdk PUBLIC IGI_SDK_IGI1_ONLY=1)
 
+option(IGI_SDK_BUILD_DEMOS "Build the internal and external-style demo targets" ON)
+
+if(IGI_SDK_BUILD_DEMOS)
+    add_library(igi_menu_manager_internal SHARED demos/internal-menumanager/internal_demo.cpp)
+    target_link_libraries(igi_menu_manager_internal PRIVATE igi_sdk)
+    target_include_directories(igi_menu_manager_internal PRIVATE include)
+    set_target_properties(igi_menu_manager_internal PROPERTIES OUTPUT_NAME "IGI-MenuManager-Internal" PREFIX "")
+
+    add_executable(igi_menu_manager_external demos/imgui/external_demo.cpp)
+    target_link_libraries(igi_menu_manager_external PRIVATE igi_sdk)
+    target_include_directories(igi_menu_manager_external PRIVATE include)
+    target_compile_definitions(igi_menu_manager_external PRIVATE IGI_SDK_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    set_target_properties(igi_menu_manager_external PROPERTIES OUTPUT_NAME "IGI-MenuManager-External")
+endif()
+
 if(WIN32)
     target_compile_definitions(igi_sdk PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
     target_link_libraries(igi_sdk PRIVATE advapi32)
