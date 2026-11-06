@@ -15,10 +15,43 @@ GAME = Path(os.environ.get("IGI_GAME_DIR", str(Path.home() / "Downloads/IGI")))
 PREFIX = Path(os.environ.get("IGI_WINEPREFIX", str(Path.home() / "igi-test-prefix")))
 WINE = Path(os.environ.get("WINE_BIN", "/Applications/Wine Stable.app/Contents/Resources/wine/bin/wine"))
 SERVER = WINE.with_name("wineserver")
-BUILD = Path(os.environ.get("IGI_WIN32_BUILD_DIR", str(ROOT / "build-win32")))
+def _detect_build_dir():
+    # tools/build-win32-dll.sh creates build-win32-release / build-win32-debug.
+    # Prefer an explicit override, then the release tree, then debug, then the
+    # legacy bare name so this script keeps working with older layouts.
+    explicit = os.environ.get("IGI_WIN32_BUILD_DIR")
+    if explicit:
+        return Path(explicit)
+    for name in ("build-win32-release", "build-win32-debug", "build-win32"):
+        candidate = ROOT / name
+        if candidate.is_dir():
+            return candidate
+    return ROOT / "build-win32-release"
+
+
+def _config_key(name, fallback):
+    """Read a hotkey name from the deployed config.ini so the injected key
+    matches whatever start_key/end_key the game folder is configured with."""
+    try:
+        for line in (GAME / "config.ini").read_text(encoding="utf-8", errors="replace").splitlines():
+            line = line.strip()
+            if not line or line.startswith(";") or line.startswith("#") or line.startswith("["):
+                continue
+            if "=" in line:
+                key, value = line.split("=", 1)
+                if key.strip().lower() == name:
+                    return value.strip().lower()
+    except OSError:
+        pass
+    return fallback
+
+
+BUILD = _detect_build_dir()
 TEST_BUILD = Path(os.environ.get("IGI_TEST_BUILD_DIR", str(ROOT / "build-macos-verify")))
 LOGDIR = Path(os.environ.get("IGI_VALIDATION_LOG_DIR", "/private/tmp/igi-live-validation"))
 SDK_LOG = GAME / "igi_sdk.log"
+START_KEY = _config_key("start_key", "f5")
+END_KEY = _config_key("end_key", "f12")
 ENV = dict(os.environ, WINEPREFIX=str(PREFIX), IGI_WINEPREFIX=str(PREFIX), WINEDEBUG="-all,+seh", IGI_ESCAPE_BEFORE_INJECT="true", IGI_ESCAPE_SETTLE_SECONDS="3")
 # The mod menu exists only once the generated screen is attached in game.
 MENU_ATTACHED = "internal menu screen: attached"
@@ -123,16 +156,19 @@ def main():
                 if sent and MENU_ATTACHED in delta:
                     if not toggle_sent:
                         keypath = "Z:" + str(GAME / "IGI1-Keypress.exe").replace("/", "\\\\")
-                        dismissed = run([WINE, keypath, "--pid", target, "escape"], 15)
+                        # Close with the configured end key, then reopen with the
+                        # configured start key. Both come from config.ini so the
+                        # validation follows whatever the game folder specifies.
+                        dismissed = run([WINE, keypath, "--pid", target, END_KEY], 15)
                         time.sleep(1)
-                        reopened = run([WINE, keypath, "--pid", target, "f5"], 15)
+                        reopened = run([WINE, keypath, "--pid", target, START_KEY], 15)
                         toggle_sent = bool(dismissed and not dismissed.returncode and reopened and not reopened.returncode)
                         if not toggle_sent:
-                            log(f"attempt={attempt} F5 reopen sequence failed pid={target}")
+                            log(f"attempt={attempt} {END_KEY} close / {START_KEY} reopen sequence failed pid={target}")
                             break
-                        log(f"attempt={attempt} Escape then configured F5 sent to verify menu re-open pid={target}")
+                        log(f"attempt={attempt} configured {END_KEY} close then {START_KEY} reopen sent to verify menu toggle pid={target}")
                     elif delta.count(MENU_ATTACHED) >= 2:
-                        log(f"SUCCESS pid={target} Escape-before-inject, DLL injection, initial F5, dismissed-screen F5 reopen and both menu attachments confirmed\n{delta}")
+                        log(f"SUCCESS pid={target} DLL injection, {START_KEY} menu open, {END_KEY} close and {START_KEY} reopen with both menu attachments confirmed\n{delta}")
                         return 0
                 if "Unhandled page fault" in text or "Unhandled exception" in text:
                     log(f"attempt={attempt} crash detected")
@@ -145,7 +181,7 @@ def main():
                     target = pid()
                     if target:
                         keypath = "Z:" + str(GAME / "IGI1-Keypress.exe").replace("/", "\\")
-                        hotkey = run([WINE, keypath, "--pid", target, "f5"], 15)
+                        hotkey = run([WINE, keypath, "--pid", target, START_KEY], 15)
                         sent = bool(hotkey and not hotkey.returncode)
                         if not sent:
                             log(f"attempt={attempt} keypress failed pid={target}")

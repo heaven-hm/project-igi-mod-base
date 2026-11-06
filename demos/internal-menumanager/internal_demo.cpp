@@ -11,11 +11,8 @@
 
 #include <atomic>
 #include <cstring>
-#include <fstream>
 #include <filesystem>
-#include <memory>
-#include <sstream>
-#include <string>
+#include <fstream>
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -359,6 +356,28 @@ extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_Internal_Reopen() {
     }
     menuScreenAttached = false;
     igi::log(igi::LogLevel::Info, "internal menu toggle: reopening dismissed screen");
+    menuFrameWork();
+    return menuScreenAttached;
+#else
+    return false;
+#endif
+}
+
+// Toggles the mod menu: closes it when the configured screen task is live and
+// opens it otherwise. The configured start key drives this so each press flips
+// the menu state instead of only reopening an already-visible screen.
+extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_Internal_Toggle() {
+#if defined(_WIN32)
+    if (!runtime.initialized()) {
+        igi::log(igi::LogLevel::Warning, "internal menu toggle: runtime is not initialized");
+        return false;
+    }
+    if (IGI::TASK::FIND_BY_ID(menuConfig.screenId) != nullptr) {
+        igi::log(igi::LogLevel::Info, "internal menu toggle: closing visible screen");
+        return runMenuCommand("LOCAL:igi_sdk/modmenu-close.qvm", "close");
+    }
+    menuScreenAttached = false;
+    igi::log(igi::LogLevel::Info, "internal menu toggle: opening dismissed screen");
     menuFrameWork();
     return menuScreenAttached;
 #else
