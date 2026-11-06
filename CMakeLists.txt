@@ -134,9 +134,27 @@ add_test(NAME igi_generated_natives
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_generated_natives.py)
 add_test(NAME igi_demo_native_contract
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_demo_native_contract.py)
+# The Unicorn ABI probe loads the retail 32-bit IGI 1 PE. On Apple Silicon the
+# script must run under x86_64 Python via Rosetta, so wrap the interpreter when
+# the host is arm64 macOS. IGI_TEST_EXE points at the supported retail
+# executable; when it is missing the script reports SKIP (exit code 77).
+set(IGI_TEST_EXE "$ENV{HOME}/Downloads/IGI/igi.exe" CACHE FILEPATH
+    "Retail 32-bit IGI 1 executable for the Unicorn ABI probe")
+# Homebrew's Python is arm64-only and cannot execute under Rosetta, so on
+# Apple Silicon use the universal system interpreter for the 32-bit probe.
+set(IGI_UNICORN_PYTHON ${Python3_EXECUTABLE})
+if(APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
+    if(EXISTS "/usr/bin/python3")
+        set(IGI_UNICORN_PYTHON arch -x86_64 /usr/bin/python3)
+    else()
+        set(IGI_UNICORN_PYTHON arch -x86_64 ${Python3_EXECUTABLE})
+    endif()
+endif()
 add_test(NAME igi_demo_natives_unicorn
-         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_demo_natives_unicorn.py)
-set_tests_properties(igi_demo_natives_unicorn PROPERTIES SKIP_RETURN_CODE 77)
+         COMMAND ${IGI_UNICORN_PYTHON} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_demo_natives_unicorn.py)
+set_tests_properties(igi_demo_natives_unicorn PROPERTIES
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "IGI_EXE=${IGI_TEST_EXE}")
 
 if(WIN32)
     add_library(igi_sdk_native_abi_fixture SHARED tests/native_abi_fixture.cpp)

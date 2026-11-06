@@ -40,7 +40,12 @@ struct GameRootLayout {
     std::uint8_t prefix[0x44];
     void* root;
 };
+// The 0x44 game-root offset is a retail IGI 1 Win32 x86 ABI fact. On 64-bit
+// hosts the pointer alignment pads the prefix to 0x48, so the check only
+// applies to the target executable build.
+#if defined(_WIN32) && !defined(_WIN64)
 static_assert(offsetof(GameRootLayout, root) == 0x44);
+#endif
 
 void invokeConfiguredAction(std::size_t item, std::string_view value) {
     if (item >= menuConfig.items.size()) return;
