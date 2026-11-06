@@ -18,6 +18,7 @@ void menuManagerShutdownTest();
 void menuConfigTest() {
     assert(igi::parseDirectInputKey("F5") == 0x3F);
     assert(igi::parseDirectInputKey("f6") == 0x40);
+    assert(igi::parseDirectInputKey("F12") == 0x58);
     assert(igi::parseDirectInputKey("End") == 0x4F);
     assert(igi::parseDirectInputKey("end") == 0x4F);
     assert(igi::parseDirectInputKey("Home") == 0x47);

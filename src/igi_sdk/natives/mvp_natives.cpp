@@ -66,6 +66,9 @@ NATIVE_DECL void * GET_WORLD() {
 NATIVE_DECL Game * GET() {
     return NATIVE_INVOKE<Game *>(HASH::GAME_GET, "Game *Game_Get(void)");
 }
+NATIVE_DECL char IS_PAUSED() {
+    return NATIVE_INVOKE<char>(HASH::GAME_IS_PAUSED, "char Game_IsPaused(void)");
+}
 NATIVE_DECL ScriptValue * SET_MISSION(ScriptValue * out, void * data, void * args) {
     return NATIVE_INVOKE<ScriptValue *>(HASH::GAME_SET_MISSION, "ScriptValue *Game_SetMission(ScriptValue *out, void *data, void *args)", out, data, args);
 }
@@ -809,13 +812,13 @@ NATIVE_DECL ScriptValue * INT_VALUE(ScriptValue * out, int * var) {
 NATIVE_DECL ScriptValue * BOOL8_VALUE(ScriptValue * out, char * var) {
     return NATIVE_INVOKE<ScriptValue *>(HASH::SCRIPT_BOOL8_VALUE, "ScriptValue *Script_Bool8Value(ScriptValue *out, char *var)", out, var);
 }
-NATIVE_DECL ScriptValue * INT16_VALUE(ScriptValue * out, short * var) {
-    return NATIVE_INVOKE<ScriptValue *>(HASH::SCRIPT_INT16_VALUE, "ScriptValue *Script_Int16Value(ScriptValue *out, short *var)", out, var);
-}
 }
 namespace TASK {
 NATIVE_DECL Task * RUN_SCRIPT(Task * parent, const char * path, char insertHead) {
     return NATIVE_INVOKE<Task *>(HASH::TASK_RUN_SCRIPT, "Task *Task_RunScript(Task *parent, const char *path, char insertHead)", parent, path, insertHead);
+}
+NATIVE_DECL Task * FIND_BY_ID(int id) {
+    return NATIVE_INVOKE<Task *>(HASH::TASK_FIND_BY_ID, "Task *Task_FindById(int id)", id);
 }
 NATIVE_DECL uint16_t GET_MASK(uint16_t type) {
     return NATIVE_INVOKE<uint16_t>(HASH::TASK_TYPE_GET_MASK, "uint16_t TaskType_GetMask(uint16_t type)", type);
@@ -864,9 +867,6 @@ NATIVE_DECL int IS_USED(int type) {
 }
 NATIVE_DECL void * FIND_WEAPON(void * task, int id) {
     return NATIVE_INVOKE<void *>(HASH::TASK_FIND_WEAPON, "void *Task_FindWeapon(void *task, int id)", task, id);
-}
-NATIVE_DECL Task * FIND_BY_ID(int id) {
-    return NATIVE_INVOKE<Task *>(HASH::TASK_FIND_BY_ID, "Task *Task_FindById(int id)", id);
 }
 }
 namespace CONFIG {

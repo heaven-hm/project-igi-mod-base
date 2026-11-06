@@ -93,7 +93,7 @@ int main() {
     assert(!mismatchedAlias.registerData("SDK:missing.qvm", "LOCAL:other.qvm", {1, 2, 3}, resourceApi));
     assert(!mismatchedAlias.active() && fakeResourceFreeCount == 2);
     fakeResourceHidden = false;
-    assert(igi::MenuConfig{}.hook == igi::igi1::TickHook::GameRunHandler);
+    assert(igi::MenuConfig{}.hook == igi::igi1::TickHook::DisplayAddFrameCallback);
     igi::Runtime runtime;
     assert(!runtime.initialize(igi::igi1::TickHook::TextDraw));
     assert(!runtime.initialize(igi::igi1::TickHook::ScreenDraw));
@@ -216,7 +216,7 @@ int main() {
     assert(mainMenu.currentScreen()->id == 900);
     // The mod menu is data-driven: its widgets come from the shipped config.ini.
     const auto modConfig = igi::loadMenuConfig(std::string(IGI_SDK_SOURCE_DIR) + "/demos/internal-menumanager/config.ini");
-    assert(modConfig.hook == igi::igi1::TickHook::GameRunHandler);
+    assert(modConfig.hook == igi::igi1::TickHook::DisplayAddFrameCallback);
     if (modConfig.items.empty())
         std::fprintf(stderr, "menu config did not load from %s/demos/internal-menumanager/config.ini\n", IGI_SDK_SOURCE_DIR);
     assert(modConfig.items.size() == 6);

@@ -44,7 +44,8 @@ class GeneratedNativesTest(unittest.TestCase):
         demo = rows(ROOT / "tests/demo-natives.tsv")
         runtime = rows(ROOT / "tests/menu-runtime-natives.tsv")
         self.assertEqual(len(demo), 10)
-        self.assertEqual(len(runtime), 2)
+        self.assertEqual({row[2] for row in runtime},
+                         {"Game_Get", "Game_IsPaused", "Task_RunScript", "Task_FindById"})
         for api, domain, name, address, signature in demo + runtime:
             with self.subTest(native=name):
                 row = manifest[address.lower()]

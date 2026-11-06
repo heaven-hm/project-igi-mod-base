@@ -192,6 +192,34 @@ game installation and match the game's 32-bit architecture. On macOS, build
 with `dlopen`/`dlsym`; it exercises the menu and scheduler but does not patch
 or inject into the Windows IGI executable.
 
+### Build and inject on macOS with Wine
+
+Build the default Windows x86 Debug menu DLL:
+
+```sh
+tools/build-win32-dll.sh
+```
+
+Build a Release DLL or another CMake target:
+
+```sh
+tools/build-win32-dll.sh --release
+tools/build-win32-dll.sh --debug --target igi1_injector
+```
+
+To inject a built DLL into an already-running local Wine IGI process, use the
+existing wrapper with an absolute DLL path:
+
+```sh
+tools/wine_igi_inject.sh /absolute/path/to/IGI-MenuManager-Internal.dll
+```
+
+The menu keys are never fixed by the DLL, shell scripts, or README examples.
+Set `start_key` and `end_key` in the `config.ini` placed beside `igi.exe`
+before injection. The current session is logged to `igi_sdk.log` in that same
+game directory. The configured start key opens or reactivates the menu; the
+configured end key requests a safe screen close and DLL unload.
+
 ### Running the external example
 
 The external example is a normal process and requires no injection:

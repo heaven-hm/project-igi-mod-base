@@ -65,8 +65,15 @@ void addItem(const std::string& id, const std::string& value, std::vector<igi::M
 
 void applyMenuKey(igi::MenuConfig& config, const std::string& key, const std::string& value) {
     if (key == "enabled") config.enabled = parseBool(value, config.enabled);
-    else if (key == "hotkey") config.hotkey = igi::parseDirectInputKey(value, config.hotkey);
-    else if (key == "exit_key" || key == "exit_hotkey") config.exitKey = igi::parseDirectInputKey(value, config.exitKey);
+    else if (key == "start_key" || key == "hotkey")
+        config.hotkey = igi::parseDirectInputKey(value, config.hotkey);
+    else if (key == "end_key" || key == "exit_key" || key == "exit_hotkey")
+        config.exitKey = igi::parseDirectInputKey(value, config.exitKey);
+    else if (key == "native_mode") {
+        const auto mode = lower(trim(value));
+        if (mode == "direct") config.directNativeMode = true;
+        else if (mode == "hooked") config.directNativeMode = false;
+    }
     else if (key == "screen_id") setInt(value, config.screenId);
     else if (key == "x") setInt(value, config.x);
     else if (key == "y") setInt(value, config.y);
@@ -87,6 +94,10 @@ std::uint8_t parseDirectInputKey(std::string_view name, std::uint8_t fallback) n
     if (key == "F6") return 0x40;
     if (key == "F7") return 0x41;
     if (key == "F8") return 0x42;
+    if (key == "F9") return 0x43;
+    if (key == "F10") return 0x44;
+    if (key == "F11") return 0x57;
+    if (key == "F12") return 0x58;
     if (key == "HOME") return 0x47;
     if (key == "END") return 0x4F;
     if (key == "PAGEUP" || key == "PGUP") return 0x49;
@@ -108,18 +119,22 @@ LogLevel parseLogLevel(std::string_view name, LogLevel fallback) noexcept {
 }
 
 igi1::TickHook parseTickHook(std::string_view name, igi1::TickHook fallback) noexcept {
-    const std::string key = lower(std::string{name});
-    if (key == "display_add_frame_callback" || key == "add_frame_callback" || key == "frame_callback") return igi1::TickHook::DisplayAddFrameCallback;
-    if (key == "screen_draw" || key == "screendraw" || key == "screen") return igi1::TickHook::ScreenDraw;
-    if (key == "display_end_frame" || key == "display_endframe" || key == "display") return igi1::TickHook::DisplayEndFrame;
-    if (key == "text_draw" || key == "textdraw") return igi1::TickHook::TextDraw;
-    if (key == "game_run_handler" || key == "game_run") return igi1::TickHook::GameRunHandler;
+    // Normalise so displayAddFrameCallback, Display_AddFrameCallback and
+    // display_add_frame_callback all resolve to the same hook.
+    std::string key = lower(std::string{name});
+    key.erase(std::remove_if(key.begin(), key.end(),
+                             [](char c) { return c == '_' || c == '-' || c == ' '; }),
+              key.end());
+    if (key == "displayaddframecallback" || key == "addframecallback" || key == "framecallback")
+        return igi1::TickHook::DisplayAddFrameCallback;
+    if (key == "screendraw" || key == "screen") return igi1::TickHook::ScreenDraw;
+    if (key == "displayendframe" || key == "display") return igi1::TickHook::DisplayEndFrame;
+    if (key == "textdraw") return igi1::TickHook::TextDraw;
     return fallback;
 }
 
 const char* tickHookName(igi1::TickHook hook) noexcept {
     switch (hook) {
-    case igi1::TickHook::GameRunHandler: return "Game_RunHandler";
     case igi1::TickHook::TextDraw: return "Text_Draw";
     case igi1::TickHook::DisplayEndFrame: return "Display_EndFrame";
     case igi1::TickHook::ScreenDraw: return "Screen_Draw";

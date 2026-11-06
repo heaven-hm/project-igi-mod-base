@@ -62,9 +62,11 @@ std::size_t Scheduler::runPending() noexcept {
 
 std::size_t Scheduler::runPendingFromGameHook() noexcept {
     const auto invocation = gameHookInvocations_.fetch_add(1, std::memory_order_relaxed) + 1;
+    if (invocation == 1)
+        log(LogLevel::Info, "scheduler: first Display_AddFrameCallback tick entered");
 #ifndef NDEBUG
     if (invocation <= 5 || (invocation % 1000) == 0)
-        log(LogLevel::Debug, "scheduler: Game_RunHandler callback entered");
+        log(LogLevel::Debug, "scheduler: Display_AddFrameCallback tick entered");
 #endif
     {
         std::lock_guard lock(mutex_);
@@ -73,13 +75,13 @@ std::size_t Scheduler::runPendingFromGameHook() noexcept {
         }
     }
     if (!isGameThread()) {
-        log(LogLevel::Error, "Game_RunHandler was observed on a second thread; scheduler skipped");
+        log(LogLevel::Error, "Display_AddFrameCallback tick was observed on a second thread; scheduler skipped");
         return 0;
     }
     const auto ran = runReadyTasks();
 #ifndef NDEBUG
     if (invocation <= 5 || (invocation % 1000) == 0)
-        log(LogLevel::Debug, "scheduler: Game_RunHandler callback completed");
+        log(LogLevel::Debug, "scheduler: Display_AddFrameCallback tick completed");
 #endif
     return ran;
 }

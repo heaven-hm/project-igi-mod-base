@@ -9,6 +9,7 @@ if (!catalogue.add({0x004167f0, "Game_GetEvent2", "IGI-RE", "entry", "uint8_t Ga
 if (!catalogue.add({0x00416810, "Game_GetEvent3", "IGI-RE", "entry", "uint8_t Game_GetEvent3(void)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x00416920, "Game_GetWorld", "IGI-RE", "entry", "void *Game_GetWorld(void)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x00416d40, "Game_Get", "IGI-RE", "entry", "Game *Game_Get(void)", NativeVerification::Exposed})) return false;
+if (!catalogue.add({0x00416d50, "Game_IsPaused", "IGI-RE", "entry", "char Game_IsPaused(void)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x00415890, "Game_SetMission", "IGI-RE", "entry", "ScriptValue *Game_SetMission(ScriptValue *out, void *data, void *args)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x00415950, "Game_SetMusicVolume", "IGI-RE", "entry", "ScriptValue *Game_SetMusicVolume(ScriptValue *out, void *data, void *args)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x004159b0, "Game_SetSFXVolume", "IGI-RE", "entry", "ScriptValue *Game_SetSFXVolume(ScriptValue *out, void *data, void *args)", NativeVerification::Exposed})) return false;
@@ -248,8 +249,8 @@ if (!catalogue.add({0x004baba0, "Script_GetSymbolTable", "IGI-RE", "entry", "Sym
 if (!catalogue.add({0x0047cda0, "Script_EvalConst", "IGI-RE", "entry", "int Script_EvalConst(const char *expr)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x004b7ea0, "Script_IntValue", "IGI-RE", "entry", "ScriptValue *Script_IntValue(ScriptValue *out, int *var)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x004b7f00, "Script_Bool8Value", "IGI-RE", "entry", "ScriptValue *Script_Bool8Value(ScriptValue *out, char *var)", NativeVerification::Exposed})) return false;
-if (!catalogue.add({0x004b7f60, "Script_Int16Value", "IGI-RE", "entry", "ScriptValue *Script_Int16Value(ScriptValue *out, short *var)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x004f0cf0, "Task_RunScript", "IGI-RE", "entry", "Task *Task_RunScript(Task *parent, const char *path, char insertHead)", NativeVerification::Exposed})) return false;
+if (!catalogue.add({0x004f1030, "Task_FindById", "IGI-RE", "entry", "Task *Task_FindById(int id)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x004014e0, "TaskType_GetMask", "IGI-RE", "entry", "uint16_t TaskType_GetMask(uint16_t type)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x004018f0, "Task_GetRootType", "IGI-RE", "entry", "uint16_t Task_GetRootType(void)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x00401a60, "Task_GetCount", "IGI-RE", "entry", "int Task_GetCount(void)", NativeVerification::Exposed})) return false;
@@ -266,7 +267,6 @@ if (!catalogue.add({0x00401f60, "Task_SetGlobalFlags", "IGI-RE", "entry", "void 
 if (!catalogue.add({0x00401fa0, "TaskType_SetFlags", "IGI-RE", "entry", "void TaskType_SetFlags(uint16_t type, uint32_t flags)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x00407cd0, "TaskType_IsUsed", "IGI-RE", "entry", "int TaskType_IsUsed(int type)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x00413cc0, "Task_FindWeapon", "IGI-RE", "entry", "void *Task_FindWeapon(void *task, int id)", NativeVerification::Exposed})) return false;
-if (!catalogue.add({0x004f1030, "Task_FindById", "IGI-RE", "entry", "Task *Task_FindById(int id)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x00403b30, "Config_IsGermany", "IGI-RE", "entry", "ScriptValue *Config_IsGermany(ScriptValue *out)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x00403c70, "Config_GetContentControlPassword", "IGI-RE", "entry", "ScriptValue *Config_GetContentControlPassword(ScriptValue *out)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x00403d90, "Config_IsContentControlPasswordEnabled", "IGI-RE", "entry", "ScriptValue *Config_IsContentControlPasswordEnabled(ScriptValue *out)", NativeVerification::Exposed})) return false;

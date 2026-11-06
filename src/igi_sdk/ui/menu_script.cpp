@@ -99,4 +99,14 @@ bool compileIgi1MenuScript(const MenuConfig& config, std::vector<std::uint8_t>& 
     return compileMenuScript(config, qvm, error, true);
 }
 bool compileIgi1MenuScreenScript(const MenuConfig& config, std::vector<std::uint8_t>& qvm, std::string& error) { return compileMenuScript(config, qvm, error, false); }
+bool compileIgi1MenuCommandScript(std::string_view command, std::vector<std::uint8_t>& qvm, std::string& error) {
+    qvm.clear(); error.clear();
+    auto lexed = qsc::Lex(std::string(command));
+    if (!lexed.ok) { error = lexed.error; return false; }
+    auto parsed = qsc::Parse(lexed.tokens);
+    if (!parsed.ok || !parsed.program) { error = parsed.error; return false; }
+    auto compiled = qvm::Compile(*parsed.program);
+    if (!compiled.ok) { error = compiled.error; return false; }
+    qvm = std::move(compiled.binary); return true;
+}
 }

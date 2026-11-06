@@ -7,11 +7,19 @@
 #include "igi_sdk/ui/menu_resource.hpp"
 #include "igi_sdk/logging/logging.hpp"
 #include "igi_sdk/natives/igi1_native_registry.hpp"
+#include "igi_sdk/natives/igi_re/hashes.hpp"
 
 #include <atomic>
+#include <cstring>
+#include <fstream>
+#include <filesystem>
 #include <memory>
 #include <sstream>
 #include <string>
+
+#if defined(_WIN32)
+#include <windows.h>
+#endif
 
 #if defined(_WIN32)
 #define IGI_DEMO_EXPORT __declspec(dllexport)
@@ -28,13 +36,37 @@ igi::MenuConfig menuConfig;
 // Keep the compiled resource available for the game-thread loader. It must not
 // disappear when the initialization function returns.
 std::vector<std::uint8_t> compiledMenu;
+std::vector<std::uint8_t> reopenMenu;
+std::vector<std::uint8_t> closeMenu;
 std::string menuSource;
 std::unique_ptr<igi::MenuScriptBridge> menuBridge;
 std::unique_ptr<igi::MenuScriptCallbacks> menuCallbacks;
 igi::MenuScriptRegistration menuRegistration;
 igi::MenuResource menuResource;
+igi::MenuResource reopenResource;
+igi::MenuResource closeResource;
 std::atomic<std::uint64_t> frameCount{0};
 bool menuScreenAttached = false;
+
+enum class IgiMenuScreenState : std::int32_t {
+    MainMenu = 3,
+    InGame = 4,
+    Restart = 5,
+};
+
+bool readMenuScreenState(std::int32_t& screen) noexcept {
+#if defined(_WIN32) && !defined(_WIN64)
+    constexpr std::uintptr_t gameStatePointerAddress = 0x00567C8C;
+    constexpr std::uintptr_t menuScreenOffset = 0x28;
+    const auto gameState = *reinterpret_cast<const std::uintptr_t*>(gameStatePointerAddress);
+    if (gameState == 0) return false;
+    screen = *reinterpret_cast<const std::int32_t*>(gameState + menuScreenOffset);
+    return true;
+#else
+    (void)screen;
+    return false;
+#endif
+}
 
 struct GameRootLayout {
     std::uint8_t prefix[0x44];
@@ -51,7 +83,7 @@ void invokeConfiguredAction(std::size_t item, std::string_view value) {
     if (item >= menuConfig.items.size()) return;
     const auto& action = menuConfig.items[item].nativeAction;
     igi::log(igi::LogLevel::Debug, "internal menu action: " + action);
-    // The callback is reached on Game_RunHandler, so typed wrappers are safe
+    // The callback is reached on Display_AddFrameCallback, so typed wrappers are safe
     // to invoke here. Values remain config-driven; no menu labels are used as
     // dispatch keys.
     if (action == "IGI_SDK_SetWeather(this.value)") {
@@ -113,6 +145,9 @@ bool installMenuScriptCallbacks() {
         }
         igi::log(igi::LogLevel::Info, "internal menu resource: LOCAL:igi_sdk/modmenu.qvm registered");
     }
+    const auto resources = igi::igi1MenuResourceApi(*caller);
+    if (!reopenResource.active() && !reopenResource.registerData("LOCAL:igi_sdk/modmenu-reopen.qvm", reopenMenu, resources)) return false;
+    if (!closeResource.active() && !closeResource.registerData("LOCAL:igi_sdk/modmenu-close.qvm", closeMenu, resources)) return false;
     menuBridge = std::make_unique<igi::MenuScriptBridge>(menuConfig, invokeConfiguredAction);
     menuCallbacks = std::make_unique<igi::MenuScriptCallbacks>(*menuBridge, script);
     if (!menuRegistration.start(*menuCallbacks, registry)) {
@@ -124,6 +159,93 @@ bool installMenuScriptCallbacks() {
     igi::log(igi::LogLevel::Info, "internal menu callbacks: registered on game thread");
     return true;
 }
+
+bool runMenuCommand(const char* resource, const char* operation) {
+    auto* game = IGI::GAME::GET();
+    auto* root = game ? static_cast<IGI::Task*>(static_cast<GameRootLayout*>(static_cast<void*>(game))->root) : nullptr;
+    if (!root) return false;
+    auto* manager = IGI::TASK::FIND_CHILD(root, IGI::MENU::GET_TYPE());
+    if (!manager) return false;
+    IGI::SCRIPT::SET_SYMBOL_CONTEXT("MenuManager_PushScreen", manager);
+    IGI::SCRIPT::SET_SYMBOL_CONTEXT("MenuManager_PopScreen", manager);
+    const bool ok = IGI::TASK::RUN_SCRIPT(manager, resource, 0) != nullptr;
+    igi::log(ok ? igi::LogLevel::Info : igi::LogLevel::Error,
+             std::string("internal menu command: ") + operation + (ok ? " requested" : " failed"));
+    return ok;
+}
+
+bool writeMenuResourceFile() {
+    if (compiledMenu.empty()) return false;
+    std::error_code error;
+    std::filesystem::create_directories("igi_sdk", error);
+    if (error) return false;
+    std::ofstream output("igi_sdk/modmenu.qvm", std::ios::binary | std::ios::trunc);
+    if (!output) return false;
+    output.write(reinterpret_cast<const char*>(compiledMenu.data()),
+                 static_cast<std::streamsize>(compiledMenu.size()));
+    return output.good();
+}
+
+#if defined(_WIN32)
+// Runs on the verified Display_AddFrameCallback thread once the tick fires.
+// Registers the script callbacks, then attaches the generated menu screen to
+// the game root task. Every step is logged so an in-game failure points at the
+// exact call that broke.
+void menuFrameWork() {
+    if (!runtime.initialized() || menuScreenAttached) return;
+    igi::log(igi::LogLevel::Info, "internal menu frame: checking game state");
+    auto* game = IGI::GAME::GET();
+    if (!game) {
+        igi::log(igi::LogLevel::Error, "internal menu screen: IGI::GAME::GET returned null");
+        return;
+    }
+    if (IGI::GAME::IS_PAUSED()) {
+        igi::log(igi::LogLevel::Debug, "internal menu screen: game is paused; waiting for active gameplay");
+        return;
+    }
+    igi::log(igi::LogLevel::Info, "internal menu frame: active game confirmed; installing script callbacks");
+    if (!installMenuScriptCallbacks()) return;
+    igi::log(igi::LogLevel::Info, "internal menu frame: script callbacks installed");
+    auto* root = static_cast<IGI::Task*>(
+        static_cast<GameRootLayout*>(static_cast<void*>(game))->root);
+    if (!root) {
+        igi::log(igi::LogLevel::Error, "internal menu screen: game root task unavailable");
+        return;
+    }
+    if (IGI::TASK::FIND_BY_ID(menuConfig.screenId) != nullptr) {
+        igi::log(igi::LogLevel::Error,
+                 "internal menu screen: configured task ID is already in use; refusing screen creation");
+        menuScreenAttached = true;
+        return;
+    }
+    const auto managerType = IGI::MENU::GET_TYPE();
+    auto* manager = IGI::TASK::FIND_CHILD(root, managerType);
+    if (!manager) {
+        igi::log(igi::LogLevel::Warning, "internal menu screen: game MenuManager unavailable; waiting");
+        return;
+    }
+    std::ostringstream context;
+    context << "internal menu natives: MenuManager_GetType=" << managerType
+            << " Task_FindChild manager=" << static_cast<void*>(manager);
+    igi::log(igi::LogLevel::Info, context.str());
+    IGI::SCRIPT::SET_SYMBOL_CONTEXT("MenuManager_PushScreen", manager);
+    igi::log(igi::LogLevel::Info, "internal menu natives: MenuManager_PushScreen context bound; invoking Task_RunScript");
+    auto* screen = IGI::TASK::RUN_SCRIPT(manager, "LOCAL:igi_sdk/modmenu.qvm", 0);
+    if (screen) {
+        using GetChangedEvent = std::uint8_t (__cdecl*)();
+        using Broadcast = void (__cdecl*)(IGI::Task*, std::uint8_t, void*);
+        const auto changedEvent = reinterpret_cast<GetChangedEvent>(igi::re::HASH::Param_GetChangedEvent)();
+        char changed = 1;
+        igi::log(igi::LogLevel::Info, "internal menu natives: broadcasting Param_GetChangedEvent to bind screen expressions");
+        reinterpret_cast<Broadcast>(igi::re::HASH::Task_Broadcast)(screen, changedEvent, &changed);
+        igi::log(igi::LogLevel::Info, "internal menu natives: screen parameter initialization completed");
+    }
+    menuScreenAttached = screen != nullptr;
+    igi::log(menuScreenAttached ? igi::LogLevel::Info : igi::LogLevel::Error,
+             menuScreenAttached ? "internal menu screen: attached and requested from existing MenuManager" :
+                                  "internal menu screen: Task_RunScript failed");
+}
+#endif
 }
 
 extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_Internal_Initialize() {
@@ -140,28 +262,70 @@ extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_Internal_Initialize() {
         igi::log(igi::LogLevel::Error, std::string("internal initialize: embedded menu compilation failed: ") + compileError);
         return false;
     }
+    if (!igi::compileIgi1MenuCommandScript("MenuManager_PushScreen(" + std::to_string(menuConfig.screenId) + ");", reopenMenu, compileError) ||
+        !igi::compileIgi1MenuCommandScript("MenuManager_PopScreen(FALSE);", closeMenu, compileError)) {
+        igi::log(igi::LogLevel::Error, std::string("internal initialize: menu command compilation failed: ") + compileError);
+        return false;
+    }
+    if (!writeMenuResourceFile()) {
+        igi::log(igi::LogLevel::Warning, "internal initialize: could not write igi_sdk/modmenu.qvm; using in-memory resource only");
+    } else {
+        igi::log(igi::LogLevel::Info, "internal initialize: wrote igi_sdk/modmenu.qvm");
+    }
     // Script_Load may request the QSC source when QVM-only mode is disabled.
+    igi::log(igi::LogLevel::Info, "internal startup stage: generating menu QSC source");
     std::ostringstream source;
     if (!igi::writeIgi1MenuScreenScript(source, menuConfig)) {
         compiledMenu.clear();
         igi::log(igi::LogLevel::Error, "internal initialize: menu source generation failed");
         return false;
     }
+    igi::log(igi::LogLevel::Info, "internal startup stage: menu QSC source generated");
     menuSource = source.str();
+    igi::log(igi::LogLevel::Info, "internal startup stage: menu QSC source retained");
     igi::log(igi::LogLevel::Debug, "internal initialize: embedded menu QVM compiled; resource installation awaits the game thread");
 #if defined(_WIN32)
-    if (!runtime.initialize(menuConfig.hook)) {
+    const bool directNativeMode = menuConfig.directNativeMode;
+    if (directNativeMode) {
+        std::int32_t activeScreen = 0;
+        if (!readMenuScreenState(activeScreen)) {
+            igi::log(igi::LogLevel::Warning, "internal direct mode deferred: menu screen state is unavailable");
+            return false;
+        }
+        std::ostringstream screenMessage;
+        screenMessage << "internal direct mode: observed menu screen=" << activeScreen;
+        igi::log(igi::LogLevel::Info, screenMessage.str());
+        if (activeScreen != static_cast<std::int32_t>(IgiMenuScreenState::InGame)) {
+            igi::log(igi::LogLevel::Warning,
+                     "internal direct mode deferred: attach requires the in-game menu screen (4), never Main Menu (3) or Restart (5)");
+            return false;
+        }
+    }
+    igi::log(igi::LogLevel::Info, directNativeMode
+        ? "internal startup stage: direct native menu mode enabled; no scheduler hook"
+        : "internal startup stage: installing Display_AddFrameCallback hook");
+    if (!(directNativeMode ? runtime.initializeDirectNativeMode() : runtime.initialize(menuConfig.hook))) {
         igi::log(igi::LogLevel::Error, "internal initialize: runtime initialization failed");
         return false;
+    }
+    if (directNativeMode) {
+        igi::log(igi::LogLevel::Info, "internal startup stage: directly attaching menu from F5 worker");
+        menuFrameWork();
+    } else {
+        igi::log(igi::LogLevel::Info, "internal startup stage: enqueue begin");
+        runtime.scheduler().enqueueEveryFrame([] { menuFrameWork(); });
+        igi::log(igi::LogLevel::Info, "internal startup stage: enqueue complete");
     }
 #else
     runtime.scheduler().bindGameThread();
 #endif
     igi::log(igi::LogLevel::Debug, "internal initialize: creating IGI 1 menu manager");
+    igi::log(igi::LogLevel::Info, "internal startup stage: menu model begin");
     gameMenu = std::make_unique<igi::Igi1MenuManager>(igi::Igi1MenuManager::create(igi::Igi1MenuSet::InGame, menuConfig));
+    igi::log(igi::LogLevel::Info, "internal startup stage: menu model complete");
     const bool pushed = gameMenu->pushScreen(menuConfig.screenId);
     igi::log(pushed ? igi::LogLevel::Warning : igi::LogLevel::Error,
-             pushed ? "internal initialize: menu model staged; script callbacks install from Game_RunHandler" : "internal initialize: menu model screen selection failed");
+             pushed ? "internal initialize: menu model staged; script callbacks install from the frame tick" : "internal initialize: menu model screen selection failed");
     if (!pushed) {
         gameMenu.reset();
         runtime.shutdown();
@@ -173,33 +337,51 @@ extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_Internal_Initialize() {
 
 extern "C" IGI_DEMO_EXPORT std::size_t IGI_MenuManager_Internal_RunFrame() {
     const auto count = frameCount.fetch_add(1, std::memory_order_relaxed) + 1;
+    const auto ran = runtime.scheduler().runPending();
 #if defined(_WIN32)
-    // Only the actual Game_RunHandler detour may bind the game thread.
-    // A loader or test host calling this export must not impersonate it.
-    const auto ran = runtime.scheduler().runPending();
-    if (runtime.initialized() && installMenuScriptCallbacks() && !menuScreenAttached) {
-        auto* game = IGI::GAME::GET();
-        auto* root = game ? static_cast<IGI::Task*>(static_cast<GameRootLayout*>(static_cast<void*>(game))->root) : nullptr;
-        if (!root) {
-            igi::log(igi::LogLevel::Error, "internal menu screen: game root task unavailable");
-        } else if (IGI::TASK::FIND_BY_ID(menuConfig.screenId) != nullptr) {
-            igi::log(igi::LogLevel::Error,
-                     "internal menu screen: configured task ID is already in use; refusing screen creation");
-        } else {
-            igi::log(igi::LogLevel::Info, "internal menu screen: attaching screen script to game root");
-            auto* screen = IGI::TASK::RUN_SCRIPT(root, "LOCAL:igi_sdk/modmenu.qvm", 0);
-            menuScreenAttached = screen != nullptr;
-            igi::log(menuScreenAttached ? igi::LogLevel::Info : igi::LogLevel::Error,
-                     menuScreenAttached ? "internal menu screen: attached and requested from existing MenuManager" :
-                                          "internal menu screen: Task_RunScript failed");
-        }
-    }
-#else
-    const auto ran = runtime.scheduler().runPending();
+    // External callers that already own the game thread can drive the same
+    // work the Display_AddFrameCallback tick performs.
+    menuFrameWork();
 #endif
     if (count <= 5 || (count % 1000) == 0)
         igi::log(igi::LogLevel::Debug, "internal frame: scheduler completed");
     return ran;
+}
+
+extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_Internal_Reopen() {
+#if defined(_WIN32)
+    if (!runtime.initialized()) {
+        igi::log(igi::LogLevel::Warning, "internal menu toggle: runtime is not initialized");
+        return false;
+    }
+    if (IGI::TASK::FIND_BY_ID(menuConfig.screenId) != nullptr) {
+        return runMenuCommand("LOCAL:igi_sdk/modmenu-reopen.qvm", "reopen");
+    }
+    menuScreenAttached = false;
+    igi::log(igi::LogLevel::Info, "internal menu toggle: reopening dismissed screen");
+    menuFrameWork();
+    return menuScreenAttached;
+#else
+    return false;
+#endif
+}
+
+extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_Internal_RequestShutdown() {
+#if defined(_WIN32)
+    if (!runtime.initialized()) return true;
+    if (IGI::TASK::FIND_BY_ID(menuConfig.screenId) == nullptr) return true;
+    return runMenuCommand("LOCAL:igi_sdk/modmenu-close.qvm", "close");
+#else
+    return false;
+#endif
+}
+
+extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_Internal_CanUnload() {
+#if defined(_WIN32)
+    return IGI::TASK::FIND_BY_ID(menuConfig.screenId) == nullptr;
+#else
+    return false;
+#endif
 }
 
 extern "C" IGI_DEMO_EXPORT void IGI_MenuManager_Internal_Shutdown() {
@@ -223,9 +405,13 @@ extern "C" IGI_DEMO_EXPORT void IGI_MenuManager_Internal_Shutdown() {
     menuBridge.reset();
     if (!menuResource.release())
         igi::log(igi::LogLevel::Error, "internal menu resource: release refused because ownership changed");
+    reopenResource.release();
+    closeResource.release();
     gameMenu.reset();
     runtime.shutdown();
     compiledMenu.clear();
+    reopenMenu.clear();
+    closeMenu.clear();
     menuSource.clear();
     menuScreenAttached = false;
     igi::log(igi::LogLevel::Info, "internal shutdown: complete");

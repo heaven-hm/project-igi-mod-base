@@ -57,7 +57,9 @@ inline constexpr std::uint32_t GAME_GET_EVENT2 = 0x004167f0;
 inline constexpr std::uint32_t GAME_GET_EVENT3 = 0x00416810;
 inline constexpr std::uint32_t GAME_GET_WORLD = 0x00416920;
 inline constexpr std::uint32_t GAME_GET = 0x00416d40;
+inline constexpr std::uint32_t GAME_IS_PAUSED = 0x00416d50;
 inline constexpr std::uint32_t TASK_RUN_SCRIPT = 0x004f0cf0;
+inline constexpr std::uint32_t TASK_FIND_BY_ID = 0x004f1030;
 inline constexpr std::uint32_t GAME_MATERIAL_LOAD_PARAMETERS = 0x00408350;
 inline constexpr std::uint32_t GAME_SET_MISSION = 0x00415890;
 inline constexpr std::uint32_t HUMAN_PLAYER_SET_FLAG_D44 = 0x0040c140;
@@ -344,8 +346,6 @@ inline constexpr std::uint32_t SOUND_GET_SET_POS_EVENT = 0x004e6670;
 inline constexpr std::uint32_t RAIN_OBJ_UPDATE_CELLS = 0x004f7990;
 inline constexpr std::uint32_t LEVEL_CLEAR_TASK_ID = 0x004f10e0;
 inline constexpr std::uint32_t MENU_MANAGER_REFRESH = 0x00417590;
-inline constexpr std::uint32_t SCRIPT_INT16_VALUE = 0x004b7f60;
-inline constexpr std::uint32_t TASK_FIND_BY_ID = 0x004f1030;
 }
 namespace MISC {
 NATIVE_DECL void FRAMES_SET(int fps);
@@ -360,6 +360,7 @@ NATIVE_DECL uint8_t GET_EVENT2();
 NATIVE_DECL uint8_t GET_EVENT3();
 NATIVE_DECL void * GET_WORLD();
 NATIVE_DECL Game * GET();
+NATIVE_DECL char IS_PAUSED();
 NATIVE_DECL ScriptValue * SET_MISSION(ScriptValue * out, void * data, void * args);
 NATIVE_DECL ScriptValue * SET_MUSIC_VOLUME(ScriptValue * out, void * data, void * args);
 NATIVE_DECL ScriptValue * SET_SFX_VOLUME(ScriptValue * out, void * data, void * args);
@@ -625,10 +626,10 @@ NATIVE_DECL SymbolTable * GET_SYMBOL_TABLE();
 NATIVE_DECL int EVAL_CONST(const char * expr);
 NATIVE_DECL ScriptValue * INT_VALUE(ScriptValue * out, int * var);
 NATIVE_DECL ScriptValue * BOOL8_VALUE(ScriptValue * out, char * var);
-NATIVE_DECL ScriptValue * INT16_VALUE(ScriptValue * out, short * var);
 }
 namespace TASK {
 NATIVE_DECL Task * RUN_SCRIPT(Task * parent, const char * path, char insertHead);
+NATIVE_DECL Task * FIND_BY_ID(int id);
 NATIVE_DECL uint16_t GET_MASK(uint16_t type);
 NATIVE_DECL uint16_t GET_ROOT_TYPE();
 NATIVE_DECL int GET_COUNT();
@@ -645,7 +646,6 @@ NATIVE_DECL void SET_GLOBAL_FLAGS(uint32_t flags);
 NATIVE_DECL void SET_FLAGS(uint16_t type, uint32_t flags);
 NATIVE_DECL int IS_USED(int type);
 NATIVE_DECL void * FIND_WEAPON(void * task, int id);
-NATIVE_DECL Task * FIND_BY_ID(int id);
 }
 namespace CONFIG {
 NATIVE_DECL ScriptValue * IS_GERMANY(ScriptValue * out);

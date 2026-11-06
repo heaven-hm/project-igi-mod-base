@@ -3,6 +3,7 @@
 #include <iosfwd>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace igi {
@@ -13,4 +14,5 @@ bool writeIgi1MenuScript(std::ostream& output, const MenuConfig& config);
 bool writeIgi1MenuScreenScript(std::ostream& output, const MenuConfig& config);
 bool compileIgi1MenuScript(const MenuConfig& config, std::vector<std::uint8_t>& qvm, std::string& error);
 bool compileIgi1MenuScreenScript(const MenuConfig& config, std::vector<std::uint8_t>& qvm, std::string& error);
+bool compileIgi1MenuCommandScript(std::string_view command, std::vector<std::uint8_t>& qvm, std::string& error);
 }

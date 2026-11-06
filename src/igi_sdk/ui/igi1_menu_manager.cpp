@@ -29,7 +29,6 @@ Igi1MenuScreen inGameScreen() {
     screen.widgets.push_back(text("sound", "Sound", "MenuManager_PushScreen(902)"));
     screen.widgets.push_back(text("controls", "Controls", "MenuManager_PushScreen(903)"));
     screen.widgets.push_back(text("quit", "Quit to Main Menu", "MenuManager_ActivatePopupScreen(931)"));
-    screen.widgets.push_back(text("Vita", "Vita", "MenuManager_PushScreen(980)"));
     return screen;
 }
 
@@ -40,7 +39,6 @@ Igi1MenuScreen configurationScreen() {
     screen.widgets.push_back(text("Controls", "Controls", "MenuManager_RequestScreen(907, FALSE)"));
     screen.widgets.push_back(text("Language", "Language", "MenuManager_RequestScreen(910, FALSE)"));
     screen.widgets.push_back(text("Content control", "Content Control", "MenuManager_PushScreen(915)"));
-    screen.widgets.push_back(text("Vita", "Vita", "MenuManager_RequestScreen(980, FALSE)"));
     return screen;
 }
 

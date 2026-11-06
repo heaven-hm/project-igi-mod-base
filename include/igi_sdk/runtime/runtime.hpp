@@ -10,8 +10,12 @@
 namespace igi {
 class Runtime final {
 public:
-    // Gameplay work is dispatched only from the verified IGI 1 game handler.
-    bool initialize(igi1::TickHook hook = igi1::TickHook::GameRunHandler);
+    // Gameplay work is dispatched only from the verified IGI 1 Display_AddFrameCallback
+    // hook at 0x004916C0, which registers the tick into the game frame callback list.
+    bool initialize(igi1::TickHook hook = igi1::TickHook::DisplayAddFrameCallback);
+    // Opt-in direct mode for native calls proven safe from an injected worker
+    // thread. It deliberately does not install a process hook.
+    bool initializeDirectNativeMode();
     void shutdown() noexcept;
     Scheduler& scheduler() noexcept { return scheduler_; }
     std::uint64_t gameHookInvocationCount() const noexcept {

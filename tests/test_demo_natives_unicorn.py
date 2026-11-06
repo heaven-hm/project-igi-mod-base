@@ -142,3 +142,20 @@ for api, domain, name, address, signature in cases:
     print(f"PASS {domain}::{api} @ 0x{address_i:08x}: {len(arguments)} args, cdecl")
 
 print(f"IGI-RE Unicorn native ABI probes passed: {len(cases)}")
+
+# Exercise the real retail registration and list-dispatch code, not a fake
+# native entry.  A callback registration alone is not a recurring frame tick.
+frame_emu = emu_module.Emu(exe=EXE, dll="")
+callback = frame_emu.alloc(16)
+counter = frame_emu.alloc(4)
+frame_emu.write(callback, b"\xff\x05" + struct.pack("<I", counter) + b"\xc3")
+frame_emu.call(0x004916C0, callback)
+head = struct.unpack("<I", frame_emu.read(0x00BCAE00, 4))[0]
+assert head != 0, "Display_AddFrameCallback did not populate the frame list"
+next_node, registered = struct.unpack("<II", frame_emu.read(head, 8))
+assert registered == callback, "frame list contains the wrong callback"
+for frame in range(3):
+    frame_emu.call(0x00491CA0, head)
+    assert frame_emu.popped == 0, "frame dispatch violated cdecl stack balance"
+    assert struct.unpack("<I", frame_emu.read(counter, 4))[0] == frame + 1, "callback did not execute exactly once"
+print("PASS retail Display_AddFrameCallback registration and three frame dispatches")

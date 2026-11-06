@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(project_igi_natives_sdk VERSION 0.1.0 LANGUAGES CXX)
+project(project_igi_natives_sdk VERSION 0.1.0 LANGUAGES C CXX)
 
 # Retail IGI 1 is a PE32 x86 process. A 64-bit DLL cannot be loaded into it,
 # so reject that misleading configuration at generation time.
@@ -97,6 +97,15 @@ if(IGI_SDK_BUILD_DEMOS)
     endif()
     set_target_properties(igi_menu_manager_internal PROPERTIES OUTPUT_NAME "IGI-MenuManager-Internal" PREFIX "")
 
+    if(WIN32)
+        add_library(igi_natives_inject_test SHARED demos/status-message/status_message_demo.cpp)
+        target_link_libraries(igi_natives_inject_test PRIVATE igi_sdk)
+        target_include_directories(igi_natives_inject_test PRIVATE include)
+        target_compile_definitions(igi_natives_inject_test PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+        target_link_options(igi_natives_inject_test PRIVATE -static)
+        set_target_properties(igi_natives_inject_test PROPERTIES OUTPUT_NAME "igi-natives-inject-test" PREFIX "")
+    endif()
+
     add_executable(igi_menu_manager_external demos/imgui/external_demo.cpp)
     target_link_libraries(igi_menu_manager_external PRIVATE igi_sdk)
     target_include_directories(igi_menu_manager_external PRIVATE include)
@@ -106,6 +115,15 @@ endif()
 
 if(WIN32)
     target_compile_definitions(igi_sdk PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+    add_library(igi_minhook STATIC
+        third_party/minhook/src/buffer.c
+        third_party/minhook/src/hook.c
+        third_party/minhook/src/trampoline.c
+        third_party/minhook/src/hde/hde32.c
+    )
+    target_include_directories(igi_minhook PUBLIC third_party/minhook/include)
+    target_compile_definitions(igi_minhook PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_link_libraries(igi_sdk PRIVATE igi_minhook)
     target_link_libraries(igi_sdk PRIVATE advapi32)
     add_library(igi_sdk_igi1 SHARED src/igi_sdk/runtime/dll_exports.cpp)
     target_link_libraries(igi_sdk_igi1 PRIVATE igi_sdk)
@@ -121,6 +139,14 @@ if(WIN32)
     add_executable(igi1_injector tools/igi1_injector.cpp)
     set_target_properties(igi1_injector PROPERTIES OUTPUT_NAME "IGI1-Injector")
 target_link_libraries(igi1_injector PRIVATE -static)
+
+    # Small Windows-side input driver used by the Wine live-game validation.
+    # Sending keys from inside the Wine desktop avoids relying on macOS
+    # Accessibility permission or on the host application's focus state.
+    add_executable(igi1_keypress tools/igi1_keypress.cpp)
+    target_link_options(igi1_keypress PRIVATE -static)
+    set_target_properties(igi1_keypress PROPERTIES OUTPUT_NAME "IGI1-Keypress")
+
 else()
     add_library(igi_sdk_igi1 SHARED src/igi_sdk/runtime/portable_exports.cpp)
     target_link_libraries(igi_sdk_igi1 PRIVATE igi_sdk)

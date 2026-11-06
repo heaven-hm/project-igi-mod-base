@@ -9,6 +9,7 @@ GAME	GET_EVENT2	004167f0	Game_GetEvent2	uint8_t Game_GetEvent2(void)	unicorn_abi
 GAME	GET_EVENT3	00416810	Game_GetEvent3	uint8_t Game_GetEvent3(void)	unicorn_abi
 GAME	GET_WORLD	00416920	Game_GetWorld	void *Game_GetWorld(void)	unicorn_abi
 GAME	GET	00416d40	Game_Get	Game *Game_Get(void)	unicorn_abi
+GAME	IS_PAUSED	00416d50	Game_IsPaused	char Game_IsPaused(void)	unicorn_abi
 GAME	SET_MISSION	00415890	Game_SetMission	ScriptValue *Game_SetMission(ScriptValue *out, void *data, void *args)	source_only
 GAME	SET_MUSIC_VOLUME	00415950	Game_SetMusicVolume	ScriptValue *Game_SetMusicVolume(ScriptValue *out, void *data, void *args)	source_only
 GAME	SET_SFX_VOLUME	004159b0	Game_SetSFXVolume	ScriptValue *Game_SetSFXVolume(ScriptValue *out, void *data, void *args)	source_only
@@ -248,8 +249,8 @@ SCRIPT	GET_SYMBOL_TABLE	004baba0	Script_GetSymbolTable	SymbolTable *Script_GetSy
 SCRIPT	EVAL_CONST	0047cda0	Script_EvalConst	int Script_EvalConst(const char *expr)	source_only
 SCRIPT	INT_VALUE	004b7ea0	Script_IntValue	ScriptValue *Script_IntValue(ScriptValue *out, int *var)	source_only
 SCRIPT	BOOL8_VALUE	004b7f00	Script_Bool8Value	ScriptValue *Script_Bool8Value(ScriptValue *out, char *var)	source_only
-SCRIPT	INT16_VALUE	004b7f60	Script_Int16Value	ScriptValue *Script_Int16Value(ScriptValue *out, short *var)	source_only
 TASK	RUN_SCRIPT	004f0cf0	Task_RunScript	Task *Task_RunScript(Task *parent, const char *path, char insertHead)	unicorn_abi
+TASK	FIND_BY_ID	004f1030	Task_FindById	Task *Task_FindById(int id)	unicorn_abi
 TASK	GET_MASK	004014e0	TaskType_GetMask	uint16_t TaskType_GetMask(uint16_t type)	source_only
 TASK	GET_ROOT_TYPE	004018f0	Task_GetRootType	uint16_t Task_GetRootType(void)	source_only
 TASK	GET_COUNT	00401a60	Task_GetCount	int Task_GetCount(void)	source_only
@@ -266,7 +267,6 @@ TASK	SET_GLOBAL_FLAGS	00401f60	Task_SetGlobalFlags	void Task_SetGlobalFlags(uint
 TASK	SET_FLAGS	00401fa0	TaskType_SetFlags	void TaskType_SetFlags(uint16_t type, uint32_t flags)	source_only
 TASK	IS_USED	00407cd0	TaskType_IsUsed	int TaskType_IsUsed(int type)	source_only
 TASK	FIND_WEAPON	00413cc0	Task_FindWeapon	void *Task_FindWeapon(void *task, int id)	source_only
-TASK	FIND_BY_ID	004f1030	Task_FindById	Task *Task_FindById(int id)	source_only
 CONFIG	IS_GERMANY	00403b30	Config_IsGermany	ScriptValue *Config_IsGermany(ScriptValue *out)	source_only
 CONFIG	GET_CONTENT_CONTROL_PASSWORD	00403c70	Config_GetContentControlPassword	ScriptValue *Config_GetContentControlPassword(ScriptValue *out)	source_only
 CONFIG	IS_CONTENT_CONTROL_PASSWORD_ENABLED	00403d90	Config_IsContentControlPasswordEnabled	ScriptValue *Config_IsContentControlPasswordEnabled(ScriptValue *out)	source_only
