@@ -57,6 +57,7 @@ if(WIN32)
 
     add_executable(igi1_injector tools/igi1_injector.cpp)
     set_target_properties(igi1_injector PROPERTIES OUTPUT_NAME "IGI1-Injector")
+target_link_libraries(igi1_injector PRIVATE -static-libgcc -static-libstdc++ -Wl,-Bstatic -lpthread -Wl,-Bdynamic)
 else()
     add_library(igi_sdk_igi1 SHARED src/igi_sdk/runtime/portable_exports.cpp)
     target_link_libraries(igi_sdk_igi1 PRIVATE igi_sdk)

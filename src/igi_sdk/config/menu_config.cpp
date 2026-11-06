@@ -102,6 +102,7 @@ LogLevel parseLogLevel(std::string_view name, LogLevel fallback) noexcept {
 
 igi1::TickHook parseTickHook(std::string_view name, igi1::TickHook fallback) noexcept {
     const std::string key = lower(std::string{name});
+    if (key == "display_add_frame_callback" || key == "add_frame_callback" || key == "frame_callback") return igi1::TickHook::DisplayAddFrameCallback;
     if (key == "screen_draw" || key == "screendraw" || key == "screen") return igi1::TickHook::ScreenDraw;
     if (key == "display_end_frame" || key == "display_endframe" || key == "display") return igi1::TickHook::DisplayEndFrame;
     if (key == "text_draw" || key == "textdraw") return igi1::TickHook::TextDraw;
@@ -115,8 +116,9 @@ const char* tickHookName(igi1::TickHook hook) noexcept {
     case igi1::TickHook::TextDraw: return "Text_Draw";
     case igi1::TickHook::DisplayEndFrame: return "Display_EndFrame";
     case igi1::TickHook::ScreenDraw: return "Screen_Draw";
+    case igi1::TickHook::DisplayAddFrameCallback: return "Display_AddFrameCallback";
     }
-    return "Screen_Draw";
+    return "Display_AddFrameCallback";
 }
 
 MenuConfig loadMenuConfig(const std::filesystem::path& path) {

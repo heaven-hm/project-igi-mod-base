@@ -8,9 +8,13 @@
 namespace igi {
 class Runtime final {
 public:
-    // `TextDraw` is the per-frame draw tick; `GameRunHandler` is the older
-    // task-slot-1 target and is kept selectable from config.ini.
-    bool initialize(igi1::TickHook hook = igi1::TickHook::TextDraw);
+    // Per-frame SDK tick selection. `DisplayAddFrameCallback` is the primary
+    // choice: it registers IGI1SDK_Tick into the game's own per-frame callback
+    // list (Display_AddFrameCallback at 0x4916C0), so the SDK runs once per
+    // displayed frame on the game thread without patching the tick target.
+    // `ScreenDraw`, `DisplayEndFrame`, `TextDraw` and `GameRunHandler` stay
+    // selectable from config.ini for comparison and fallback.
+    bool initialize(igi1::TickHook hook = igi1::TickHook::DisplayAddFrameCallback);
     void shutdown() noexcept;
     Scheduler& scheduler() noexcept { return scheduler_; }
     std::uint64_t gameHookInvocationCount() const noexcept {

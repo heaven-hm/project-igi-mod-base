@@ -38,6 +38,12 @@ extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_Internal_Initialize() {
     const bool pushed = gameMenu->pushScreen(menuConfig.screenId);
     igi::log(pushed ? igi::LogLevel::Info : igi::LogLevel::Error,
              pushed ? "internal initialize: mod menu screen activated" : "internal initialize: mod menu screen activation failed");
+    if (pushed) {
+        const auto ticked = runtime.scheduler().runPendingFromGameHook();
+        igi::log(igi::LogLevel::Debug,
+                 std::string("internal initialize: scheduler ticked on init; pending=") +
+                     std::to_string(ticked));
+    }
     return pushed;
 }
 

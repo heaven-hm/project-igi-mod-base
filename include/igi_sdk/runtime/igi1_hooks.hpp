@@ -3,10 +3,15 @@
 #include <cstdint>
 
 namespace igi::igi1 {
-enum class TickHook { ScreenDraw, DisplayEndFrame, TextDraw, GameRunHandler };
+enum class TickHook { DisplayAddFrameCallback, ScreenDraw, DisplayEndFrame, TextDraw, GameRunHandler };
 
 inline constexpr std::uint32_t imageBase = 0x00400000;
 inline constexpr std::uint32_t gameRunHandler = 0x00416260;
+// Per-frame display callback registration: pushes a DisplayCallback onto
+// gDisplayFrameCallbacks, which Display_RunCallbacks runs once per displayed
+// frame (at src/win/display.c:357, before Display_EndFrame at 364).
+inline constexpr std::uint32_t displayAddFrameCallback = 0x004916C0;
+
 // Screen-level frame: Display_NextFrame, child draw events, then Display_EndFrame.
 inline constexpr std::uint32_t screenDraw = 0x004E7400;
 // Per-frame end of display: `call Scene_DrawAll; mov gDisplayEndFrameCallbacks; ...`

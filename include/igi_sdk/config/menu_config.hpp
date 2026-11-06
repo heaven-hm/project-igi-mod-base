@@ -38,7 +38,7 @@ struct MenuConfig {
     LogLevel minimumLogLevel = LogLevel::Info;
     bool console = false;
 #endif
-    igi1::TickHook hook = igi1::TickHook::ScreenDraw;
+    igi1::TickHook hook = igi1::TickHook::DisplayAddFrameCallback;
     std::vector<ModMenuItemConfig> items;
 };
 
