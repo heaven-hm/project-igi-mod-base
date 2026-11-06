@@ -35,12 +35,15 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import os
+import re
 import struct
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RE_ROOT = Path(os.environ.get("IGI_RE_ROOT", "/Users/haseeb-mir/Documents/Code/IGI-RE"))
+NATIVES_HEADER = ROOT / "include" / "igi_sdk" / "natives" / "mvp_natives.hpp"
+NATIVES_SOURCE = ROOT / "src" / "igi_sdk" / "natives" / "mvp_natives.cpp"
 EXE = os.environ.get("IGI_EXE", "")
 DLL = os.environ.get("IGI_DLL", str(ROOT / "build-win32-release" / "IGI-MenuManager-Internal.dll"))
 
@@ -48,6 +51,17 @@ DLL = os.environ.get("IGI_DLL", str(ROOT / "build-win32-release" / "IGI-MenuMana
 DISPLAY_ADD_FRAME_CALLBACK = 0x004916C0
 FRAME_DISPATCH = 0x00491CA0
 FRAME_LIST_HEAD = 0x00BCAE00
+
+# Game singletons that a live game initialises during startup. The natives the
+# demo uses read these globals directly, so an uninitialised emulator faults on
+# a null dereference. Seeding them with zeroed scratch structures lets the real
+# native code run instead of merely being validated.
+GAME_GLOBALS = {
+    0x00567C8C: 0x200,  # game settings/config object (FRAMES_SET writes +0x30)
+    0x0057BABC: 0x200,  # Game singleton (IS_PAUSED reads +0xE0)
+    0x0057BAB4: 0x200,  # world/list head (GET_WORLD reads +0x20)
+    0x005C89FC: 0x40,   # level max / game constants
+}
 
 
 def skip(reason: str) -> None:
@@ -275,6 +289,32 @@ def build_stubs():
     add("TranslateMessage", _stub_ret_zero(1))
     add("GetSystemMetrics", lambda e: e.ret(1920, 4))
     add("MessageBoxA", lambda e: e.ret(1, 4))
+    add("GetWindowLongA", lambda e: e.ret(0, 8))
+    add("GetWindowLongW", lambda e: e.ret(0, 8))
+    add("SetWindowLongA", lambda e: e.ret(0, 12))
+    add("SetWindowLongW", lambda e: e.ret(0, 12))
+    add("GetClientRect", lambda e: e.ret(1, 2))
+    add("GetDesktopWindow", lambda e: e.ret(0x00010010, 0))
+    add("AdjustWindowRect", _stub_ret_one(4))
+    add("ClientToScreen", _stub_ret_one(2))
+    add("SetWindowPos", _stub_ret_one(7))
+    add("MoveWindow", _stub_ret_one(6))
+    add("ShowWindow", _stub_ret_one(2))
+    add("SetWindowTextA", _stub_ret_one(2))
+    add("SetWindowTextW", _stub_ret_one(2))
+    add("GetForegroundWindow", lambda e: e.ret(0x00010010, 0))
+    add("GetActiveWindow", lambda e: e.ret(0x00010010, 0))
+    add("SetFocus", lambda e: e.ret(0x00010010, 4))
+    add("SetActiveWindow", lambda e: e.ret(0x00010010, 4))
+    add("InvalidateRect", _stub_ret_one(3))
+    add("UpdateWindow", _stub_ret_one(1))
+    add("SendMessageA", lambda e: e.ret(0, 16))
+    add("PostMessageA", _stub_ret_one(4))
+    add("DefWindowProcA", lambda e: e.ret(0, 16))
+    add("GetDC", lambda e: e.ret(0x00020020, 4))
+    add("ReleaseDC", lambda e: e.ret(1, 8))
+    add("ScreenToClient", _stub_ret_one(2))
+    add("EnableWindow", lambda e: e.ret(0, 8))
 
     # =====================================================================
     # UCRT (api-ms-win-crt-*) stubs. These are cdecl: the caller cleans the
@@ -477,6 +517,106 @@ def build_stubs():
     return stubs
 
 
+# --- native catalogue -------------------------------------------------------
+#
+# The SDK exposes natives as IGI::DOMAIN::NAME in C++, but the addresses live in
+# HASH::DOMAIN_NAME constants. mvp_natives.cpp ties the two together via
+# NATIVE_INVOKE<Void>(HASH::DOMAIN_NAME, ...), so the scanner parses both files
+# once and builds the full name -> address map.
+
+_HASH_RE = re.compile(r"inline\s+constexpr\s+std::uint32_t\s+(\w+)\s*=\s*(0x[0-9a-fA-F]+)\s*;")
+_DECL_RE = re.compile(r"NATIVE_DECL\s+[\w:\s\*]+?\s+(\w+)\s*\([^)]*\)\s*\{")
+_SIGNATURE_RE = re.compile(r"NATIVE_DECL\s+[\w:\s\*]+?\s+(\w+)\s*\(([^)]*)\)\s*;")
+_NAMESPACE_RE = re.compile(r"namespace\s+(\w+)\s*\{")
+_HASH_USE_RE = re.compile(r"HASH::(\w+)")
+_SOURCE_CALL_RE = re.compile(r"IGI::([A-Z_][A-Z_0-9]*)::([A-Z_][A-Z_0-9]*)")
+
+# Wrapper namespaces that do not name a real IGI domain.
+_WRAPPER_NAMESPACES = frozenset({"IGI"})
+
+
+def load_native_catalogue(header: Path = NATIVES_HEADER, source: Path = NATIVES_SOURCE) -> dict[str, dict]:
+    """Build {\"DOMAIN::NAME\": {address, hash, domain, name}} from the SDK sources.
+
+    Returns an empty dict when the generated files are unavailable; the caller
+    reports that instead of guessing addresses.
+    """
+    if not header.is_file() or not source.is_file():
+        return {}
+
+    hash_addresses: dict[str, int] = {}
+    for match in _HASH_RE.finditer(header.read_text()):
+        hash_addresses[match.group(1)] = int(match.group(2), 16)
+
+    # Parse parameter lists from the header so run_native can build valid
+    # arguments; without them the natives dereference null pointers.
+    signature_params: dict[str, list[str]] = {}
+    header_text = header.read_text()
+    for match in _SIGNATURE_RE.finditer(header_text):
+        sig_name = match.group(1)
+        raw = match.group(2).strip()
+        params: list[str] = []
+        if raw and raw != "void":
+            for part in raw.split(","):
+                part = part.strip()
+                # Drop the trailing parameter name, keep the type.
+                tokens = part.rsplit(None, 1)
+                params.append(tokens[0] if len(tokens) == 2 and not tokens[0].endswith("*") else part)
+        namespaces = [m.group(1) for m in _NAMESPACE_RE.finditer(header_text[: match.start()])]
+        domain = "?"
+        for candidate in reversed(namespaces):
+            if candidate not in _WRAPPER_NAMESPACES:
+                domain = candidate
+                break
+        if domain != "?":
+            signature_params[f"{domain}::{sig_name}"] = params
+
+    text = source.read_text()
+    catalogue: dict[str, dict] = {}
+
+    # mvp_natives.cpp defines natives as NATIVE_DECL ... NAME(...) { ... } blocks
+    # nested inside `namespace DOMAIN { ... }`. The domain for a declaration is
+    # the nearest preceding namespace that is not a wrapper namespace.
+    for match in _DECL_RE.finditer(text):
+        name = match.group(1)
+        hash_match = _HASH_USE_RE.search(text, match.end(), match.end() + 2000)
+        if hash_match is None:
+            continue
+        hash_name = hash_match.group(1)
+        address = hash_addresses.get(hash_name)
+        if address is None:
+            continue
+
+        prefix = text[: match.start()]
+        namespaces = [m.group(1) for m in _NAMESPACE_RE.finditer(prefix)]
+        domain = "?"
+        for candidate in reversed(namespaces):
+            if candidate not in _WRAPPER_NAMESPACES:
+                domain = candidate
+                break
+        if domain == "?":
+            continue
+
+        key = f"{domain}::{name}"
+        catalogue[key] = {
+            "domain": domain,
+            "name": name,
+            "hash": hash_name,
+            "address": address,
+            "params": signature_params.get(key, []),
+        }
+    return catalogue
+
+
+def scan_source_file(path: Path) -> list[str]:
+    """Extract every IGI::DOMAIN::NAME reference from a C/C++ source file."""
+    text = path.read_text(errors="replace")
+    seen: dict[str, None] = {}
+    for match in _SOURCE_CALL_RE.finditer(text):
+        seen[f"{match.group(1)}::{match.group(2)}"] = None
+    return list(seen)
+
+
 class IGIRuntime:
     """Runtime environment around IGI-RE's Emu for our DLL.
 
@@ -576,8 +716,123 @@ class IGIRuntime:
         """Run the DLL's Initialize export inside the emulated process."""
         return self.call_export("IGI_MenuManager_Internal_Initialize")
 
+    def seed_game_globals(self) -> None:
+        """Point the game singletons at zeroed scratch structures.
+
+        A running game allocates these during startup; without them the natives
+        dereference null and fault. Zeroed memory is enough for the read/write
+        paths these natives take.
+        """
+        for address, size in GAME_GLOBALS.items():
+            scratch = self.emu.alloc(size)
+            self.emu.write(address, struct.pack("<I", scratch))
+
+    def build_arguments(self, entry: dict) -> tuple:
+        """Build valid cdecl arguments from the native's declared signature.
+
+        Pointer parameters receive a real allocation so the native can read and
+        write it instead of faulting on a null dereference. `char *` receives a
+        NUL-terminated string. Integer and float parameters receive neutral
+        values that do not depend on prior game state.
+        """
+        values: list[int] = []
+        for declared in entry.get("params", []):
+            kind = declared.replace("const", "").replace("struct ", "").strip()
+            if "*" not in kind:
+                if "float" in kind or "double" in kind:
+                    packed = struct.pack("<f", 0.5)
+                    values.append(struct.unpack("<I", packed)[0])
+                else:
+                    values.append(30)
+                continue
+
+            memory = self.emu.alloc(64)
+            if "char" in kind:
+                self.emu.write(memory, b"igi_sdk\0")
+            elif "Task" in kind or "Graph" in kind:
+                # Task/Graph natives walk linked lists and read member pointers.
+                # Point the first few slots at zeroed nodes so those walks
+                # terminate instead of dereferencing null.
+                for offset in range(0, 32, 4):
+                    node = self.emu.alloc(16)
+                    self.emu.write(memory + offset, struct.pack("<I", node))
+            values.append(memory)
+        return tuple(values)
+
+    def run_native(self, entry: dict, args: tuple | None = None):
+        """Invoke a retail native at its verified address in the game context.
+
+        When no explicit arguments are supplied, valid arguments are derived
+        from the native's declared signature so the real code path executes
+        instead of faulting on null pointers.
+        """
+        address = entry["address"]
+        if args is None:
+            args = self.build_arguments(entry)
+        try:
+            result = self.emu.call(address, *args)
+            return {"ok": True, "address": address, "result": result, "args": args}
+        except Exception as error:  # emulator surfaces faults as exceptions
+            return {"ok": False, "address": address, "error": str(error), "args": args}
+
     def run_shutdown(self):
         return self.call_export("IGI_MenuManager_Internal_Shutdown")
+
+
+def run_source_scan(args, emu_module) -> int:
+    """Scan a C/C++ source file and execute every IGI native it references.
+
+    Each reference is resolved through the generated native catalogue to its
+    verified retail address, then invoked inside the emulated game image so the
+    real code path and calling convention are exercised.
+    """
+    path = args.path
+    if not path.is_file():
+        skip(f"source file does not exist: {path}")
+
+    catalogue = load_native_catalogue()
+    if not catalogue:
+        skip("native catalogue unavailable; regenerate mvp_natives.hpp/.cpp")
+
+    natives = scan_source_file(path)
+    print(f"scan: {path}")
+    print(f"scan: {len(natives)} IGI native reference(s) found")
+
+    runtime = IGIRuntime(args.exe, args.dll, emu_module, lenient=args.lenient)
+    runtime.install_frame_hook()
+    runtime.seed_game_globals()
+
+    # Dispatch a few frames so the game callback list and DLL state are live
+    # before natives are invoked against the retail image.
+    runtime.run_frames(min(args.frames, 5))
+
+    passed: list[str] = []
+    failed: list[tuple[str, str]] = []
+    missing: list[str] = []
+
+    for native in natives:
+        entry = catalogue.get(native)
+        if entry is None:
+            missing.append(native)
+            continue
+        result = runtime.run_native(entry)
+        if result["ok"]:
+            passed.append(f"{native} @ 0x{entry['address']:08x}")
+        else:
+            failed.append((native, result["error"]))
+
+    for line in passed:
+        print(f"PASS {line}")
+    for native, error in failed:
+        print(f"FAIL {native}: {error}")
+    for native in missing:
+        print(f"SKIP {native}: not in native catalogue")
+
+    print(
+        f"scan result: {len(passed)} passed, {len(failed)} failed, "
+        f"{len(missing)} not catalogued"
+    )
+    return 0 if not failed else 1
 
 
 def main() -> int:
@@ -586,6 +841,12 @@ def main() -> int:
     parser.add_argument("--lenient", action="store_true", help="treat unknown imports as zero-return")
     parser.add_argument("--exe", default=EXE, help="path to retail igi.exe")
     parser.add_argument("--dll", default=DLL, help="path to IGI-MenuManager-Internal.dll")
+    parser.add_argument(
+        "--path",
+        type=Path,
+        default=None,
+        help="scan a C/C++ source file for IGI::DOMAIN::NAME natives and run them",
+    )
     args = parser.parse_args()
 
     if not args.exe:
@@ -605,6 +866,10 @@ def main() -> int:
 
     print(f"runtime: exe={args.exe}")
     print(f"runtime: dll={args.dll}")
+
+    if args.path is not None:
+        return run_source_scan(args, emu_module)
+
     runtime = IGIRuntime(args.exe, args.dll, emu_module, lenient=args.lenient)
 
     runtime.install_frame_hook()
