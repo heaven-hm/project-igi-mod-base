@@ -7,6 +7,18 @@ if(WIN32 AND NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
     message(FATAL_ERROR "IGI 1 SDK Windows targets require a 32-bit x86 toolchain")
 endif()
 
+# Retail IGI 1 igi.exe is a 2002 ANSI Win32 process. The SDK DLLs must load
+# inside it through a remote LoadLibrary call, so they must not depend on the
+# mingw runtime DLLs (libstdc++-6/libgcc_s/libwinpthread). Homebrew's mingw-w64
+# ignores -mcrtdll=msvcrt and always emits the UCRT api-ms-win-crt-* imports,
+# which Wine 11 resolves through ucrtbase.dll, but the shared mingw runtime does
+# not resolve reliably in the game process. Every Windows target therefore links
+# with -static so the C++ runtime is embedded and the only imports left are the
+# system DLLs and the UCRT API sets the loader provides.
+if(WIN32)
+    add_link_options(-mcrtdll=msvcrt)
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -80,6 +92,9 @@ if(IGI_SDK_BUILD_DEMOS)
     )
     target_link_libraries(igi_menu_manager_internal PRIVATE igi_sdk)
     target_include_directories(igi_menu_manager_internal PRIVATE include)
+    if(WIN32)
+        target_link_options(igi_menu_manager_internal PRIVATE -static)
+    endif()
     set_target_properties(igi_menu_manager_internal PROPERTIES OUTPUT_NAME "IGI-MenuManager-Internal" PREFIX "")
 
     add_executable(igi_menu_manager_external demos/imgui/external_demo.cpp)
@@ -95,6 +110,9 @@ if(WIN32)
     add_library(igi_sdk_igi1 SHARED src/igi_sdk/runtime/dll_exports.cpp)
     target_link_libraries(igi_sdk_igi1 PRIVATE igi_sdk)
     target_compile_definitions(igi_sdk_igi1 PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+    # Embed the mingw C++ runtime so the injected DLL is self-contained: the
+    # game process must not need libstdc++-6/libgcc_s/libwinpthread present.
+    target_link_options(igi_sdk_igi1 PRIVATE -static)
     set_target_properties(igi_sdk_igi1 PROPERTIES OUTPUT_NAME "IGI-Natives-SDK-IGI1" PREFIX ""
         WINDOWS_EXPORT_ALL_SYMBOLS ON)
     add_executable(igi_sdk_win32_loader tools/win32_loader.cpp)
@@ -102,7 +120,7 @@ if(WIN32)
 
     add_executable(igi1_injector tools/igi1_injector.cpp)
     set_target_properties(igi1_injector PROPERTIES OUTPUT_NAME "IGI1-Injector")
-target_link_libraries(igi1_injector PRIVATE -static-libgcc -static-libstdc++ -Wl,-Bstatic -lpthread -Wl,-Bdynamic)
+target_link_libraries(igi1_injector PRIVATE -static)
 else()
     add_library(igi_sdk_igi1 SHARED src/igi_sdk/runtime/portable_exports.cpp)
     target_link_libraries(igi_sdk_igi1 PRIVATE igi_sdk)
@@ -114,6 +132,9 @@ add_executable(igi_sdk_tests
     tests/MenuManagerTests.cpp
 )
 target_link_libraries(igi_sdk_tests PRIVATE igi_sdk)
+if(WIN32)
+    target_link_options(igi_sdk_tests PRIVATE -static)
+endif()
 target_compile_definitions(igi_sdk_tests PRIVATE IGI_SDK_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
 add_custom_command(
@@ -159,6 +180,7 @@ set_tests_properties(igi_demo_natives_unicorn PROPERTIES
 if(WIN32)
     add_library(igi_sdk_native_abi_fixture SHARED tests/native_abi_fixture.cpp)
     target_link_libraries(igi_sdk_native_abi_fixture PRIVATE igi_sdk)
+    target_link_options(igi_sdk_native_abi_fixture PRIVATE -static)
     set_target_properties(igi_sdk_native_abi_fixture PROPERTIES
         OUTPUT_NAME "igi-sdk-native-abi-fixture" PREFIX "")
     add_test(NAME igi_sdk_native_wrappers_unicorn
