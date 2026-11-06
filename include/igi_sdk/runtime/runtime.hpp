@@ -16,6 +16,7 @@ public:
     // Opt-in direct mode for native calls proven safe from an injected worker
     // thread. It deliberately does not install a process hook.
     bool initializeDirectNativeMode();
+    bool allowDirectNativeCallbackThread() noexcept;
     void shutdown() noexcept;
     Scheduler& scheduler() noexcept { return scheduler_; }
     std::uint64_t gameHookInvocationCount() const noexcept {
@@ -28,6 +29,7 @@ private:
     HookManager hooks_{scheduler_};
     std::unique_ptr<NativeCatalogue> catalogue_;
     std::unique_ptr<NativeCaller> caller_;
+    bool directNativeMode_ = false;
     bool initialized_ = false;
 };
 }

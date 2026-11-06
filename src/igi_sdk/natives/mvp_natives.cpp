@@ -69,6 +69,9 @@ NATIVE_DECL Game * GET() {
 NATIVE_DECL char IS_PAUSED() {
     return NATIVE_INVOKE<char>(HASH::GAME_IS_PAUSED, "char Game_IsPaused(void)");
 }
+NATIVE_DECL void SET_PAUSED(char on) {
+    return NATIVE_INVOKE<Void>(HASH::GAME_SET_PAUSED, "void Game_SetPaused(char on)", on);
+}
 NATIVE_DECL ScriptValue * SET_MISSION(ScriptValue * out, void * data, void * args) {
     return NATIVE_INVOKE<ScriptValue *>(HASH::GAME_SET_MISSION, "ScriptValue *Game_SetMission(ScriptValue *out, void *data, void *args)", out, data, args);
 }
@@ -969,6 +972,6 @@ NATIVE_DECL int PROFILE_GET_LANGUAGE() {
     return NATIVE_INVOKE<int>(HASH::PROFILE_GET_LANGUAGE, "int Profile_GetLanguage(void)");
 }
 }
-std::size_t NativeBindingCount() noexcept { return 300; }
+std::size_t NativeBindingCount() noexcept { return 301; }
 } // namespace IGI
 #undef NATIVE_INVOKE

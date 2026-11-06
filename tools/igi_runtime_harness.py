@@ -63,6 +63,15 @@ GAME_GLOBALS = {
     0x005C89FC: 0x40,   # level max / game constants
 }
 
+# These routines require live renderer or MenuManager-owned task graphs. Their
+# entry addresses are still checked, but running them against synthetic zeroed
+# emulator state is invalid and produces misleading null-context faults.
+LIVE_GAME_ONLY_NATIVES = frozenset({
+    "GAME::SET_DISPLAY_MODE",
+    "SCRIPT::SET_SYMBOL_CONTEXT",
+    "TASK::RUN_SCRIPT",
+})
+
 
 def skip(reason: str) -> None:
     print(f"SKIP: {reason}")
@@ -809,11 +818,16 @@ def run_source_scan(args, emu_module) -> int:
     passed: list[str] = []
     failed: list[tuple[str, str]] = []
     missing: list[str] = []
+    deferred: list[str] = []
 
     for native in natives:
         entry = catalogue.get(native)
         if entry is None:
             missing.append(native)
+            continue
+        if native in LIVE_GAME_ONLY_NATIVES:
+            runtime.emu.read(entry["address"], 1)
+            deferred.append(f"{native} @ 0x{entry['address']:08x}: requires live game state")
             continue
         result = runtime.run_native(entry)
         if result["ok"]:
@@ -827,10 +841,12 @@ def run_source_scan(args, emu_module) -> int:
         print(f"FAIL {native}: {error}")
     for native in missing:
         print(f"SKIP {native}: not in native catalogue")
+    for line in deferred:
+        print(f"DEFER {line}")
 
     print(
         f"scan result: {len(passed)} passed, {len(failed)} failed, "
-        f"{len(missing)} not catalogued"
+        f"{len(deferred)} live-game-only, {len(missing)} not catalogued"
     )
     return 0 if not failed else 1
 

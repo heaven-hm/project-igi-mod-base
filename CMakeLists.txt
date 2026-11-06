@@ -57,6 +57,7 @@ add_library(igi_sdk STATIC
     src/igi_sdk/ui/menu_script_bridge.cpp
     src/igi_sdk/ui/menu_script_igi1.cpp
     src/igi_sdk/ui/menu_values.cpp
+    src/igi_sdk/ui/menu_native_actions.cpp
     src/igi_sdk/natives/native_catalogue.cpp
     src/igi_sdk/natives/native_caller.cpp
     src/igi_sdk/natives/mvp_natives.cpp

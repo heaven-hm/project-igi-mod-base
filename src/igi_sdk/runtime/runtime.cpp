@@ -33,10 +33,17 @@ bool Runtime::initializeDirectNativeMode() {
     log(LogLevel::Info, "direct-native runtime: native caller allocated");
     bindIgi1NativeCaller(caller_.get());
     log(LogLevel::Info, "direct-native runtime: native caller bound");
+    directNativeMode_ = true;
     initialized_ = true;
     log(LogLevel::Info, "IGI 1 SDK direct-native runtime initialized without a scheduler hook");
     return true;
 #endif
+}
+
+bool Runtime::allowDirectNativeCallbackThread() noexcept {
+    if (!initialized_ || !directNativeMode_) return false;
+    scheduler_.allowCurrentGameThread();
+    return scheduler_.isGameThread();
 }
 
 bool Runtime::initialize(igi1::TickHook hook) {
@@ -75,6 +82,7 @@ void Runtime::shutdown() noexcept {
     caller_.reset();
     catalogue_.reset();
     scheduler_.reset();
+    directNativeMode_ = false;
     initialized_ = false;
 }
 }

@@ -9,18 +9,21 @@ class NativeCaller;
 class MenuScriptBridge final {
 public:
     using SelectionHandler = std::function<void(std::size_t, std::string_view)>;
-    explicit MenuScriptBridge(const MenuConfig& config, SelectionHandler onSelection = {})
-        : values_(config), onSelection_(std::move(onSelection)) {}
+    using CloseHandler = std::function<void()>;
+    explicit MenuScriptBridge(const MenuConfig& config, SelectionHandler onSelection = {}, CloseHandler onClose = {})
+        : values_(config), onSelection_(std::move(onSelection)), onClose_(std::move(onClose)) {}
     bool fillList(int item, const std::function<void(std::string_view, int)>& addItem) const;
     int getList(int item) const noexcept;
     bool setList(int item, int value);
     bool activate(int item);
     int getToggle(int item) const noexcept;
     bool setToggle(int item, int value);
+    void close();
 
 private:
     MenuValues values_;
     SelectionHandler onSelection_;
+    CloseHandler onClose_;
 };
 
 // IGI 1 x86 ScriptValue layout, as recovered from the game interface.
@@ -53,6 +56,7 @@ public:
     IgiScriptValue* getToggle(IgiScriptValue* output, void* args);
     IgiScriptValue* setToggle(IgiScriptValue* output, void* args);
     IgiScriptValue* action(IgiScriptValue* output, void* args);
+    IgiScriptValue* close(IgiScriptValue* output, void* args);
 private:
     MenuScriptBridge& bridge_;
     MenuScriptApi api_;

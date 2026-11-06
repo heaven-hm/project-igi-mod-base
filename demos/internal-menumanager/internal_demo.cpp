@@ -8,6 +8,7 @@
 #include "igi_sdk/logging/logging.hpp"
 #include "igi_sdk/natives/igi1_native_registry.hpp"
 #include "igi_sdk/natives/igi_re/hashes.hpp"
+#include "igi_sdk/ui/menu_native_actions.hpp"
 
 #include <atomic>
 #include <cstring>
@@ -69,56 +70,10 @@ struct GameRootLayout {
     std::uint8_t prefix[0x44];
     void* root;
 };
-// The 0x44 game-root offset is a retail IGI 1 Win32 x86 ABI fact. On 64-bit
-// hosts the pointer alignment pads the prefix to 0x48, so the check only
-// applies to the target executable build.
+
 #if defined(_WIN32) && !defined(_WIN64)
 static_assert(offsetof(GameRootLayout, root) == 0x44);
 #endif
-
-void invokeConfiguredAction(std::size_t item, std::string_view value) {
-    if (item >= menuConfig.items.size()) return;
-    const auto& action = menuConfig.items[item].nativeAction;
-    igi::log(igi::LogLevel::Debug, "internal menu action: " + action);
-    // The callback is reached on Display_AddFrameCallback, so typed wrappers are safe
-    // to invoke here. Values remain config-driven; no menu labels are used as
-    // dispatch keys.
-    if (action == "IGI_SDK_SetWeather(this.value)") {
-        if (value != "on" && value != "off") {
-            igi::log(igi::LogLevel::Warning, "weather selection must be on or off; native call skipped");
-            return;
-        }
-        const char weather[] = {'r', static_cast<char>(value == "on"), '\0'};
-        IGI::GAME::SET_RAINING(weather);
-    } else if (action == "IGI_SDK_EnableUnlimitedAmmo()") {
-        IGI::PLAYER::SET_UNLIMITED_AMMO();
-    } else if (action == "IGI_SDK_ToggleFrameLimit()") {
-        IGI::MISC::FRAMES_SET(value == "false" ? 60 : 30);
-    } else if (action == "IGI_SDK_SetMusicVolume(this.value)") {
-        float volume = 0.0F;
-        if (value == "mute") volume = 0.0F;
-        else if (value == "low") volume = 0.35F;
-        else if (value == "normal") volume = 1.0F;
-        else {
-            igi::log(igi::LogLevel::Warning, "unknown music volume selection; native call skipped");
-            return;
-        }
-        IGI::AUDIO::MUSIC_SET_VOLUME(volume, volume);
-    } else if (action == "IGI_SDK_RefreshDisplay()") {
-        IGI::GAME::SET_DISPLAY_MODE();
-    } else if (action == "IGI_SDK_LogGameState()") {
-        std::ostringstream state;
-        state << "IGI state: events="
-              << static_cast<int>(IGI::GAME::GET_EVENT0()) << ','
-              << static_cast<int>(IGI::GAME::GET_EVENT1()) << ','
-              << static_cast<int>(IGI::GAME::GET_EVENT2()) << ','
-              << static_cast<int>(IGI::GAME::GET_EVENT3())
-              << " world=" << IGI::GAME::GET_WORLD();
-        igi::log(igi::LogLevel::Info, state.str());
-    } else {
-        igi::log(igi::LogLevel::Warning, "internal menu action has no native adapter: " + action);
-    }
-}
 
 bool installMenuScriptCallbacks() {
     if (menuRegistration.active()) return true;
@@ -145,7 +100,19 @@ bool installMenuScriptCallbacks() {
     const auto resources = igi::igi1MenuResourceApi(*caller);
     if (!reopenResource.active() && !reopenResource.registerData("LOCAL:igi_sdk/modmenu-reopen.qvm", reopenMenu, resources)) return false;
     if (!closeResource.active() && !closeResource.registerData("LOCAL:igi_sdk/modmenu-close.qvm", closeMenu, resources)) return false;
-    menuBridge = std::make_unique<igi::MenuScriptBridge>(menuConfig, invokeConfiguredAction);
+    menuBridge = std::make_unique<igi::MenuScriptBridge>(
+        menuConfig,
+        [](std::size_t item, std::string_view value) {
+            igi::executeMenuNativeAction(menuConfig, runtime, item, value);
+        },
+        [] {
+            if (!igi::resumeFromMenu(runtime)) {
+                igi::log(igi::LogLevel::Error, "internal menu close rejected: unable to resume game");
+                return;
+            }
+            menuScreenAttached = false;
+            igi::log(igi::LogLevel::Info, "internal menu close: game resumed");
+        });
     menuCallbacks = std::make_unique<igi::MenuScriptCallbacks>(*menuBridge, script);
     if (!menuRegistration.start(*menuCallbacks, registry)) {
         menuCallbacks.reset();
@@ -238,6 +205,13 @@ void menuFrameWork() {
         igi::log(igi::LogLevel::Info, "internal menu natives: screen parameter initialization completed");
     }
     menuScreenAttached = screen != nullptr;
+    if (menuScreenAttached) {
+        if (!igi::pauseForMenu(runtime)) {
+            igi::log(igi::LogLevel::Error, "internal menu open: unable to pause game");
+            return;
+        }
+        igi::log(igi::LogLevel::Info, "internal menu open: game paused");
+    }
     igi::log(menuScreenAttached ? igi::LogLevel::Info : igi::LogLevel::Error,
              menuScreenAttached ? "internal menu screen: attached and requested from existing MenuManager" :
                                   "internal menu screen: Task_RunScript failed");
@@ -406,19 +380,10 @@ extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_Internal_CanUnload() {
 extern "C" IGI_DEMO_EXPORT void IGI_MenuManager_Internal_Shutdown() {
     igi::log(igi::LogLevel::Debug, "internal shutdown: begin");
     if (menuScreenAttached) {
-        // The live MenuScreen and its QVM retain references to SDK script
-        // callbacks. IGI has no recovered screen-detach API here, so tearing
-        // down callbacks, resource bytes, or the game hook would leave live
-        // game objects pointing into released SDK state. Keep the runtime and
-        // resource resident for this process instead of creating dangling
-        // callbacks. A full detach path can replace this once task teardown is
-        // verified against the retail executable.
         igi::log(igi::LogLevel::Warning,
                  "internal shutdown deferred: live mod screen retains SDK callbacks; runtime remains resident");
         return;
     }
-    // Script handlers hold pointers into the DLL; remove them before releasing
-    // the bridge and callback objects.
     menuRegistration.stop();
     menuCallbacks.reset();
     menuBridge.reset();

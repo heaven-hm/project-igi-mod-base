@@ -68,6 +68,10 @@ bool MenuScriptBridge::activate(int item) {
     return true;
 }
 
+void MenuScriptBridge::close() {
+    if (onClose_) onClose_();
+}
+
 namespace {
 IgiScriptValue* result(IgiScriptValue* output, int value) noexcept {
     if (!output) return nullptr;
@@ -109,6 +113,10 @@ IgiScriptValue* MenuScriptCallbacks::setToggle(IgiScriptValue* output, void* arg
 IgiScriptValue* MenuScriptCallbacks::action(IgiScriptValue* output, void* args) {
     if (!output || !args || !api_.getInt) return result(output, 0);
     return result(output, bridge_.activate(api_.getInt(args, 0)) ? 1 : 0);
+}
+IgiScriptValue* MenuScriptCallbacks::close(IgiScriptValue* output, void*) {
+    bridge_.close();
+    return result(output, 1);
 }
 
 namespace {
@@ -160,19 +168,29 @@ IgiScriptValue* actionCallback(IgiScriptValue* out, void* context, void* args) {
         return result(out, 0);
     }
 }
+IgiScriptValue* closeCallback(IgiScriptValue* out, void* context, void* args) {
+    try {
+        return context ? static_cast<MenuScriptCallbacks*>(context)->close(out, args) : result(out, 0);
+    } catch (...) {
+        log(LogLevel::Error, "IGI_SDK_CloseMenu: callback threw");
+        return result(out, 0);
+    }
+}
 }
 
 bool registerMenuScriptCallbacks(MenuScriptCallbacks& callbacks, ScriptRegistryApi registry) noexcept {
     if (!registry.registerFunction || !registry.registerIntFunction || !registry.removeSymbol || !registry.containsSymbol || !registry.matchesSymbol) return false;
     if (registry.containsSymbol("IGI_SDK_FillList") || registry.containsSymbol("IGI_SDK_GetList") ||
         registry.containsSymbol("IGI_SDK_SetList") || registry.containsSymbol("IGI_SDK_GetToggle") ||
-        registry.containsSymbol("IGI_SDK_SetToggle") || registry.containsSymbol("IGI_SDK_Action")) return false;
+        registry.containsSymbol("IGI_SDK_SetToggle") || registry.containsSymbol("IGI_SDK_Action") ||
+        registry.containsSymbol("IGI_SDK_CloseMenu")) return false;
     registry.registerFunction("IGI_SDK_FillList", fillCallback, &callbacks, 1);
     registry.registerIntFunction("IGI_SDK_GetList", getCallback, &callbacks, 1);
     registry.registerFunction("IGI_SDK_SetList", setCallback, &callbacks, 2);
     registry.registerIntFunction("IGI_SDK_GetToggle", getToggleCallback, &callbacks, 1);
     registry.registerFunction("IGI_SDK_SetToggle", setToggleCallback, &callbacks, 2);
     registry.registerFunction("IGI_SDK_Action", actionCallback, &callbacks, 1);
+    registry.registerFunction("IGI_SDK_CloseMenu", closeCallback, &callbacks, 0);
     return true;
 }
 
@@ -185,6 +203,7 @@ void unregisterMenuScriptCallbacks(MenuScriptCallbacks& callbacks, ScriptRegistr
     if (registry.matchesSymbol("IGI_SDK_GetToggle", getToggleCallback, &callbacks)) registry.removeSymbol("IGI_SDK_GetToggle");
     if (registry.matchesSymbol("IGI_SDK_SetToggle", setToggleCallback, &callbacks)) registry.removeSymbol("IGI_SDK_SetToggle");
     if (registry.matchesSymbol("IGI_SDK_Action", actionCallback, &callbacks)) registry.removeSymbol("IGI_SDK_Action");
+    if (registry.matchesSymbol("IGI_SDK_CloseMenu", closeCallback, &callbacks)) registry.removeSymbol("IGI_SDK_CloseMenu");
 }
 
 bool MenuScriptRegistration::start(MenuScriptCallbacks& callbacks, ScriptRegistryApi registry) noexcept {

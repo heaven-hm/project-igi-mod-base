@@ -2,17 +2,26 @@
 
 #include "igi_sdk/logging/logging.hpp"
 
+#include <algorithm>
 #include <vector>
 
 namespace igi {
 void Scheduler::bindGameThread() noexcept {
     std::lock_guard lock(mutex_);
-    gameThread_ = std::this_thread::get_id();
+    gameThreads_.assign(1, std::this_thread::get_id());
+}
+
+void Scheduler::allowCurrentGameThread() noexcept {
+    std::lock_guard lock(mutex_);
+    const auto current = std::this_thread::get_id();
+    if (std::find(gameThreads_.begin(), gameThreads_.end(), current) == gameThreads_.end())
+        gameThreads_.push_back(current);
 }
 
 bool Scheduler::isGameThread() const noexcept {
     std::lock_guard lock(mutex_);
-    return gameThread_ != std::thread::id{} && gameThread_ == std::this_thread::get_id();
+    const auto current = std::this_thread::get_id();
+    return std::find(gameThreads_.begin(), gameThreads_.end(), current) != gameThreads_.end();
 }
 
 TaskId Scheduler::add(Task task, std::chrono::steady_clock::time_point due, bool everyFrame) {
@@ -51,7 +60,7 @@ void Scheduler::clear() noexcept {
 void Scheduler::reset() noexcept {
     std::lock_guard lock(mutex_);
     entries_.clear();
-    gameThread_ = {};
+    gameThreads_.clear();
     gameHookInvocations_.store(0, std::memory_order_relaxed);
 }
 
@@ -70,9 +79,7 @@ std::size_t Scheduler::runPendingFromGameHook() noexcept {
 #endif
     {
         std::lock_guard lock(mutex_);
-        if (gameThread_ == std::thread::id{}) {
-            gameThread_ = std::this_thread::get_id();
-        }
+        if (gameThreads_.empty()) gameThreads_.push_back(std::this_thread::get_id());
     }
     if (!isGameThread()) {
         log(LogLevel::Error, "Display_AddFrameCallback tick was observed on a second thread; scheduler skipped");

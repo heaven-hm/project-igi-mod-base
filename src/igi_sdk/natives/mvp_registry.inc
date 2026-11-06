@@ -10,6 +10,7 @@ if (!catalogue.add({0x00416810, "Game_GetEvent3", "IGI-RE", "entry", "uint8_t Ga
 if (!catalogue.add({0x00416920, "Game_GetWorld", "IGI-RE", "entry", "void *Game_GetWorld(void)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x00416d40, "Game_Get", "IGI-RE", "entry", "Game *Game_Get(void)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x00416d50, "Game_IsPaused", "IGI-RE", "entry", "char Game_IsPaused(void)", NativeVerification::Exposed})) return false;
+if (!catalogue.add({0x00416d60, "Game_SetPaused", "IGI-RE", "entry", "void Game_SetPaused(char on)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x00415890, "Game_SetMission", "IGI-RE", "entry", "ScriptValue *Game_SetMission(ScriptValue *out, void *data, void *args)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x00415950, "Game_SetMusicVolume", "IGI-RE", "entry", "ScriptValue *Game_SetMusicVolume(ScriptValue *out, void *data, void *args)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x004159b0, "Game_SetSFXVolume", "IGI-RE", "entry", "ScriptValue *Game_SetSFXVolume(ScriptValue *out, void *data, void *args)", NativeVerification::Exposed})) return false;

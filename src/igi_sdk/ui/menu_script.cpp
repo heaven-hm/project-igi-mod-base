@@ -38,7 +38,7 @@ bool writeMenuScript(std::ostream& out, const MenuConfig& config, bool standalon
             << ", \"LOCAL:menusystem/ingamemenu.res\", FALSE, ";
     out << "Task_New(" << config.screenId << ", \"MenuScreen\", \"IGI SDK\", \"\", "
         << config.x << ", " << config.y << ", " << config.x + config.width << ", " << config.y + config.height
-        << ", \"MenuManager_PopScreen(FALSE)\", \"\", \"\", Task_New(-1, \"MenuFrame\", \"\", \"\", "
+        << ", \"IGI_SDK_CloseMenu(); MenuManager_PopScreen(FALSE)\", \"\", \"\", Task_New(-1, \"MenuFrame\", \"\", \"\", "
         << config.x << ", " << config.y << ", " << config.width << ", " << config.height << ", 1, 4, 4, FALSE";
     for (const auto& item : config.items) {
         const auto index = &item - config.items.data();

@@ -54,7 +54,7 @@ static DWORD WINAPI igiSdkStartup(void* rawModule) {
     const auto config = igi::loadMenuConfig("config.ini");
     igi::setLogLevel(config.minimumLogLevel);
 #ifndef NDEBUG
-    if (config.console) attachConsole();
+    attachConsole();
 #endif
     igi::log(igi::LogLevel::Info, "internal DLL attached");
     if (!config.enabled) return 0;

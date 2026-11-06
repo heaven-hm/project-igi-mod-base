@@ -7,6 +7,7 @@
 #include <mutex>
 #include <thread>
 #include <unordered_map>
+#include <vector>
 
 namespace igi {
 using TaskId = std::uint64_t;
@@ -15,6 +16,7 @@ using Task = std::function<void()>;
 class Scheduler final {
 public:
     void bindGameThread() noexcept;
+    void allowCurrentGameThread() noexcept;
     bool isGameThread() const noexcept;
     TaskId enqueue(Task task);
     TaskId enqueueOnce(Task task) { return enqueue(std::move(task)); }
@@ -42,7 +44,7 @@ private:
     TaskId add(Task task, std::chrono::steady_clock::time_point due, bool everyFrame);
     std::size_t runReadyTasks() noexcept;
     mutable std::mutex mutex_;
-    std::thread::id gameThread_;
+    std::vector<std::thread::id> gameThreads_;
     TaskId nextId_ = 1;
     std::atomic<std::uint64_t> gameHookInvocations_{0};
     bool running_ = false;
