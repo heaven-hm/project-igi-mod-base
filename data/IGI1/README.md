@@ -13,9 +13,11 @@ SHA-256: `8655624f9cc3f2e151cb8902ab95f33203d2eae9007ec430cd94850aca80d69f`
 kind, and normalized function declaration metadata; no IGI-RE implementation
 code is imported.
 
-All records are `Catalogued` research metadata. A record cannot become a
-stable public wrapper until its target-build address, signature, calling
-convention, and behaviour have been independently verified.
+Imported rows remain `Catalogued` research metadata. Separately,
+`mvp-300.tsv` lists exactly 300 generated SDK wrappers. Its `source_only`
+rows have matching recovered declarations and compile-time wrappers;
+`unicorn_abi` rows also pass the x86 SDK wrapper ABI fixture. Neither status
+claims the original gameplay function body or in-game effect was tested.
 
 The table has 5,391 function entries. The source import currently recovers
 5,389 signatures; the two remaining entries (`_fsopen` and `_output`) are

@@ -96,7 +96,7 @@ bool NativeCatalogue::markVerified(std::string_view name, NativeVerification sta
 
 bool NativeCatalogue::add(NativeRecord record) {
     if (record.address == 0 || record.name.empty() || record.signature.empty()) return false;
-    if (findByAddress(record.address) != nullptr || findByName(record.name) != nullptr) return false;
+    if (findByAddress(record.address) != nullptr) return false;
     records_.push_back(std::move(record));
     return true;
 }

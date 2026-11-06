@@ -3,17 +3,24 @@
 #include "igi_sdk/ui/menu_values.hpp"
 
 namespace igi {
+class NativeCaller;
 // Platform-neutral portion of the IGI script callbacks. The runtime adapter
 // must invoke these on the game thread while the game is filling a list.
 class MenuScriptBridge final {
 public:
-    explicit MenuScriptBridge(const MenuConfig& config) : values_(config) {}
+    using SelectionHandler = std::function<void(std::size_t, std::string_view)>;
+    explicit MenuScriptBridge(const MenuConfig& config, SelectionHandler onSelection = {})
+        : values_(config), onSelection_(std::move(onSelection)) {}
     bool fillList(int item, const std::function<void(std::string_view, int)>& addItem) const;
     int getList(int item) const noexcept;
-    bool setList(int item, int value) noexcept;
+    bool setList(int item, int value);
+    bool activate(int item);
+    int getToggle(int item) const noexcept;
+    bool setToggle(int item, int value);
 
 private:
     MenuValues values_;
+    SelectionHandler onSelection_;
 };
 
 // IGI 1 x86 ScriptValue layout, as recovered from the game interface.
@@ -43,6 +50,9 @@ public:
     IgiScriptValue* fill(IgiScriptValue* output, void* args);
     IgiScriptValue* get(IgiScriptValue* output, void* args);
     IgiScriptValue* set(IgiScriptValue* output, void* args);
+    IgiScriptValue* getToggle(IgiScriptValue* output, void* args);
+    IgiScriptValue* setToggle(IgiScriptValue* output, void* args);
+    IgiScriptValue* action(IgiScriptValue* output, void* args);
 private:
     MenuScriptBridge& bridge_;
     MenuScriptApi api_;
@@ -56,6 +66,10 @@ struct ScriptRegistryApi {
     bool (*containsSymbol)(const char*) = nullptr;
     bool (*matchesSymbol)(const char*, ScriptCallback, void*) = nullptr;
 };
+
+// Available only on the validated Windows x86 game thread.
+ScriptRegistryApi igi1ScriptRegistryApi(NativeCaller& caller) noexcept;
+MenuScriptApi igi1MenuScriptApi(NativeCaller& caller) noexcept;
 
 // Minimal recovered IGI 1 symbol fields needed for ownership verification.
 struct IgiScriptSymbol {

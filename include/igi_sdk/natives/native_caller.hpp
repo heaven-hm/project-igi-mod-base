@@ -32,6 +32,8 @@ public:
                              std::uintptr_t& address) const noexcept;
     NativeCallStatus resolveByAddress(std::uint32_t nativeAddress,
                                       std::uintptr_t& address) const noexcept;
+    NativeCallStatus resolveByAddress(std::uint32_t nativeAddress, std::string_view signature,
+                                      std::uintptr_t& address) const noexcept;
     std::string_view nameForAddress(std::uint32_t nativeAddress) const noexcept;
     Scheduler& scheduler() noexcept;
     TaskId queue(std::string_view nativeName, std::function<void()> invocation);

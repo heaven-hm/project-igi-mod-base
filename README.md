@@ -20,7 +20,7 @@ project-igi-natives-sdk/
 ├── include/igi_sdk/
 │   ├── logging/       public logging API
 │   ├── natives/       catalogue, runner, and domain APIs
-│   │   └── domains/   AI, soldiers, vehicles, camera, graphs, memory
+│   │   └── domains/   AI, soldiers, vehicles, camera, graphs
 │   ├── runtime/       scheduler, hook, target profile, DLL lifecycle
 │   └── ui/            renderer-independent MenuManager API
 ├── src/igi_sdk/       implementations with the same module layout
@@ -205,13 +205,14 @@ executes that metadata callback through `Scheduler`. It deliberately does not
 attach to another process or write game memory. Any future external control
 must use a separately reviewed IPC protocol shared with an in-process mod.
 
-The internal demo's IGI 1 mod screen contains eight options driven by
-`config.ini`: weather, all weapons, frame limit, free camera, unlimited ammo,
-invulnerability, player speed, and runtime logs. These
-are menu action definitions tied to the SDK scheduler boundary. A mod must
-bind each action to a separately verified native wrapper before it changes
-game state; the demo never calls an unverified address just because a name is
-present in the catalogue.
+The internal demo's IGI 1 screen has six options from `config.ini`: rain on/off,
+enable unlimited ammo, frame limit, music volume, refresh display, and log game
+state. The SDK ships exactly 300 typed x86 wrappers generated from IGI-RE
+declarations. The demo exercises ten gameplay wrappers and uses two additional
+native entry points to attach its QVM to the existing MenuManager. Twelve
+wrappers pass the Unicorn ABI probe; this checks addresses, arguments, return
+values, and stack balance, not gameplay effects. The other 288 wrappers compile
+from source declarations and remain unverified in a live game.
 
 ## Creating an IGI 1 mod
 

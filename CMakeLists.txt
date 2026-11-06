@@ -40,10 +40,14 @@ add_library(igi_sdk STATIC
     src/igi_sdk/ui/menu_manager.cpp
     src/igi_sdk/ui/igi1_menu_manager.cpp
     src/igi_sdk/ui/menu_script.cpp
+    src/igi_sdk/ui/menu_resource.cpp
+    src/igi_sdk/ui/menu_resource_igi1.cpp
     src/igi_sdk/ui/menu_script_bridge.cpp
+    src/igi_sdk/ui/menu_script_igi1.cpp
     src/igi_sdk/ui/menu_values.cpp
     src/igi_sdk/natives/native_catalogue.cpp
     src/igi_sdk/natives/native_caller.cpp
+    src/igi_sdk/natives/mvp_natives.cpp
     src/igi_sdk/natives/igi1_native_registry.cpp
     src/igi_sdk/natives/domains/flow/flow.cpp
     src/igi_sdk/natives/native_runner.cpp
@@ -91,7 +95,8 @@ if(WIN32)
     add_library(igi_sdk_igi1 SHARED src/igi_sdk/runtime/dll_exports.cpp)
     target_link_libraries(igi_sdk_igi1 PRIVATE igi_sdk)
     target_compile_definitions(igi_sdk_igi1 PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
-    set_target_properties(igi_sdk_igi1 PROPERTIES OUTPUT_NAME "IGI-Natives-SDK-IGI1" PREFIX "")
+    set_target_properties(igi_sdk_igi1 PROPERTIES OUTPUT_NAME "IGI-Natives-SDK-IGI1" PREFIX ""
+        WINDOWS_EXPORT_ALL_SYMBOLS ON)
     add_executable(igi_sdk_win32_loader tools/win32_loader.cpp)
     set_target_properties(igi_sdk_win32_loader PROPERTIES OUTPUT_NAME "IGI-SDK-Loader")
 
@@ -111,5 +116,36 @@ add_executable(igi_sdk_tests
 target_link_libraries(igi_sdk_tests PRIVATE igi_sdk)
 target_compile_definitions(igi_sdk_tests PRIVATE IGI_SDK_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
+add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/tests/generated_demo_natives.cpp
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_demo_native_tests.py
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_demo_native_tests.py
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/demo-natives.tsv
+            ${CMAKE_CURRENT_SOURCE_DIR}/data/IGI1/mvp-300.tsv
+            ${CMAKE_CURRENT_SOURCE_DIR}/include/igi_sdk/IGI.hpp
+)
+add_executable(igi_demo_native_contract_tests tests/generated_demo_natives.cpp)
+target_link_libraries(igi_demo_native_contract_tests PRIVATE igi_sdk)
+target_compile_definitions(igi_demo_native_contract_tests PRIVATE IGI_SDK_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+
 enable_testing()
 add_test(NAME igi_sdk_tests COMMAND igi_sdk_tests)
+add_test(NAME igi_generated_natives
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_generated_natives.py)
+add_test(NAME igi_demo_native_contract
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_demo_native_contract.py)
+add_test(NAME igi_demo_natives_unicorn
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_demo_natives_unicorn.py)
+set_tests_properties(igi_demo_natives_unicorn PROPERTIES SKIP_RETURN_CODE 77)
+
+if(WIN32)
+    add_library(igi_sdk_native_abi_fixture SHARED tests/native_abi_fixture.cpp)
+    target_link_libraries(igi_sdk_native_abi_fixture PRIVATE igi_sdk)
+    set_target_properties(igi_sdk_native_abi_fixture PROPERTIES
+        OUTPUT_NAME "igi-sdk-native-abi-fixture" PREFIX "")
+    add_test(NAME igi_sdk_native_wrappers_unicorn
+             COMMAND ${Python3_EXECUTABLE}
+                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_sdk_native_wrappers_unicorn.py
+                     $<TARGET_FILE:igi_sdk_native_abi_fixture>)
+    set_tests_properties(igi_sdk_native_wrappers_unicorn PROPERTIES SKIP_RETURN_CODE 77)
+endif()

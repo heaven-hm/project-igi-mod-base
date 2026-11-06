@@ -1,0 +1,11 @@
+# api	domain	name	address	signature
+FRAMES_SET	MISC	FramesSet	00402820	void FramesSet(int fps)
+SET_RAINING	GAME	Game_SetRaining	00416110	void Game_SetRaining(const char *weather)
+SET_UNLIMITED_AMMO	PLAYER	HumanPlayer_SetUnlimitedAmmo	00410360	void HumanPlayer_SetUnlimitedAmmo(void)
+SET_DISPLAY_MODE	GAME	Game_SetDisplayMode	00416010	void Game_SetDisplayMode(void)
+MUSIC_SET_VOLUME	AUDIO	Music_SetVolume	00495e70	void Music_SetVolume(float music, float master)
+GET_EVENT0	GAME	Game_GetEvent0	004167d0	uint8_t Game_GetEvent0(void)
+GET_EVENT1	GAME	Game_GetEvent1	004167e0	uint8_t Game_GetEvent1(void)
+GET_EVENT2	GAME	Game_GetEvent2	004167f0	uint8_t Game_GetEvent2(void)
+GET_EVENT3	GAME	Game_GetEvent3	00416810	uint8_t Game_GetEvent3(void)
+GET_WORLD	GAME	Game_GetWorld	00416920	void *Game_GetWorld(void)

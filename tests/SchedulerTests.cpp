@@ -3,6 +3,8 @@
 #include "igi_sdk/natives/native_catalogue.hpp"
 #include "igi_sdk/natives/native_runner.hpp"
 #include "igi_sdk/natives/native_caller.hpp"
+#include "igi_sdk/natives/igi1_native_registry.hpp"
+#include "igi_sdk/IGI.hpp"
 #include "igi_sdk/runtime/hook_manager.hpp"
 #include "igi_sdk/runtime/runtime.hpp"
 #include "igi_sdk/runtime/scheduler.hpp"
@@ -11,6 +13,7 @@
 #include "igi_sdk/ui/menu_script.hpp"
 #include "igi_sdk/ui/menu_values.hpp"
 #include "igi_sdk/ui/menu_script_bridge.hpp"
+#include "igi_sdk/ui/menu_resource.hpp"
 #include "igi_sdk/config/menu_config.hpp"
 #include "igi_sdk/natives/native_catalogue.hpp"
 
@@ -30,10 +33,36 @@ int scriptItemsAdded = 0;
 int scriptRegistrations = 0;
 int scriptRemovals = 0;
 bool scriptSymbolExists = false;
+igi::ScriptCallback registeredCallbacks[6]{};
+void* registeredContext = nullptr;
+int fakeResourceObject = 0;
+void* fakeResourceCurrent = nullptr;
+void* fakeResourceData = nullptr;
+std::string fakeResourceRegisteredName;
+int fakeResourceFreeCount = 0;
+bool fakeResourceHidden = false;
+int fakeResourceLookup(const char*, void** out) {
+    if (out) *out = fakeResourceHidden ? nullptr : fakeResourceCurrent;
+    return !fakeResourceHidden && fakeResourceCurrent != nullptr;
+}
+void* fakeResourceRegister(const char* name, int size, void* data) {
+    assert(size == 3 && data);
+    fakeResourceRegisteredName = name;
+    fakeResourceData = data;
+    return fakeResourceCurrent = &fakeResourceObject;
+}
+void fakeResourceFree(void* resource) {
+    assert(resource == &fakeResourceObject);
+    fakeResourceCurrent = nullptr;
+    ++fakeResourceFreeCount;
+}
 int fakeScriptGetInt(void* args, int index) { return static_cast<int*>(args)[index]; }
+int throwingScriptGetInt(void*, int) { throw std::runtime_error("script argument failure"); }
 void fakeScriptAddItem(const char*, int id) { assert(id == scriptItemsAdded++); }
 void fakeRegister(const char*, igi::ScriptCallback callback, void* context, int argc) {
     assert(callback && context && (argc == 1 || argc == 2));
+    registeredCallbacks[scriptRegistrations % 6] = callback;
+    registeredContext = context;
     ++scriptRegistrations;
 }
 void fakeRemove(const char*) { ++scriptRemovals; }
@@ -43,6 +72,27 @@ igi::IgiScriptValue* fakeCallback(igi::IgiScriptValue* output, void*, void*) { r
 }
 
 int main() {
+    igi::MenuResourceApi resourceApi{fakeResourceLookup, fakeResourceRegister, fakeResourceFree};
+    igi::MenuResource resource;
+    assert(!resource.registerData("", {1, 2, 3}, resourceApi));
+    assert(!resource.registerData(std::string("SDK:bad\0name", 12), {1, 2, 3}, resourceApi));
+    assert(!resource.registerData("SDK:good", std::string("LOCAL:bad\0name", 14), {1, 2, 3}, resourceApi));
+    assert(resource.registerData("SDK:menu.qvm", "LOCAL:resolved/menu.qvm", {1, 2, 3}, resourceApi));
+    assert(fakeResourceRegisteredName == "LOCAL:resolved/menu.qvm");
+    assert(resource.active() && static_cast<std::uint8_t*>(fakeResourceData)[1] == 2);
+    igi::MenuResource collision;
+    assert(!collision.registerData("SDK:menu.qvm", {1, 2, 3}, resourceApi));
+    int foreign = 0;
+    fakeResourceCurrent = &foreign;
+    assert(!resource.release() && resource.active() && fakeResourceFreeCount == 0);
+    fakeResourceCurrent = &fakeResourceObject;
+    assert(resource.release() && !resource.active() && fakeResourceFreeCount == 1);
+    assert(resource.release() && fakeResourceFreeCount == 1);
+    fakeResourceHidden = true;
+    igi::MenuResource mismatchedAlias;
+    assert(!mismatchedAlias.registerData("SDK:missing.qvm", "LOCAL:other.qvm", {1, 2, 3}, resourceApi));
+    assert(!mismatchedAlias.active() && fakeResourceFreeCount == 2);
+    fakeResourceHidden = false;
     assert(igi::MenuConfig{}.hook == igi::igi1::TickHook::GameRunHandler);
     igi::Runtime runtime;
     assert(!runtime.initialize(igi::igi1::TickHook::TextDraw));
@@ -61,6 +111,9 @@ int main() {
     igi::NativeCatalogue callerCatalogue;
     assert(callerCatalogue.load(callerRecords));
     igi::NativeCaller unvalidatedCaller(callerCatalogue, scheduler, false);
+    assert(!igi::igi1ScriptRegistryApi(unvalidatedCaller).registerFunction);
+    assert(!igi::igi1MenuScriptApi(unvalidatedCaller).getInt);
+    assert(!igi::igi1MenuResourceApi(unvalidatedCaller).registerResource);
     std::uintptr_t resolvedAddress = 0;
     assert(unvalidatedCaller.resolve("TestNative", "void TestNative(int value)", resolvedAddress) ==
            igi::NativeCallStatus::NotTargetBuild);
@@ -74,6 +127,12 @@ int main() {
     assert(callerCatalogue.markVerified("TestNative", igi::NativeVerification::Exposed));
     assert(validatedCaller.resolve("TestNative", "void TestNative(int value)", resolvedAddress) ==
            igi::NativeCallStatus::Success && resolvedAddress == 0x00402820);
+    assert(callerCatalogue.add({0x00402830, "TestNative", "test", "entry",
+                                "void TestNative(int value)", igi::NativeVerification::Exposed}));
+    assert(validatedCaller.resolveByAddress(0x00402830, "void TestNative(int value)", resolvedAddress) ==
+           igi::NativeCallStatus::Success && resolvedAddress == 0x00402830);
+    assert(validatedCaller.resolveByAddress(0x00402830, "void TestNative(void)", resolvedAddress) ==
+           igi::NativeCallStatus::SignatureMismatch && resolvedAddress == 0);
     int queuedNativeCalls = 0;
     assert(validatedCaller.queue("TestNative", [&] { ++queuedNativeCalls; }) != 0);
     assert(scheduler.runPending() == 1 && queuedNativeCalls == 1);
@@ -124,6 +183,18 @@ int main() {
     igi::NativeCatalogue catalogue;
     assert(catalogue.load(catalogueFile));
     assert(catalogue.size() == 7068);
+    igi::NativeCatalogue exposed;
+    assert(igi::loadIgi1VerifiedNativeRegistry(exposed));
+    assert(exposed.size() >= 300 && exposed.size() == IGI::NativeBindingCount());
+    const auto* taskDelete = catalogue.findByAddress(0x004015F0);
+    assert(taskDelete && taskDelete->name == "Task_Delete" && taskDelete->signature == "void Task_Delete(Task *task)");
+    for (const auto& binding : exposed.records()) {
+        assert(igi::nativeDomainForName(binding.name) != igi::NativeDomain::Memory);
+        assert(!binding.name.starts_with("crt_"));
+        assert(!binding.runtimeVerified);
+        const auto* source = catalogue.findByAddress(binding.address);
+        assert(source && source->name == binding.name && source->signature == binding.signature);
+    }
     assert(catalogue.count(igi::NativeDomain::AI) > 0);
     assert(catalogue.count(igi::NativeDomain::Soldiers) > 0);
     assert(catalogue.count(igi::NativeDomain::Camera) > 0);
@@ -148,27 +219,61 @@ int main() {
     assert(modConfig.hook == igi::igi1::TickHook::GameRunHandler);
     if (modConfig.items.empty())
         std::fprintf(stderr, "menu config did not load from %s/demos/internal-menumanager/config.ini\n", IGI_SDK_SOURCE_DIR);
-    assert(modConfig.items.size() == 8);
+    assert(modConfig.items.size() == 6);
     igi::MenuValues menuValues(modConfig);
-    assert(menuValues.choiceCount(0) == 3);
-    assert(menuValues.choice(0, 1) == "snow");
-    assert(menuValues.select(0, 2));
-    assert(menuValues.selected(0) == 2);
-    assert(!menuValues.select(0, 3));
+    assert(menuValues.toggle(2) == true);
+    assert(menuValues.setToggle(2, false) && menuValues.toggle(2) == false);
+    assert(!menuValues.setToggle(0, true) && !menuValues.toggle(0));
+    assert(menuValues.choiceCount(0) == 2);
+    assert(menuValues.choice(0, 1) == "on");
+    assert(menuValues.select(0, 1));
+    assert(menuValues.selected(0) == 1);
+    assert(!menuValues.select(0, 2));
     assert(!menuValues.selected(1));
     std::vector<std::string> filledChoices;
     assert(menuValues.fill(0, [&](std::string_view value, int id) {
         assert(static_cast<std::size_t>(id) == filledChoices.size());
         filledChoices.emplace_back(value);
     }));
-    assert((filledChoices == std::vector<std::string>{"rain", "snow", "clear"}));
+    assert((filledChoices == std::vector<std::string>{"off", "on"}));
     assert(!menuValues.fill(1, [](std::string_view, int) {}));
     assert(!menuValues.fill(0, {}));
-    igi::MenuScriptBridge listBridge(modConfig);
+    std::string selectedWeather;
+    igi::MenuScriptBridge listBridge(modConfig, [&](std::size_t item, std::string_view value) {
+        if (item == 0) selectedWeather = value;
+    });
+    assert(listBridge.getToggle(2) == 1);
+    assert(listBridge.setToggle(2, 0) && listBridge.getToggle(2) == 0);
+    assert(!listBridge.setToggle(2, 2) && listBridge.getToggle(2) == 0);
+    assert(listBridge.getToggle(0) == -1);
     int populated = 0;
     assert(listBridge.fillList(0, [&](std::string_view, int id) { assert(id == populated++); }));
-    assert(populated == 3 && listBridge.getList(0) == 0);
+    assert(populated == 2 && listBridge.getList(0) == 0);
     assert(listBridge.setList(0, 1) && listBridge.getList(0) == 1);
+    std::size_t toggledItem = 99;
+    std::string toggledValue;
+    igi::MenuScriptBridge toggleBridge(modConfig, [&](std::size_t item, std::string_view value) {
+        toggledItem = item;
+        toggledValue = value;
+    });
+    assert(toggleBridge.setToggle(2, 0));
+    assert(toggleBridge.getToggle(2) == 0 && toggledItem == 2 && toggledValue == "false");
+    std::size_t activatedItem = 99;
+    std::string activatedValue;
+    igi::MenuScriptBridge actionBridge(modConfig, [&](std::size_t item, std::string_view value) {
+        activatedItem = item;
+        activatedValue = value;
+    });
+    assert(actionBridge.activate(1) && activatedItem == 1 && activatedValue.empty());
+    assert(actionBridge.activate(2) && activatedItem == 2 && activatedValue == "false");
+    assert(!actionBridge.activate(-1));
+    assert(selectedWeather == "on");
+    igi::MenuScriptBridge failingBridge(modConfig, [](std::size_t, std::string_view) {
+        throw std::runtime_error("feature rejected selection");
+    });
+    try { failingBridge.setList(0, 1); assert(false); }
+    catch (const std::runtime_error&) {}
+    assert(failingBridge.getList(0) == 0);
     assert(!listBridge.setList(0, -1) && !listBridge.setList(-1, 0));
     assert(listBridge.getList(-1) == -1 && !listBridge.fillList(-1, {}));
     igi::MenuScriptCallbacks callbacks(listBridge, {fakeScriptGetInt, fakeScriptAddItem});
@@ -178,12 +283,12 @@ int main() {
     symbol.kind = 0;
     assert(!igi::menuScriptSymbolMatches(&symbol, fakeCallback, &callbacks));
     igi::IgiScriptValue scriptResult{};
-    int scriptArgs[] = {0, 2};
+    int scriptArgs[] = {0, 1};
     scriptItemsAdded = 0;
     assert(callbacks.fill(&scriptResult, scriptArgs) == &scriptResult);
-    assert(scriptResult.integer == 1 && scriptItemsAdded == 3);
+    assert(scriptResult.integer == 1 && scriptItemsAdded == 2);
     assert(callbacks.set(&scriptResult, scriptArgs)->integer == 1);
-    assert(callbacks.get(&scriptResult, scriptArgs)->integer == 2);
+    assert(callbacks.get(&scriptResult, scriptArgs)->integer == 1);
     scriptItemsAdded = 0;
     assert(callbacks.fill(nullptr, scriptArgs) == nullptr && scriptItemsAdded == 0);
     assert(!igi::registerMenuScriptCallbacks(callbacks, {}));
@@ -191,10 +296,23 @@ int main() {
     scriptSymbolExists = true;
     assert(!igi::registerMenuScriptCallbacks(callbacks, registry) && scriptRegistrations == 0);
     scriptSymbolExists = false;
-    assert(igi::registerMenuScriptCallbacks(callbacks, registry) && scriptRegistrations == 3);
+    assert(igi::registerMenuScriptCallbacks(callbacks, registry) && scriptRegistrations == 6);
+    assert(registeredCallbacks[0] && registeredContext == &callbacks);
+    igi::MenuScriptCallbacks throwingCallbacks(listBridge, {throwingScriptGetInt, fakeScriptAddItem});
+    assert(registeredCallbacks[0](&scriptResult, &throwingCallbacks, scriptArgs) == &scriptResult);
+    assert(scriptResult.integer == 0);
+    assert(registeredCallbacks[1](&scriptResult, &throwingCallbacks, scriptArgs) == &scriptResult);
+    assert(scriptResult.integer == -1);
+    assert(registeredCallbacks[2](&scriptResult, &throwingCallbacks, scriptArgs) == &scriptResult);
+    assert(registeredCallbacks[3] && registeredCallbacks[3](&scriptResult, &throwingCallbacks, scriptArgs) == &scriptResult);
+    assert(scriptResult.integer == -1);
+    assert(registeredCallbacks[4] && registeredCallbacks[4](&scriptResult, &throwingCallbacks, scriptArgs) == &scriptResult);
+    assert(scriptResult.integer == 0);
+    assert(registeredCallbacks[5] && registeredCallbacks[5](&scriptResult, &throwingCallbacks, scriptArgs) == &scriptResult);
+    assert(scriptResult.integer == 0);
     scriptSymbolExists = true;
     igi::unregisterMenuScriptCallbacks(callbacks, registry);
-    assert(scriptRemovals == 3);
+    assert(scriptRemovals == 6);
     igi::MenuScriptRegistration registration;
     scriptSymbolExists = false;
     assert(registration.start(callbacks, registry));
@@ -202,21 +320,35 @@ int main() {
     scriptSymbolExists = true;
     registration.stop();
     registration.stop();
-    assert(!registration.active() && scriptRemovals == 6);
+    assert(!registration.active() && scriptRemovals == 12);
     scriptArgs[1] = -1;
     assert(callbacks.set(&scriptResult, scriptArgs)->integer == 0);
     std::ostringstream menuScript;
     assert(igi::writeIgi1MenuScript(menuScript, modConfig));
+    assert(menuScript.str().find("IGI_SDK_GetToggle(2)") != std::string::npos);
+    assert(menuScript.str().find("IGI_SDK_SetToggle(2,this.isOn)") != std::string::npos);
+    std::ostringstream screenOnlyScript;
+    std::string compileError;
+    assert(igi::writeIgi1MenuScreenScript(screenOnlyScript, modConfig));
+    assert(screenOnlyScript.str().find("Task_New(-1, \"MenuManager\"") == std::string::npos);
+    assert(screenOnlyScript.str().find("Task_New(990, \"MenuScreen\"") != std::string::npos);
+    assert(screenOnlyScript.str().find("MenuManager_PushScreen(990)") != std::string::npos);
+    std::vector<std::uint8_t> screenOnlyQvm;
+    assert(igi::compileIgi1MenuScreenScript(modConfig, screenOnlyQvm, compileError));
+    assert(screenOnlyQvm.size() > 16);
     assert(menuScript.str().find("Task_New(990, \"MenuScreen\"") != std::string::npos);
-    assert(menuScript.str().find("Give All Weapons") != std::string::npos);
+    assert(menuScript.str().find("Enable Unlimited Ammo") != std::string::npos);
     assert(menuScript.str().find("IGI_SDK_SetWeather") == std::string::npos);
+    assert(menuScript.str().find("IGI_SDK_Action(5)") != std::string::npos);
     assert(menuScript.str().find("Task_New(-1, \"ToggleBox\"") != std::string::npos);
     assert(menuScript.str().find("IGI_SDK_FillList(0)") != std::string::npos);
     assert(menuScript.str().find("IGI_SDK_SetList(0,this.nActiveID)") != std::string::npos);
     assert(menuScript.str().find("IGI_SDK_GetList(0)\", \"\", \"IGI_SDK_SetList(0,this.nActiveID)") != std::string::npos);
     std::vector<std::uint8_t> compiledMenu;
-    std::string compileError;
-    assert(igi::compileIgi1MenuScript(modConfig, compiledMenu, compileError));
+    if (!igi::compileIgi1MenuScript(modConfig, compiledMenu, compileError)) {
+        std::fprintf(stderr, "menu compile error: %s\n", compileError.c_str());
+        assert(false);
+    }
     assert(!compiledMenu.empty());
     assert(!igi::compileIgi1MenuScript(igi::MenuConfig{}, compiledMenu, compileError));
     assert(compiledMenu.empty() && !compileError.empty());
@@ -228,10 +360,10 @@ int main() {
     auto modMenu = igi::Igi1MenuManager::create(igi::Igi1MenuSet::InGame, modConfig);
     assert(modMenu.pushScreen(modConfig.screenId));
     assert(modMenu.currentScreen()->widgets.size() == modConfig.items.size());
-    assert(modMenu.currentScreen()->widgets[0].label == "Weather");
+    assert(modMenu.currentScreen()->widgets[0].label == "Rain");
     assert(modMenu.currentScreen()->widgets[0].kind == igi::Igi1WidgetKind::ListBox);
-    assert(modMenu.currentScreen()->widgets[3].label == "Free Camera");
-    assert(modMenu.currentScreen()->widgets[3].kind == igi::Igi1WidgetKind::ToggleBox);
+    assert(modMenu.currentScreen()->widgets[3].label == "Music Volume");
+    assert(modMenu.currentScreen()->widgets[3].kind == igi::Igi1WidgetKind::ListBox);
     auto alternateConfig = modConfig;
     alternateConfig.screenId = 991;
     auto alternateMenu = igi::Igi1MenuManager::create(igi::Igi1MenuSet::InGame, alternateConfig);

@@ -20,6 +20,8 @@ struct NativeRecord {
     std::string kind;
     std::string signature;
     NativeVerification verification = NativeVerification::Catalogued;
+    // A generated wrapper does not imply an in-game invocation was observed.
+    bool runtimeVerified = false;
 };
 
 class NativeCatalogue final {

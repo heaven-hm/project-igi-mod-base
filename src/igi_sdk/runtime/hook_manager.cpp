@@ -156,18 +156,25 @@ bool installGameRunHandler(igi::Scheduler& scheduler, void*& output) {
     std::memcpy(trampoline + displacedBytes + 1, &return32, sizeof(return32));
 
     DWORD oldProtection = 0;
-    if (!VirtualProtect(target, displacedBytes, PAGE_EXECUTE_READWRITE, &oldProtection) ||
-        !writeJump(target, displacedBytes, reinterpret_cast<std::uintptr_t>(&gameRunHandlerDetour))) {
+    if (!VirtualProtect(target, displacedBytes, PAGE_EXECUTE_READWRITE, &oldProtection)) {
+        VirtualFree(trampoline, 0, MEM_RELEASE);
+        logHook(LogLevel::Error, "Game_RunHandler hook refused: target protection failed");
+        return false;
+    }
+    // Publish the continuation before making the detour reachable.
+    igiGameRunTrampoline = trampoline;
+    activeScheduler.store(&scheduler, std::memory_order_release);
+    if (!writeJump(target, displacedBytes, reinterpret_cast<std::uintptr_t>(&gameRunHandlerDetour))) {
+        activeScheduler.store(nullptr, std::memory_order_release);
+        igiGameRunTrampoline = nullptr;
         VirtualProtect(target, displacedBytes, oldProtection, &oldProtection);
         VirtualFree(trampoline, 0, MEM_RELEASE);
-        logHook(LogLevel::Error, "Game_RunHandler hook refused: patch write failed");
+        logHook(LogLevel::Error, "Game_RunHandler hook refused: branch encoding failed");
         return false;
     }
     FlushInstructionCache(GetCurrentProcess(), target, displacedBytes);
     VirtualProtect(target, displacedBytes, oldProtection, &oldProtection);
     std::memcpy(installedPatch.data(), target, displacedBytes);
-    igiGameRunTrampoline = trampoline;
-    activeScheduler.store(&scheduler, std::memory_order_release);
     output = trampoline;
     logHook(LogLevel::Info, "IGI 1 Game_RunHandler scheduler hook installed at 0x00416260");
     return true;
@@ -225,10 +232,13 @@ bool HookManager::uninstall() noexcept {
             FlushInstructionCache(GetCurrentProcess(), target, displacedBytes);
         } else {
             log(LogLevel::Warning, "Game_RunHandler hook bytes changed; refusing to overwrite another patch");
+            VirtualProtect(target, displacedBytes, oldProtection, &oldProtection);
+            return false;
         }
         VirtualProtect(target, displacedBytes, oldProtection, &oldProtection);
     } else {
         log(LogLevel::Warning, "Game_RunHandler hook protection restore failed");
+        return false;
     }
     while (hookUsers.load(std::memory_order_acquire) != 0) Sleep(0);
     activeScheduler.store(nullptr, std::memory_order_release);

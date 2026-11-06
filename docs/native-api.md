@@ -1,8 +1,10 @@
 # IGI 1 native catalogue
 
 The IGI 1 MVP keeps research metadata separate from callable APIs. A native is
-callable only after its exact address, signature, calling convention, and
-target-build behavior have been promoted to `Verified` or `Exposed`.
+callable only when an exposed SDK wrapper's address and signature match the
+loaded catalogue and the executable matches the supported build. The manifest
+separately records which wrappers passed the Unicorn ABI probe; in-game
+effects require live-game validation.
 
 Each record in `data/IGI1/neonix-igi-re-signatures.tsv` contains:
 

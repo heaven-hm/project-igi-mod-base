@@ -111,9 +111,6 @@ BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID) {
     if (reason == DLL_PROCESS_ATTACH) {
         DisableThreadLibraryCalls(module);
         CreateThread(nullptr, 0, igiSdkStartup, nullptr, 0, nullptr);
-    } else if (reason == DLL_PROCESS_DETACH) {
-        IGI_MenuManager_Internal_Shutdown();
-        FreeConsole();
     }
     return TRUE;
 }

@@ -47,6 +47,12 @@ NativeCallStatus NativeCaller::resolve(std::string_view name, std::string_view s
 
 NativeCallStatus NativeCaller::resolveByAddress(std::uint32_t nativeAddress,
                                                 std::uintptr_t& address) const noexcept {
+    const auto* record = catalogue_.findByAddress(nativeAddress);
+    return resolveByAddress(nativeAddress, record ? std::string_view(record->signature) : std::string_view{}, address);
+}
+
+NativeCallStatus NativeCaller::resolveByAddress(std::uint32_t nativeAddress, std::string_view signature,
+                                                std::uintptr_t& address) const noexcept {
     address = 0;
     if (!targetValidated_) {
         reportFailure("address", NativeCallStatus::NotTargetBuild);
@@ -57,12 +63,20 @@ NativeCallStatus NativeCaller::resolveByAddress(std::uint32_t nativeAddress,
         reportFailure("address", NativeCallStatus::MissingNative);
         return NativeCallStatus::MissingNative;
     }
+    if (record->signature != signature) {
+        reportFailure(record->name, NativeCallStatus::SignatureMismatch);
+        return NativeCallStatus::SignatureMismatch;
+    }
     if (record->verification == NativeVerification::Catalogued) {
         reportFailure(record->name, NativeCallStatus::UnverifiedNative);
         return NativeCallStatus::UnverifiedNative;
     }
+    if (record->address < igi1::imageBase || record->address >= igi1::imageBase + igi1::expectedImageSize) {
+        reportFailure(record->name, NativeCallStatus::InvalidFunction);
+        return NativeCallStatus::InvalidFunction;
+    }
     address = record->address;
-    reportResolved(record->name, record->address, record->signature);
+    reportResolved(record->name, record->address, signature);
     return NativeCallStatus::Success;
 }
 

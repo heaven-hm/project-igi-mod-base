@@ -3,7 +3,21 @@
 #include <algorithm>
 
 namespace igi {
-MenuValues::MenuValues(const MenuConfig& config) : items_(config.items), selected_(items_.size(), 0) {}
+MenuValues::MenuValues(const MenuConfig& config)
+    : items_(config.items), selected_(items_.size(), 0), toggles_(items_.size(), false) {
+    for (std::size_t i = 0; i < items_.size(); ++i) toggles_[i] = items_[i].defaultToggle;
+}
+
+std::optional<bool> MenuValues::toggle(std::size_t item) const noexcept {
+    if (item >= items_.size() || items_[item].kind != ModMenuItemKind::Toggle) return std::nullopt;
+    return toggles_[item];
+}
+
+bool MenuValues::setToggle(std::size_t item, bool value) noexcept {
+    if (item >= items_.size() || items_[item].kind != ModMenuItemKind::Toggle) return false;
+    toggles_[item] = value;
+    return true;
+}
 
 std::size_t MenuValues::choiceCount(std::size_t item) const noexcept {
     if (item >= items_.size() || items_[item].kind != ModMenuItemKind::List) return 0;
