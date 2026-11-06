@@ -29,7 +29,13 @@ public:
     const std::vector<NativeRecord>& records() const noexcept { return records_; }
     std::size_t count(NativeDomain domain) const noexcept;
     const NativeRecord* findByAddress(std::uint32_t address) const noexcept;
+    // Returns null for absent or ambiguous names; callers may resolve by address.
     const NativeRecord* findByName(std::string_view name) const noexcept;
+    // Promotion is explicit: imported research remains non-callable until a
+    // target-build review promotes the exact record.
+    bool markVerified(std::string_view name,
+                      NativeVerification state = NativeVerification::Verified) noexcept;
+    bool add(NativeRecord record);
 
 private:
     std::vector<NativeRecord> records_;

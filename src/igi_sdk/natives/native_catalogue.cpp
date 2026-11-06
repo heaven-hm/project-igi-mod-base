@@ -73,7 +73,31 @@ const NativeRecord* NativeCatalogue::findByAddress(std::uint32_t address) const 
 }
 
 const NativeRecord* NativeCatalogue::findByName(std::string_view name) const noexcept {
-    for (const NativeRecord& record : records_) if (record.name == name) return &record;
-    return nullptr;
+    const NativeRecord* match = nullptr;
+    for (const NativeRecord& record : records_) {
+        if (record.name != name) continue;
+        if (match != nullptr) return nullptr;
+        match = &record;
+    }
+    return match;
+}
+
+bool NativeCatalogue::markVerified(std::string_view name, NativeVerification state) noexcept {
+    NativeRecord* match = nullptr;
+    for (NativeRecord& record : records_) {
+        if (record.name != name) continue;
+        if (match != nullptr) return false;
+        match = &record;
+    }
+    if (!match || state == NativeVerification::Catalogued) return false;
+    match->verification = state;
+    return true;
+}
+
+bool NativeCatalogue::add(NativeRecord record) {
+    if (record.address == 0 || record.name.empty() || record.signature.empty()) return false;
+    if (findByAddress(record.address) != nullptr || findByName(record.name) != nullptr) return false;
+    records_.push_back(std::move(record));
+    return true;
 }
 }

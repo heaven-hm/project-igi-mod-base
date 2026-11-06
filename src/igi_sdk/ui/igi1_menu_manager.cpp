@@ -45,7 +45,7 @@ Igi1MenuScreen configurationScreen() {
 }
 
 Igi1MenuScreen modScreen(const MenuConfig& config) {
-    Igi1MenuScreen screen{990, "IGI SDK Mod Menu", "mainmenu.pic", "MenuManager_PopScreen(FALSE)", {}};
+    Igi1MenuScreen screen{config.screenId, "IGI SDK Mod Menu", "mainmenu.pic", "MenuManager_PopScreen(FALSE)", {}};
     for (const auto& item : config.items) {
         Igi1MenuWidget widget{Igi1WidgetKind::MenuText, -1, item.id, item.label, {}, {}, {}, item.nativeAction, {}, 0, 0, 0, 0, true};
         if (item.kind == ModMenuItemKind::Toggle) {
@@ -81,7 +81,9 @@ Igi1MenuManager Igi1MenuManager::create(Igi1MenuSet set, const MenuConfig& confi
     if (set == Igi1MenuSet::InGame) {
         manager.screens_.push_back(Igi1MenuScreen{902, "Sound Configuration", "mainmenu.pic", "MenuManager_PopScreen(FALSE)", {}});
         manager.screens_.push_back(Igi1MenuScreen{903, "Controls Configuration", "mainmenu.pic", "MenuManager_PopScreen(FALSE)", {}});
-        manager.screens_.push_back(modScreen(config));
+        if (config.screenId != 900 && config.screenId != 902 && config.screenId != 903 &&
+            config.screenId != 931 && config.screenId != 932 && config.screenId != 934)
+            manager.screens_.push_back(modScreen(config));
     }
     manager.screens_.push_back(Igi1MenuScreen{931, "Quit Main Menu", "", "MenuManager_LeaveMenus(0, MENUMANAGER_QUIT)", {}});
     manager.screens_.push_back(Igi1MenuScreen{932, "Restart Mission", "", "MenuManager_LeaveMenus(900, MENUMANAGER_RESTARTLEVEL)", {}});

@@ -1,16 +1,51 @@
 cmake_minimum_required(VERSION 3.20)
 project(project_igi_natives_sdk VERSION 0.1.0 LANGUAGES CXX)
 
+# Retail IGI 1 is a PE32 x86 process. A 64-bit DLL cannot be loaded into it,
+# so reject that misleading configuration at generation time.
+if(WIN32 AND NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
+    message(FATAL_ERROR "IGI 1 SDK Windows targets require a 32-bit x86 toolchain")
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+
+add_library(igi_qsc_compiler STATIC
+    third_party/igi1conv/qsc_lexer.cpp
+    third_party/igi1conv/qsc_parser.cpp
+    third_party/igi1conv/qvm_compiler.cpp
+)
+set_target_properties(igi_qsc_compiler PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_include_directories(igi_qsc_compiler PUBLIC third_party/igi1conv)
+
+# IGI-RE native bindings: regenerates include/igi_sdk/natives/igi_re/hashes.hpp
+# from data/IGI1/neonix-igi-re-names.tsv whenever the symbol table changes.
+set(IGI_RE_HASH_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/include/igi_sdk/natives/igi_re/hashes.hpp)
+add_custom_command(
+    OUTPUT ${IGI_RE_HASH_HEADER}
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_igi_hash.py
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_igi_hash.py
+            ${CMAKE_CURRENT_SOURCE_DIR}/data/IGI1/neonix-igi-re-names.tsv
+    COMMENT "Generating IGI-RE HASH bindings from names.tsv"
+    VERBATIM
+)
+add_custom_target(igi_re_hash_bindings DEPENDS ${IGI_RE_HASH_HEADER})
 
 add_library(igi_sdk STATIC
     src/igi_sdk/config/menu_config.cpp
     src/igi_sdk/logging/logging.cpp
     src/igi_sdk/ui/menu_manager.cpp
     src/igi_sdk/ui/igi1_menu_manager.cpp
+    src/igi_sdk/ui/menu_script.cpp
+    src/igi_sdk/ui/menu_script_bridge.cpp
+    src/igi_sdk/ui/menu_values.cpp
     src/igi_sdk/natives/native_catalogue.cpp
+    src/igi_sdk/natives/native_caller.cpp
+    src/igi_sdk/natives/igi1_native_registry.cpp
+    src/igi_sdk/natives/domains/flow/flow.cpp
     src/igi_sdk/natives/native_runner.cpp
     src/igi_sdk/runtime/scheduler.cpp
     src/igi_sdk/runtime/target_profile.cpp
@@ -19,7 +54,12 @@ add_library(igi_sdk STATIC
     src/igi_sdk/runtime/macos_hook_backend.cpp
 )
 target_include_directories(igi_sdk PUBLIC include)
+target_link_libraries(igi_sdk PRIVATE igi_qsc_compiler)
+add_dependencies(igi_sdk igi_re_hash_bindings)
 target_compile_definitions(igi_sdk PUBLIC IGI_SDK_IGI1_ONLY=1)
+
+add_executable(igi_menu_script tools/generate_menu_script.cpp)
+target_link_libraries(igi_menu_script PRIVATE igi_sdk)
 
 option(IGI_SDK_BUILD_DEMOS "Build the internal and external-style demo targets" ON)
 

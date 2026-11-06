@@ -66,6 +66,7 @@ void addItem(const std::string& id, const std::string& value, std::vector<igi::M
 void applyMenuKey(igi::MenuConfig& config, const std::string& key, const std::string& value) {
     if (key == "enabled") config.enabled = parseBool(value, config.enabled);
     else if (key == "hotkey") config.hotkey = igi::parseDirectInputKey(value, config.hotkey);
+    else if (key == "exit_key" || key == "exit_hotkey") config.exitKey = igi::parseDirectInputKey(value, config.exitKey);
     else if (key == "screen_id") setInt(value, config.screenId);
     else if (key == "x") setInt(value, config.x);
     else if (key == "y") setInt(value, config.y);
@@ -86,6 +87,12 @@ std::uint8_t parseDirectInputKey(std::string_view name, std::uint8_t fallback) n
     if (key == "F6") return 0x40;
     if (key == "F7") return 0x41;
     if (key == "F8") return 0x42;
+    if (key == "HOME") return 0x47;
+    if (key == "END") return 0x4F;
+    if (key == "PAGEUP" || key == "PGUP") return 0x49;
+    if (key == "PAGEDOWN" || key == "PGDN") return 0x51;
+    if (key == "INSERT" || key == "INS") return 0x52;
+    if (key == "DELETE" || key == "DEL") return 0x53;
     return fallback;
 }
 

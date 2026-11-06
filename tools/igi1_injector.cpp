@@ -51,8 +51,9 @@ std::string toNarrow(const wchar_t* text) {
     if (!text || !*text) return {};
     const int size = WideCharToMultiByte(CP_UTF8, 0, text, -1, nullptr, 0, nullptr, nullptr);
     if (size <= 1) return {};
-    std::string out(static_cast<std::size_t>(size - 1), '\0');
+    std::string out(static_cast<std::size_t>(size), '\0');
     WideCharToMultiByte(CP_UTF8, 0, text, -1, out.data(), size, nullptr, nullptr);
+    out.resize(static_cast<std::size_t>(size - 1));
     return out;
 }
 
@@ -103,7 +104,9 @@ int injectInto(DWORD pid, const std::string& dllPath, bool verbose) {
     }
 
     BOOL targetIsWow64 = FALSE;
-    if (IsWow64Process(process, &targetIsWow64) && !targetIsWow64) {
+    BOOL selfIsWow64 = FALSE;
+    if (IsWow64Process(GetCurrentProcess(), &selfIsWow64) && selfIsWow64 &&
+        IsWow64Process(process, &targetIsWow64) && !targetIsWow64) {
         std::printf("error: pid %lu is not a 32-bit process; this injector is x86\n",
                     static_cast<unsigned long>(pid));
         CloseHandle(process);
@@ -134,7 +137,13 @@ int injectInto(DWORD pid, const std::string& dllPath, bool verbose) {
         return 7;
     }
 
-    WaitForSingleObject(thread, 15000);
+    const DWORD waitResult = WaitForSingleObject(thread, 15000);
+    if (waitResult != WAIT_OBJECT_0) {
+        std::printf("error: remote loader did not finish (wait=%lu); allocation retained\n", static_cast<unsigned long>(waitResult));
+        CloseHandle(thread);
+        CloseHandle(process);
+        return 8;
+    }
     DWORD moduleBase = 0;
     GetExitCodeThread(thread, &moduleBase);
     CloseHandle(thread);

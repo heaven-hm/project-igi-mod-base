@@ -39,7 +39,7 @@ bool Scheduler::cancel(TaskId taskId) noexcept {
     std::lock_guard lock(mutex_);
     auto found = entries_.find(taskId);
     if (found == entries_.end()) return false;
-    found->second.cancelled = true;
+    entries_.erase(found);
     return true;
 }
 
@@ -89,11 +89,20 @@ std::size_t Scheduler::runReadyTasks() noexcept {
     const auto now = std::chrono::steady_clock::now();
     {
         std::lock_guard lock(mutex_);
+        if (running_) return 0;
+        running_ = true;
         for (auto& [id, entry] : entries_) {
             if (!entry.cancelled && entry.due <= now) ready.emplace_back(id, entry.task);
         }
     }
+    std::size_t executed = 0;
     for (auto& [id, task] : ready) {
+        {
+            std::lock_guard lock(mutex_);
+            const auto found = entries_.find(id);
+            if (found == entries_.end() || found->second.cancelled) continue;
+        }
+        ++executed;
         try { task(); }
         catch (...) { log(LogLevel::Error, "scheduler task threw; task contained"); }
         std::lock_guard lock(mutex_);
@@ -105,6 +114,10 @@ std::size_t Scheduler::runReadyTasks() noexcept {
                 entries_.erase(found);
         }
     }
-    return ready.size();
+    {
+        std::lock_guard lock(mutex_);
+        running_ = false;
+    }
+    return executed;
 }
 }

@@ -258,24 +258,10 @@ changing feature logic.
 
 ### Windows
 
-Windows x86 is the supported injected-runtime target. The default scheduler
-hook is `Screen_Draw` at `0x004E7400`, the screen-level frame function:
-
-```c
-void Screen_Draw(Task *t) {
-    Display_NextFrame();
-    CALL_CHILDREN(t, Screen_GetDrawEvent(), 1);
-    Display_EndFrame();
-    gScreenFrame++;
-}
-```
-
-Its first instruction is the five-byte `mov 0xA5EA65,%al`, so the patch is a
-five-byte `jmp rel32` that touches no register or flag, and nothing needs
-relocating in the trampoline. `display_end_frame` (`0x00491D20`, five bytes
-with a relocated `call Scene_DrawAll`), `text_draw` (`0x004B6E60`, five bytes)
-and `game_run_handler` (`0x00416260`, eight bytes, relocated call) stay
-selectable with the `hook` key in `config.ini`.
+Windows x86 is the primary injected-runtime target. The scheduler uses
+`Game_RunHandler` at `0x00416260`; the original handler continues through a
+trampoline. Display and text functions are not accepted as gameplay hooks.
+In-game verification of the hook and its actual frequency is still required.
 
 `Flow_RunHandler` at `0x00402260` is retained as a lifecycle investigation
 reference. `Game_Update` at `0x00401050` is catalogued but is not used as the
@@ -313,15 +299,25 @@ WINEPREFIX=$HOME/igi-test-prefix ./tools/wine_igi_inject.sh \
   /Users/you/Downloads/IGI/IGI-MenuManager-Internal.dll igi.exe
 ```
 
+The wrapper also runs on Linux with Wine installed; set `WINE_BIN` if Wine is
+not on your PATH. Use the same `WINEPREFIX` used to launch the game. The DLL
+and Windows injector must both be x86 for the original Windows game. The Wine
+wrapper injects into an existing process and does not launch the game.
+
+Native macOS `.dylib` and Linux `.so` remote injection are not yet validated;
+the Wine x86 injector cannot load those libraries into a native process.
+The demo's menu model is not yet wired to the game's native MenuManager, so
+successful DLL loading does not establish that a visible menu is available.
+
 `config.ini` beside the DLL controls the runtime:
 
 | key | meaning |
 | --- | --- |
 | `enabled` | master switch for the demo menu |
 | `hotkey` | `F3`-`F8`, matched against DirectInput codes |
-| `hook` | `screen_draw` (default), `display_end_frame`, `text_draw`, `game_run_handler` |
+| `hook` | `game_run_handler` (required for the gameplay scheduler) |
 | `log_level` | `trace`, `debug`, `info`, `warning`, `error`, `critical` |
-| `console` | release builds only; Debug always allocates a console |
+| `console` | retained for configuration compatibility; Debug allocates a console and Release uses file logging |
 | `screen_id`, `x`, `y`, `width`, `height` | menu screen identity and frame |
 
 `[mod_menu.debug]` and `[mod_menu.release]` are applied only to a build with a

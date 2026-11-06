@@ -24,7 +24,12 @@ bool isSupportedExecutable() noexcept {
                  CryptCreateHash(provider, CALG_SHA_256, 0, 0, &hash) != FALSE;
     std::array<std::byte, 4096> buffer{};
     DWORD read = 0;
-    while (valid && ReadFile(file, buffer.data(), static_cast<DWORD>(buffer.size()), &read, nullptr) && read != 0) {
+    while (valid) {
+        if (!ReadFile(file, buffer.data(), static_cast<DWORD>(buffer.size()), &read, nullptr)) {
+            valid = false;
+            break;
+        }
+        if (read == 0) break;
         valid = CryptHashData(hash, reinterpret_cast<const BYTE*>(buffer.data()), read, 0) != FALSE;
     }
     std::array<BYTE, 32> digest{};

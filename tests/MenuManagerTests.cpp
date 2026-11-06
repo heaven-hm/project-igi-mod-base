@@ -3,6 +3,7 @@
 #include "igi_sdk/runtime/scheduler.hpp"
 
 #include <cassert>
+#include <cstdio>
 #include <chrono>
 #include <vector>
 
@@ -17,7 +18,22 @@ void menuManagerShutdownTest();
 void menuConfigTest() {
     assert(igi::parseDirectInputKey("F5") == 0x3F);
     assert(igi::parseDirectInputKey("f6") == 0x40);
+    assert(igi::parseDirectInputKey("End") == 0x4F);
+    assert(igi::parseDirectInputKey("end") == 0x4F);
+    assert(igi::parseDirectInputKey("Home") == 0x47);
+    assert(igi::parseDirectInputKey("Delete") == 0x53);
     assert(igi::parseDirectInputKey("unknown", 0x3F) == 0x3F);
+    // exit_key keeps the safe default when the value is malformed.
+    igi::MenuConfig exitKeyConfig;
+    assert(exitKeyConfig.exitKey == 0x4F);
+    FILE* exitKeyFile = std::fopen("exit_key_test.ini", "w");
+    assert(exitKeyFile);
+    std::fputs("[mod_menu]\nhotkey=F5\nexit_key=Delete\n", exitKeyFile);
+    std::fclose(exitKeyFile);
+    const auto exitKeyLoaded = igi::loadMenuConfig("exit_key_test.ini");
+    std::remove("exit_key_test.ini");
+    assert(exitKeyLoaded.exitKey == 0x53);
+    assert(exitKeyLoaded.hotkey == 0x3F);
 }
 
 void menuManagerModelTest() {

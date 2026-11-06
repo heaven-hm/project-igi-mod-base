@@ -21,3 +21,9 @@ The table has 5,391 function entries. The source import currently recovers
 5,389 signatures; the two remaining entries (`_fsopen` and `_output`) are
 Microsoft C runtime routines for which IGI-RE deliberately provides no C
 rewrite/declaration. They remain catalogued and are never exposed by this SDK.
+
+`tools/generate_igi_hash.py` converts `neonix-igi-re-names.tsv` into the
+generated include `igi_sdk/natives/igi_re/hashes.hpp`: one
+`inline constexpr NativeHash <Name> = 0x<address>;` per symbol under
+`igi::re::HASH`. CMake regenerates it whenever the TSV changes. The umbrella
+`igi_sdk/IGI.hpp` re-exports the same names under `IGI::HASH`.

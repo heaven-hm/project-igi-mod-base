@@ -19,8 +19,9 @@ extern "C" __declspec(dllexport) unsigned long long WINAPI IGI_SDK_GetGameHookIn
     return static_cast<unsigned long long>(runtime.gameHookInvocationCount());
 }
 
-BOOL APIENTRY DllMain(HMODULE, DWORD reason, LPVOID) {
-    if (reason == DLL_PROCESS_DETACH) runtime.shutdown();
+BOOL APIENTRY DllMain(HMODULE, DWORD, LPVOID) {
+    // Hook teardown must happen through IGI_SDK_Shutdown, outside the loader
+    // lock, before the host calls FreeLibrary or exits.
     return TRUE;
 }
 #endif

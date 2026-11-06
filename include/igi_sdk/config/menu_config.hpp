@@ -24,6 +24,9 @@ struct ModMenuItemConfig {
 struct MenuConfig {
     bool enabled = true;
     std::uint8_t hotkey = 0x3F; // DIK_F5
+    // Start key opens/initializes the menu (hotkey); end key closes it.
+    // 0 disables the end key so the game keeps running unmodified.
+    std::uint8_t exitKey = 0x4F; // DIK_END
     std::int32_t screenId = 990;
     std::int32_t x = 95;
     std::int32_t y = 185;
@@ -38,7 +41,7 @@ struct MenuConfig {
     LogLevel minimumLogLevel = LogLevel::Info;
     bool console = false;
 #endif
-    igi1::TickHook hook = igi1::TickHook::DisplayAddFrameCallback;
+    igi1::TickHook hook = igi1::TickHook::GameRunHandler;
     std::vector<ModMenuItemConfig> items;
 };
 
@@ -47,6 +50,6 @@ struct MenuConfig {
 MenuConfig loadMenuConfig(const std::filesystem::path& path);
 std::uint8_t parseDirectInputKey(std::string_view name, std::uint8_t fallback = 0x3F) noexcept;
 LogLevel parseLogLevel(std::string_view name, LogLevel fallback = LogLevel::Info) noexcept;
-igi1::TickHook parseTickHook(std::string_view name, igi1::TickHook fallback = igi1::TickHook::TextDraw) noexcept;
+igi1::TickHook parseTickHook(std::string_view name, igi1::TickHook fallback = igi1::TickHook::GameRunHandler) noexcept;
 const char* tickHookName(igi1::TickHook hook) noexcept;
 }

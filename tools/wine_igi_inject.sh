@@ -10,7 +10,13 @@ dll=${1:-}
 exe_name=${2:-igi.exe}
 injector=${3:-}
 
-wine_bin=${WINE_BIN:-"/Applications/Wine Stable.app/Contents/Resources/wine/bin/wine"}
+if [ -n "${WINE_BIN:-}" ]; then
+    wine_bin=$WINE_BIN
+elif [ "$(uname -s)" = Darwin ]; then
+    wine_bin="/Applications/Wine Stable.app/Contents/Resources/wine/bin/wine"
+else
+    wine_bin=$(command -v wine || true)
+fi
 export WINEPREFIX=${WINEPREFIX:-$HOME/igi-test-prefix}
 
 if [ -z "$dll" ]; then
@@ -21,7 +27,7 @@ if [ ! -f "$dll" ]; then
     printf 'error: missing DLL: %s\n' "$dll" >&2
     exit 2
 fi
-if [ ! -x "$wine_bin" ]; then
+if [ -z "$wine_bin" ] || [ ! -x "$wine_bin" ]; then
     printf 'error: wine not found at %s (set WINE_BIN)\n' "$wine_bin" >&2
     exit 2
 fi

@@ -13,7 +13,8 @@ the supported IGI 1 executable, installs the guarded `Game_RunHandler`
 trampoline, and leaves the original handler execution intact. Call
 `IGI_SDK_Shutdown` before unloading the DLL; shutdown restores the original
 bytes, clears scheduled work, and resets the game-thread binding for a later
-load.
+load. Do not call shutdown from `DllMain` or an SDK scheduler callback; it is
+refused there to avoid re-entrant detour teardown.
 
 ## Measuring target cadence
 

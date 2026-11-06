@@ -45,6 +45,7 @@ private:
     std::thread::id gameThread_;
     TaskId nextId_ = 1;
     std::atomic<std::uint64_t> gameHookInvocations_{0};
+    bool running_ = false;
     std::unordered_map<TaskId, Entry> entries_;
 };
 }
