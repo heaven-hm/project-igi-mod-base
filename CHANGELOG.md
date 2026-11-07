@@ -19,8 +19,15 @@
   the start key remains disabled until `igi.exe` exits.
 - Added Simple and Advanced menu screenshots, feature lists, and contributor
   credits to the README.
-- Fixed visible weather: shared menu helpers now create the retail `RainEffect`
-  level task for rain or snow and remove their own task when weather is disabled.
+- Fixed visible weather: shared menu helpers now parent the retail `RainEffect`
+  task under the active `Level` task and broadcast `Param_GetChangedEvent` for
+  live rain and snow precipitation effects.
+- Added prebuilt x86 release DLLs in `binaries/` (`igi-advanced-mod-internal.dll`
+  and `igi-advanced-mod-external.dll`) with automatic deployment on build completion.
+- Clarified repository branching model: `develop` is strictly dedicated to the
+  retail IGI Game Menu UI (Internal Mod Menu via QVM MenuManager), while
+  `feature/imgui-mod` provides the external Dear ImGui Direct3D 7 menu
+  implementation backed by [AndenDev/D3D7Imgui](https://github.com/AndenDev/D3D7Imgui).
 
 ## 0.1 — IGI 1 MVP
 

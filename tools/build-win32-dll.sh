@@ -83,9 +83,20 @@ case "$target" in
     igi_advanced_mod_menu) artifact=${IGI_DLL_NAME:-igi-advanced-mod-internal.dll} ;;
     igi_simple_mod_menu) artifact=${IGI_DLL_NAME:-igi-simple-mod-internal.dll} ;;
     igi_basic_mod_menu) artifact=${IGI_DLL_NAME:-igi-basic-mod-internal.dll} ;;
+    igi_advanced_mod_menu_external) artifact=${IGI_DLL_NAME:-igi-advanced-mod-external.dll} ;;
+    igi_simple_mod_menu_external) artifact=${IGI_DLL_NAME:-igi-simple-mod-external.dll} ;;
+    igi_basic_mod_menu_external) artifact=${IGI_DLL_NAME:-igi-basic-mod-external.dll} ;;
+    igi_injector) artifact=IGI-Injector.exe ;;
+    igi_keypress) artifact=IGI-Keypress.exe ;;
     igi_natives_inject_test) artifact=${IGI_DLL_NAME:-igi-natives-inject-test.dll} ;;
     *) artifact=${IGI_DLL_NAME:-} ;;
 esac
+
+if [[ -n "$artifact" && -f "$build_dir/$artifact" ]]; then
+    mkdir -p "$root/binaries"
+    cp "$build_dir/$artifact" "$root/binaries/$artifact"
+    printf 'copied artifact to binaries: %s\n' "$root/binaries/$artifact"
+fi
 
 if ((verify)); then
     if [[ -z ${IGI_EXE:-} ]]; then
