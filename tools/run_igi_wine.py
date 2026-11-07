@@ -162,7 +162,7 @@ def main(argv=None):
     env = dict(
         os.environ,
         WINEPREFIX=str(prefix),
-        WINEDEBUG=os.environ.get("WINEDEBUG", "-all,+seh"),
+        WINEDEBUG=os.environ.get("IGI_WINEDEBUG", "-all"),
     )
     explicit_overrides = "WINEDLLOVERRIDES" in env
     if not explicit_overrides:

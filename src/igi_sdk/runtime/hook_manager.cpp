@@ -135,7 +135,7 @@ extern "C" int __cdecl displayRunCallbacksDetour() {
 bool installDisplayFrameHook(igi::Scheduler& scheduler, void*& trampolineOut) {
     using igi::LogLevel;
     if (!igi::igi1::isSupportedExecutable()) {
-        igi::log(LogLevel::Error, "Display_AddFrameCallback hook refused: executable hash mismatch");
+        igi::log(LogLevel::Error, "Display_AddFrameCallback hook refused: supported retail hook signatures mismatch");
         return false;
     }
     const auto initializeStatus = MH_Initialize();
@@ -259,13 +259,24 @@ bool HookManager::uninstall() noexcept {
     // stays resident, so an in-flight detour never jumps into freed memory. The
     // stale IGI1SDK_Tick node in the game's list is harmless: it observes a null
     // scheduler and does nothing.
+    bool restored = true;
     if (addHookCreated) {
-        if (MH_DisableHook(reinterpret_cast<void*>(igi1::displayAddFrameCallback)) != MH_OK)
-            log(LogLevel::Warning, "Display_AddFrameCallback hook disable failed");
+        const auto status = MH_DisableHook(reinterpret_cast<void*>(igi1::displayAddFrameCallback));
+        if (status != MH_OK && status != MH_ERROR_DISABLED) {
+            log(LogLevel::Error, "Display_AddFrameCallback restore failed; teardown remains pending");
+            restored = false;
+        }
     }
     if (runHookCreated) {
-        if (MH_DisableHook(reinterpret_cast<void*>(igi1::displayRunCallbacks)) != MH_OK)
-            log(LogLevel::Warning, "Display_RunCallbacks hook disable failed");
+        const auto status = MH_DisableHook(reinterpret_cast<void*>(igi1::displayRunCallbacks));
+        if (status != MH_OK && status != MH_ERROR_DISABLED) {
+            log(LogLevel::Error, "Display_RunCallbacks restore failed; teardown remains pending");
+            restored = false;
+        }
+    }
+    if (!restored || !igi1::isSupportedExecutable()) {
+        log(LogLevel::Error, "hook teardown incomplete: original retail hook bytes are not restored");
+        return false;
     }
 
     tickRegistered.store(false, std::memory_order_release);

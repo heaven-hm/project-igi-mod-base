@@ -16,7 +16,11 @@ namespace igi::hotkeys {
 inline constexpr auto kPollInterval = std::chrono::milliseconds(10);
 
 inline void pollSleep() noexcept {
+#if defined(_WIN32)
+    Sleep(static_cast<DWORD>(kPollInterval.count()));
+#else
     std::this_thread::sleep_for(kPollInterval);
+#endif
 }
 
 inline bool isKeyDown(int key) noexcept {

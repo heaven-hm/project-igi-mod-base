@@ -30,8 +30,8 @@ struct MenuConfig {
     // either `end_key` or the legacy `exit_key`/`exit_hotkey`. 0 disables it so
     // the game keeps running unmodified.
     std::uint8_t exitKey = 0x4F; // DIK_END
-    // `direct` attaches once from the configured hotkey worker. `hooked`
-    // uses the per-frame scheduler hook.
+    // The internal QVM menu always uses the game-frame scheduler. Retained for
+    // backwards-compatible parsing; `direct` is ignored by the menu host.
     bool directNativeMode = false;
     std::int32_t screenId = 990;
     std::int32_t x = 95;

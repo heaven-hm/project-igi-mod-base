@@ -41,8 +41,8 @@ bool Runtime::initializeDirectNativeMode() {
 }
 
 bool Runtime::allowDirectNativeCallbackThread() noexcept {
-    if (!initialized_ || !directNativeMode_) return false;
-    scheduler_.allowCurrentGameThread();
+    if (!initialized_) return false;
+    if (directNativeMode_) scheduler_.allowCurrentGameThread();
     return scheduler_.isGameThread();
 }
 

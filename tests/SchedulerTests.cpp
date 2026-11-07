@@ -214,11 +214,18 @@ int main() {
     assert(mainMenu.currentScreen()->title == "Configuration");
     assert(mainMenu.popScreen(true));
     assert(mainMenu.currentScreen()->id == 900);
-    // The mod menu is data-driven: its widgets come from the shipped config.ini.
-    const auto modConfig = igi::loadMenuConfig(std::string(IGI_SDK_SOURCE_DIR) + "/demos/internal-menumanager/config.ini");
+    // Menu items are defined per mod menu in C++, not read from config.ini.
+    auto modConfig = igi::loadMenuConfig(std::string(IGI_SDK_SOURCE_DIR) + "/demos/internal-menumanager/config.ini");
     assert(modConfig.hook == igi::igi1::TickHook::DisplayAddFrameCallback);
-    if (modConfig.items.empty())
-        std::fprintf(stderr, "menu config did not load from %s/demos/internal-menumanager/config.ini\n", IGI_SDK_SOURCE_DIR);
+    assert(modConfig.items.empty());
+    modConfig.items = {
+        {"weather", igi::ModMenuItemKind::List, "Rain", "IGI_SDK_SetWeather(this.value)", {"off", "on"}},
+        {"ammo", igi::ModMenuItemKind::Action, "Enable Unlimited Ammo", "IGI_SDK_EnableUnlimitedAmmo()", {}},
+        {"frames", igi::ModMenuItemKind::Toggle, "Frame Limit", "IGI_SDK_ToggleFrameLimit()", {"true"}, true},
+        {"music", igi::ModMenuItemKind::List, "Music Volume", "IGI_SDK_SetMusicVolume(this.value)", {"mute", "low", "normal"}},
+        {"display", igi::ModMenuItemKind::Action, "Refresh Display", "IGI_SDK_RefreshDisplay()", {}},
+        {"diagnostics", igi::ModMenuItemKind::Action, "Log Game State", "IGI_SDK_LogGameState()", {}},
+    };
     assert(modConfig.items.size() == 6);
     igi::MenuValues menuValues(modConfig);
     assert(menuValues.toggle(2) == true);

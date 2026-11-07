@@ -100,13 +100,7 @@ console=true
 `PageDown`, `Insert` and `Delete`. The DLL, the injector and the scripts all
 read these keys from this file; nothing hardcodes a hotkey.
 
-Menu items are data-driven:
-
-```ini
-[mod_menu.items]
-weather=list,Rain,IGI_SDK_SetWeather(this.value),off,on
-ammo=action,Enable Unlimited Ammo,IGI_SDK_EnableUnlimitedAmmo()
-```
+Each menu DLL owns its items in C++; `[mod_menu.items]` is not read.
 
 ## Create, build and run a menu
 
@@ -179,9 +173,71 @@ tools/verify_igi1_hook.sh /path/to/igi.exe
 
 The first validates the local registration evidence; the second checks
 the supported executable hash, hook prologues, calling convention metadata and
-task-table references. `python3 tools/build_inject_mod.py --attempts N` builds,
+task-table references. The injected DLL repeats the two hook-prologue checks in
+memory and does not run CryptoAPI file hashing inside Wine. `python3 tools/build_inject_mod.py --attempts N` builds,
 launches the game under Wine, injects the DLL, presses the configured keys and
 reports whether the menu attached.
+
+## Menu execution flow
+
+All three menu DLLs start through the same Windows entry point. They then select
+their own menu implementation.
+
+```mermaid
+flowchart TD
+    A[DLLMain] --> B[igiSdkMainThread]
+    B --> C[Common menu runtime]
+    C --> D{Menu DLL}
+    D --> E[IGI-MenuManager-Internal]
+    D --> F[igi-simple-mod-menu]
+    D --> G[igi-basic-mod-menu]
+    E --> H[Default menu actions]
+    F --> I[Weather, FPS, weapons]
+    G --> J[FPS, music, unlimited ammo]
+    H --> K[Game frame callback]
+    I --> K
+    J --> K
+    K --> L[Create menu UI in game]
+    L --> M[Menu actions call IGI natives]
+    M --> N[Toggle or close with configured keys]
+```
+
+`igiSdkMainThread` handles configuration, hotkeys and shutdown. The shared
+runtime creates the visible UI from the game frame callback; each DLL only
+provides its own menu items and actions.
+
+### Creating a new menu
+
+The shared `internal_demo.cpp` calls these two functions:
+
+```cpp
+bool configureModMenu(igi::MenuConfig& config);
+void runModMenuAction(const igi::MenuConfig& config,
+                       igi::Runtime& runtime,
+                       std::size_t item,
+                       std::string_view value);
+```
+
+To create a new menu, implement both functions in your menu source file and
+link that file with `internal_demo.cpp` and `src/igi_sdk/platform/windows_dll_host.cpp`.
+
+`configureModMenu()` defines the menu items and values. The shared runtime
+calls it during `IGI_MenuManager_Internal_Initialize()`.
+
+`runModMenuAction()` handles the selected item. The shared
+`MenuScriptBridge` calls it whenever the player changes a menu value or invokes
+an action.
+
+The existing implementations are:
+
+```text
+IGI-MenuManager-Internal → default_menu.cpp → executeMenuNativeAction
+igi-simple-mod-menu      → simple_menu.cpp  → simpleMenuAction
+igi-basic-mod-menu       → basic_menu.cpp   → basicMenuAction
+```
+
+Your new menu should follow the same two-function pattern as
+`demos/simple-menu/simple_menu.cpp` or `demos/basic-menu/basic_menu.cpp`.
 
 ## License and credits
 

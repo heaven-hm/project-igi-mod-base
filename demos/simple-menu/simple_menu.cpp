@@ -113,7 +113,7 @@ void simpleMenuAction(igi::Runtime& runtime, std::size_t item, std::string_view 
     }
 }
 
-bool configureDemoMenu(igi::MenuConfig& config) { return configureSimpleMenu(config); }
-void runDemoMenuAction(const igi::MenuConfig&, igi::Runtime& runtime, std::size_t item, std::string_view value) {
+bool configureModMenu(igi::MenuConfig& config) { return configureSimpleMenu(config); }
+void runModMenuAction(const igi::MenuConfig&, igi::Runtime& runtime, std::size_t item, std::string_view value) {
     simpleMenuAction(runtime, item, value);
 }

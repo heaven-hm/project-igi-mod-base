@@ -1,5 +1,5 @@
 #include "basic_menu.hpp"
-#include "igi_sdk/ui/demo_menu.hpp"
+#include "igi_sdk/ui/mod_menu.hpp"
 #include "igi_sdk/IGI.hpp"
 #include "igi_sdk/ui/menu_native_actions.hpp"
 
@@ -22,7 +22,7 @@ void basicMenuAction(igi::Runtime& runtime, std::size_t item, std::string_view v
     if (item == 2) IGI::PLAYER::SET_UNLIMITED_AMMO();
 }
 
-bool configureDemoMenu(igi::MenuConfig& config) { return configureBasicMenu(config); }
-void runDemoMenuAction(const igi::MenuConfig&, igi::Runtime& runtime, std::size_t item, std::string_view value) {
+bool configureModMenu(igi::MenuConfig& config) { return configureBasicMenu(config); }
+void runModMenuAction(const igi::MenuConfig&, igi::Runtime& runtime, std::size_t item, std::string_view value) {
     basicMenuAction(runtime, item, value);
 }
