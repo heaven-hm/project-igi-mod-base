@@ -1,10 +1,26 @@
 # Project IGI Mod Base
 
-Version: 0.1
+Version: 0.2
 
 Project IGI Mod Base is a C++ foundation for creating single-player mods and in-game mod menus for Project I.G.I. It provides an in-game menu interface, game native bindings, runtime hooking and memory support, logging, and examples to build on.
 
 The internal in-game menu is implemented. An external DirectX 7/ImGui interface is planned; it is not yet a finished GUI.
+
+## Version 0.2: Restructure
+
+- Reorganized the implementation into focused `src/` modules for configuration,
+  logging, native bindings, runtime hooks, platform hosting, UI, and the shared
+  mod-menu host.
+- Replaced the old SDK include layout with a smaller public mod base and kept
+  menu-specific actions inside `demos/internal/`.
+- Added Basic, Simple, and Advanced internal menu targets that share one
+  game-thread host and typed native helpers.
+- Added formatting, clang-tidy, CTest, and Unicorn verification to the local
+  workflow and GitHub Actions.
+- Fixed level switching to use the game’s Flow request and `Game` cleanup path,
+  releasing injected QVM resources before the new level attaches.
+- Made the configured end key safely stop the resident menu host, preventing
+  the start key from reopening it until `igi.exe` exits.
 
 ## Included mod menus
 
@@ -12,7 +28,7 @@ The internal in-game menu is implemented. An external DirectX 7/ImGui interface 
 
 ### Simple Mod Menu
 
-- Rain state toggle and frame-rate selection (30, 60, or 120 FPS)
+- Live rain, snow, or off selection and frame-rate selection (30, 60, or 120 FPS)
 - Weapon list and pickup for Glock 17, MP5SD, UZI, M16A2, AK-47, Dragunov SVD, Minimi, and Spas 12
 - First-person or third-person camera view
 - Level selection for levels 1–14
@@ -30,6 +46,13 @@ The internal in-game menu is implemented. An external DirectX 7/ImGui interface 
 
 All controls run through the game-thread menu runtime. The mod menu pauses the
 game while open and restores input when it closes.
+
+### External ImGui Advanced Menu (separate branch)
+
+![ImGui Advanced Menu running in Project I.G.I.](assets/imgui-advanced-mod-menu.png)
+
+This Direct3D 7/ImGui implementation is being tested on its own branch. It is
+not part of `develop` until that branch is merged.
 
 Target: the EU/Chinese Windows x86 IGI 1 executable. Native Windows is
 supported directly. On macOS and Linux, run the same Windows x86 game and DLL
@@ -138,9 +161,13 @@ injected menu before the game destroys the old level. AI or building
 creation/removal needs a verified object-specific native lifecycle; do not use
 raw task memory or a generic task deletion helper for it.
 
-`GAME::SET_RAINING` only changes the game's `gRaining` state. A level's own
-`RainEffect` task owns visible precipitation; there is no verified global
-native for creating, deleting, or converting that level-owned task into snow.
+`GAME::SET_RAINING` only changes the game's `gRaining` state. Visible
+precipitation belongs to the level's `RainEffect` task. `setWeather()` follows
+the retail level-QVM lifecycle: it creates `RainEffect` through `Task_New`,
+tracks the injected task by an unused level ID, and deletes only that task when
+Weather is set to Off or the level changes. Its `Is Rain` parameter selects
+rain (`TRUE`) or snow (`FALSE`); only one injected precipitation effect exists
+at a time.
 
 ## Config
 

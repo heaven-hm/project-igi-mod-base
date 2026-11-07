@@ -1,5 +1,6 @@
 #include "config/menu_config.hpp"
 #include "ui/menu_manager.hpp"
+#include "ui/menu_script.hpp"
 #include "runtime/scheduler.hpp"
 
 #include <cassert>
@@ -72,8 +73,19 @@ void menuConfigTest() {
     assert(exitKeyLoaded.imgui.iniFile == "custom-imgui.ini");
 }
 
+void rainEffectCommandCompilerTest() {
+    std::vector<std::uint8_t> qvm;
+    std::string error;
+    const std::string command =
+        "Task_New(4095, \"RainEffect\", \"IGIModPrecipitation\", FALSE, 50.0, 20.0, "
+        "\"TRUE\\n\", 0.06);";
+    assert(igi::compileIgiMenuCommandScript(command, qvm, error));
+    assert(!qvm.empty());
+}
+
 void menuManagerModelTest() {
     menuConfigTest();
+    rainEffectCommandCompilerTest();
     igi::Scheduler scheduler;
     igi::MenuManager menuManager(scheduler);
     menuManager.createMenu("main", "Main");
