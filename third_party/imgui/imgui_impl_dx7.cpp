@@ -242,38 +242,56 @@ struct ImGui_ImplDX7_StateBackup
     DWORD         rs_fog{}, rs_clipping{};
     IDirectDrawSurface7* tex0{};
     DWORD         tss0_colorop{}, tss0_colorarg1{}, tss0_colorarg2{}, tss0_alphaop{}, tss0_alphaarg1{}, tss0_alphaarg2{};
+    DWORD         tss0_minfilter{}, tss0_magfilter{}, tss0_mipfilter{}, tss0_addressu{}, tss0_addressv{};
     DWORD         tss1_colorop{}, tss1_alphaop{};
     D3DVIEWPORT7  viewport{}; // included even though we don't change it
 
-    void Capture(IDirect3DDevice7* d3d)
+    bool Capture(IDirect3DDevice7* d3d)
     {
-        d3d->GetTransform(D3DTRANSFORMSTATE_WORLD, &world);
-        d3d->GetTransform(D3DTRANSFORMSTATE_VIEW, &view);
-        d3d->GetTransform(D3DTRANSFORMSTATE_PROJECTION, &proj);
+#define IMGUI_DX7_CAPTURE(call) \
+    do {                          \
+        if (FAILED(call)) {       \
+            if (tex0) {           \
+                tex0->Release();  \
+                tex0 = nullptr;   \
+            }                     \
+            return false;         \
+        }                         \
+    } while (false)
+        IMGUI_DX7_CAPTURE(d3d->GetTransform(D3DTRANSFORMSTATE_WORLD, &world));
+        IMGUI_DX7_CAPTURE(d3d->GetTransform(D3DTRANSFORMSTATE_VIEW, &view));
+        IMGUI_DX7_CAPTURE(d3d->GetTransform(D3DTRANSFORMSTATE_PROJECTION, &proj));
 
-        d3d->GetRenderState(D3DRENDERSTATE_ALPHABLENDENABLE, &rs_alpha_blend);
-        d3d->GetRenderState(D3DRENDERSTATE_ALPHATESTENABLE, &rs_alpha_test);
-        d3d->GetRenderState(D3DRENDERSTATE_SRCBLEND, &rs_src_blend);
-        d3d->GetRenderState(D3DRENDERSTATE_DESTBLEND, &rs_dst_blend);
-        d3d->GetRenderState(D3DRENDERSTATE_ZENABLE, &rs_zenable);
-        d3d->GetRenderState(D3DRENDERSTATE_ZWRITEENABLE, &rs_zwrite);
-        d3d->GetRenderState(D3DRENDERSTATE_CULLMODE, &rs_cullmode);
-        d3d->GetRenderState(D3DRENDERSTATE_LIGHTING, &rs_lighting);
-        d3d->GetRenderState(D3DRENDERSTATE_SHADEMODE, &rs_shade);
-        d3d->GetRenderState(D3DRENDERSTATE_FOGENABLE, &rs_fog);
-        d3d->GetRenderState(D3DRENDERSTATE_CLIPPING, &rs_clipping);
+        IMGUI_DX7_CAPTURE(d3d->GetRenderState(D3DRENDERSTATE_ALPHABLENDENABLE, &rs_alpha_blend));
+        IMGUI_DX7_CAPTURE(d3d->GetRenderState(D3DRENDERSTATE_ALPHATESTENABLE, &rs_alpha_test));
+        IMGUI_DX7_CAPTURE(d3d->GetRenderState(D3DRENDERSTATE_SRCBLEND, &rs_src_blend));
+        IMGUI_DX7_CAPTURE(d3d->GetRenderState(D3DRENDERSTATE_DESTBLEND, &rs_dst_blend));
+        IMGUI_DX7_CAPTURE(d3d->GetRenderState(D3DRENDERSTATE_ZENABLE, &rs_zenable));
+        IMGUI_DX7_CAPTURE(d3d->GetRenderState(D3DRENDERSTATE_ZWRITEENABLE, &rs_zwrite));
+        IMGUI_DX7_CAPTURE(d3d->GetRenderState(D3DRENDERSTATE_CULLMODE, &rs_cullmode));
+        IMGUI_DX7_CAPTURE(d3d->GetRenderState(D3DRENDERSTATE_LIGHTING, &rs_lighting));
+        IMGUI_DX7_CAPTURE(d3d->GetRenderState(D3DRENDERSTATE_SHADEMODE, &rs_shade));
+        IMGUI_DX7_CAPTURE(d3d->GetRenderState(D3DRENDERSTATE_FOGENABLE, &rs_fog));
+        IMGUI_DX7_CAPTURE(d3d->GetRenderState(D3DRENDERSTATE_CLIPPING, &rs_clipping));
 
-        d3d->GetTexture(0, &tex0); // AddRef()'d; must Release() later
-        d3d->GetTextureStageState(0, D3DTSS_COLOROP, &tss0_colorop);
-        d3d->GetTextureStageState(0, D3DTSS_COLORARG1, &tss0_colorarg1);
-        d3d->GetTextureStageState(0, D3DTSS_COLORARG2, &tss0_colorarg2);
-        d3d->GetTextureStageState(0, D3DTSS_ALPHAOP, &tss0_alphaop);
-        d3d->GetTextureStageState(0, D3DTSS_ALPHAARG1, &tss0_alphaarg1);
-        d3d->GetTextureStageState(0, D3DTSS_ALPHAARG2, &tss0_alphaarg2);
-        d3d->GetTextureStageState(1, D3DTSS_COLOROP, &tss1_colorop);
-        d3d->GetTextureStageState(1, D3DTSS_ALPHAOP, &tss1_alphaop);
+        IMGUI_DX7_CAPTURE(d3d->GetTexture(0, &tex0)); // AddRef()'d; must Release() later
+        IMGUI_DX7_CAPTURE(d3d->GetTextureStageState(0, D3DTSS_COLOROP, &tss0_colorop));
+        IMGUI_DX7_CAPTURE(d3d->GetTextureStageState(0, D3DTSS_COLORARG1, &tss0_colorarg1));
+        IMGUI_DX7_CAPTURE(d3d->GetTextureStageState(0, D3DTSS_COLORARG2, &tss0_colorarg2));
+        IMGUI_DX7_CAPTURE(d3d->GetTextureStageState(0, D3DTSS_ALPHAOP, &tss0_alphaop));
+        IMGUI_DX7_CAPTURE(d3d->GetTextureStageState(0, D3DTSS_ALPHAARG1, &tss0_alphaarg1));
+        IMGUI_DX7_CAPTURE(d3d->GetTextureStageState(0, D3DTSS_ALPHAARG2, &tss0_alphaarg2));
+        IMGUI_DX7_CAPTURE(d3d->GetTextureStageState(0, D3DTSS_MINFILTER, &tss0_minfilter));
+        IMGUI_DX7_CAPTURE(d3d->GetTextureStageState(0, D3DTSS_MAGFILTER, &tss0_magfilter));
+        IMGUI_DX7_CAPTURE(d3d->GetTextureStageState(0, D3DTSS_MIPFILTER, &tss0_mipfilter));
+        IMGUI_DX7_CAPTURE(d3d->GetTextureStageState(0, D3DTSS_ADDRESSU, &tss0_addressu));
+        IMGUI_DX7_CAPTURE(d3d->GetTextureStageState(0, D3DTSS_ADDRESSV, &tss0_addressv));
+        IMGUI_DX7_CAPTURE(d3d->GetTextureStageState(1, D3DTSS_COLOROP, &tss1_colorop));
+        IMGUI_DX7_CAPTURE(d3d->GetTextureStageState(1, D3DTSS_ALPHAOP, &tss1_alphaop));
 
-        d3d->GetViewport(&viewport);
+        IMGUI_DX7_CAPTURE(d3d->GetViewport(&viewport));
+#undef IMGUI_DX7_CAPTURE
+        return true;
     }
 
     void Restore(IDirect3DDevice7* d3d)
@@ -303,6 +321,11 @@ struct ImGui_ImplDX7_StateBackup
         d3d->SetTextureStageState(0, D3DTSS_ALPHAOP, tss0_alphaop);
         d3d->SetTextureStageState(0, D3DTSS_ALPHAARG1, tss0_alphaarg1);
         d3d->SetTextureStageState(0, D3DTSS_ALPHAARG2, tss0_alphaarg2);
+        d3d->SetTextureStageState(0, D3DTSS_MINFILTER, tss0_minfilter);
+        d3d->SetTextureStageState(0, D3DTSS_MAGFILTER, tss0_magfilter);
+        d3d->SetTextureStageState(0, D3DTSS_MIPFILTER, tss0_mipfilter);
+        d3d->SetTextureStageState(0, D3DTSS_ADDRESSU, tss0_addressu);
+        d3d->SetTextureStageState(0, D3DTSS_ADDRESSV, tss0_addressv);
         d3d->SetTextureStageState(1, D3DTSS_COLOROP, tss1_colorop);
         d3d->SetTextureStageState(1, D3DTSS_ALPHAOP, tss1_alphaop);
 
@@ -521,7 +544,8 @@ void ImGui_ImplDX7_RenderDrawData(ImDrawData* draw_data)
 
     // Backup application state (we touch a subset).
     ImGui_ImplDX7_StateBackup backup{};
-    backup.Capture(d3d);
+    if (!backup.Capture(d3d))
+        return;
 
     // Set render state appropriate for UI.
     ImGui_ImplDX7_SetupRenderState(draw_data);

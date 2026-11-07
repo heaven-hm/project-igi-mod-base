@@ -288,6 +288,8 @@ add_test(NAME igi_generated_natives
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_generated_natives.py)
 add_test(NAME igi_demo_native_contract
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_demo_native_contract.py)
+add_test(NAME igi_imgui_dx7_state_backup
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_imgui_dx7_state_backup.py)
 endif()
 # The Unicorn ABI probe loads the retail 32-bit IGI 1 PE. On Apple Silicon the
 # script must run under x86_64 Python via Rosetta, so wrap the interpreter when
