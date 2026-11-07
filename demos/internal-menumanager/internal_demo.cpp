@@ -10,7 +10,7 @@
 #include "igi_sdk/natives/igi_re/hashes.hpp"
 #include "igi_sdk/platform/windows_dll.hpp"
 #include "igi_sdk/ui/menu_native_actions.hpp"
-#include "igi_sdk/ui/demo_menu.hpp"
+#include "igi_sdk/ui/mod_menu.hpp"
 
 #include <atomic>
 #include <cstdint>

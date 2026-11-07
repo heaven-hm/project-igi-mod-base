@@ -1,115 +1,124 @@
 #include "simple_menu.hpp"
-#include "igi_sdk/IGI.hpp"
-#include "igi_sdk/logging/logging.hpp"
-#include "igi_sdk/ui/menu_native_actions.hpp"
-#include <algorithm>
+
 #include <cstdint>
-#include <cstring>
 #include <string>
+#include <string_view>
 #include <vector>
 
+#include "igi_sdk/IGI.hpp"
+#include "igi_sdk/logging/logging.hpp"
+#include "igi_sdk/ui/mod_menu.hpp"
+#include "igi_sdk/ui/menu_native_actions.hpp"
+
 namespace {
-struct Weapon { int id; int ammo; std::string name; };
-std::vector<Weapon> weapons;
-std::size_t selected = 0;
-using GetCount = int (__cdecl*)();
-using GetWeapon = const unsigned char* (__cdecl*)(int);
-using NewTask = unsigned char* (__cdecl*)(void*, std::uint16_t, void*);
-using ChangeEffect = void (__cdecl*)(void*);
-using DeleteTask = void (__cdecl*)(void*);
-unsigned char* weatherTask = nullptr;
 
-bool setWeather(std::string_view weather) {
-    auto* game = reinterpret_cast<unsigned char*>(IGI::GAME::GET());
-    if (!game || !IGI::GAME::GET_WORLD()) return false;
-    const auto type = *reinterpret_cast<const std::uint16_t*>(0x0057bd84);
-    const auto texture = *reinterpret_cast<unsigned char* const*>(0x0057bd80);
-    if (type >= 0x180 || !texture) return false;
+constexpr std::uintptr_t gAICurrentAddr = 0x005bda58;
+constexpr std::uintptr_t gMoveScaleAddr = 0x0056e1e8;
 
-    bool found = false;
-    auto* node = *reinterpret_cast<unsigned char**>(game + 8);
-    while (node) {
-        auto* next = *reinterpret_cast<unsigned char**>(node);
-        if (!next) break;
-        if (node == weatherTask) {
-            std::uint16_t nodeType;
-            std::memcpy(&nodeType, node + 0x1c, sizeof(nodeType));
-            found = nodeType == type;
-            break;
+bool g_ghostMode = false;
+bool g_godMode = false;
+bool g_oneHitKill = false;
+float g_currentSpeed = 1.0f;
+double g_defaultSightRange = 100.0;
+
+std::uint8_t* getCurrentAi() noexcept {
+    auto* const aiPtr = reinterpret_cast<std::uint8_t* const*>(gAICurrentAddr);
+    return aiPtr ? *aiPtr : nullptr;
+}
+
+std::uint8_t* getPlayerAi() noexcept {
+    auto* player = reinterpret_cast<std::uint8_t*>(IGI::GAME::GET_PLAYER(0));
+    if (!player) return nullptr;
+    auto* const aiPtr = reinterpret_cast<std::uint8_t* const*>(player + 0x800);
+    return aiPtr ? *aiPtr : nullptr;
+}
+
+void applyGhostMode(bool enabled) noexcept {
+    g_ghostMode = enabled;
+    auto* ai = getCurrentAi();
+    if (ai) {
+        if (enabled) {
+            const double current = *reinterpret_cast<const double*>(ai + 0xb0);
+            if (current > 0.0) g_defaultSightRange = current;
+            *reinterpret_cast<double*>(ai + 0xb0) = 0.0;
+            *reinterpret_cast<float*>(ai + 0xb0) = 0.0f;
+        } else {
+            *reinterpret_cast<double*>(ai + 0xb0) = g_defaultSightRange;
+            *reinterpret_cast<float*>(ai + 0xb0) = static_cast<float>(g_defaultSightRange);
         }
-        node = next;
     }
-    if (!found) weatherTask = nullptr;
-    if (weather == "Off") {
-        if (weatherTask) reinterpret_cast<DeleteTask>(0x004015f0)(weatherTask);
-        weatherTask = nullptr;
-    } else {
-        if (!weatherTask)
-            weatherTask = reinterpret_cast<NewTask>(0x004012a0)(game, type, nullptr);
-        if (!weatherTask) return false;
-        weatherTask[0x24] = weather == "Rain" ? 1 : 0;
-        reinterpret_cast<ChangeEffect>(0x00436a50)(weatherTask);
-    }
-    const char raining[] = {'r', static_cast<char>(weather == "Rain"), '\0'};
-    IGI::GAME::SET_RAINING(raining);
-    return true;
 }
 
-bool pickup() {
-    if (selected >= weapons.size()) return false;
-    auto* player = IGI::GAME::GET_PLAYER(0);
-    if (!player) return false;
-    int args[] = {weapons[selected].id, weapons[selected].ammo};
-    IGI::PLAYER::PICK_UP_WEAPON(reinterpret_cast<IGI::Human*>(player), args);
-    return true;
+void applyGodMode(bool enabled) noexcept {
+    g_godMode = enabled;
+    const std::uint8_t flag = enabled ? 1 : 0;
+    auto* ai = getCurrentAi();
+    if (ai) {
+        *reinterpret_cast<std::uint8_t*>(ai + 0x3abc) = flag;
+    }
+    auto* playerAi = getPlayerAi();
+    if (playerAi) {
+        *reinterpret_cast<std::uint8_t*>(playerAi + 0x3abc) = flag;
+    }
 }
+
+void applyMoveSpeed(float scale) noexcept {
+    g_currentSpeed = scale;
+    *reinterpret_cast<float*>(gMoveScaleAddr) = scale;
 }
+
+void applyOneHitKill(bool enabled) noexcept {
+    g_oneHitKill = enabled;
+    const std::uint8_t flag = enabled ? 0 : 1;
+    auto* ai = getCurrentAi();
+    if (ai) {
+        *reinterpret_cast<std::uint8_t*>(ai + 0x3abd) = flag;
+    }
+    auto* playerAi = getPlayerAi();
+    if (playerAi) {
+        *reinterpret_cast<std::uint8_t*>(playerAi + 0x3abd) = flag;
+    }
+}
+
+}  // namespace
 
 bool configureSimpleMenu(igi::MenuConfig& config) {
-    weapons.clear();
-    const int count = reinterpret_cast<GetCount>(0x00413bb0)();
-    if (count <= 0 || count > 64) {
-        igi::log(igi::LogLevel::Error, "simple menu: weapon registry unavailable");
-        return false;
-    }
-    igi::ModMenuItemConfig weaponList{"weapon", igi::ModMenuItemKind::List, "Weapon", "", {}};
-    for (int i = 0; i < count; ++i) {
-        const auto* weapon = reinterpret_cast<GetWeapon>(0x00413b90)(i);
-        int id, ammo;
-        std::memcpy(&id, weapon, sizeof(id));
-        std::memcpy(&ammo, weapon + 0x648, sizeof(ammo));
-        const char* name = reinterpret_cast<const char*>(weapon + 0x10);
-        const auto length = strnlen(name, 39);
-        std::string label(name, length);
-        if (label.empty()) label = "Weapon " + std::to_string(id);
-        weapons.push_back({id, std::max(0, ammo), label});
-        weaponList.values.push_back(label);
-    }
-    selected = 0;
     config.items = {
-        {"weather", igi::ModMenuItemKind::List, "Weather", "", {"Off", "Rain", "Snow"}},
-        {"fps", igi::ModMenuItemKind::List, "FPS", "", {"30", "60", "120"}},
-        std::move(weaponList),
-        {"pickup", igi::ModMenuItemKind::Action, "OK - Pick up weapon", "", {}}
+        {"ghost", igi::ModMenuItemKind::Toggle, "Ghost Mode", "", {"false"}, false},
+        {"god", igi::ModMenuItemKind::Toggle, "God Mode", "", {"false"}, false},
+        {"speed", igi::ModMenuItemKind::List, "Player Speed", "", {"1.0x (Normal)", "2.0x (Fast)", "3.0x (Super)"}},
+        {"onehit", igi::ModMenuItemKind::Toggle, "One-Hit Kill", "", {"false"}, false},
     };
     return true;
 }
 
 void simpleMenuAction(igi::Runtime& runtime, std::size_t item, std::string_view value) {
-    if (item == 2) {
-        for (std::size_t i = 0; i < weapons.size(); ++i)
-            if (weapons[i].name == value) { selected = i; break; }
-        return;
-    }
     if (!igi::pauseForMenu(runtime)) return;
-    if (item == 1) {
-        IGI::MISC::FRAMES_SET(value == "30" ? 30 : value == "60" ? 60 : 120);
+
+    if (item == 0) {
+        const bool enabled = (value == "true" || value == "1" || value == "on");
+        applyGhostMode(enabled);
+        igi::log(igi::LogLevel::Info, enabled ? "simple menu: Ghost Mode (Blind AI) enabled"
+                                              : "simple menu: Ghost Mode (Blind AI) disabled");
+    } else if (item == 1) {
+        const bool enabled = (value == "true" || value == "1" || value == "on");
+        applyGodMode(enabled);
+        igi::log(igi::LogLevel::Info, enabled ? "simple menu: God Mode (Invulnerable) enabled"
+                                              : "simple menu: God Mode (Invulnerable) disabled");
+    } else if (item == 2) {
+        float scale = 1.0f;
+        if (value.find("2.0") != std::string_view::npos || value == "2") {
+            scale = 2.0f;
+        } else if (value.find("3.0") != std::string_view::npos || value == "3") {
+            scale = 3.0f;
+        }
+        applyMoveSpeed(scale);
+        igi::log(igi::LogLevel::Info, "simple menu: Player Movement Speed set to " + std::string(value));
     } else if (item == 3) {
-        igi::log(pickup() ? igi::LogLevel::Info : igi::LogLevel::Error, "simple menu: weapon pickup requested");
-    } else if (item == 0) {
-        const bool ok = setWeather(value);
-        igi::log(ok ? igi::LogLevel::Info : igi::LogLevel::Error,
-                 ok ? "simple menu: weather effect updated" : "simple menu: weather effect unavailable");
+        const bool enabled = (value == "true" || value == "1" || value == "on");
+        applyOneHitKill(enabled);
+        igi::log(igi::LogLevel::Info, enabled ? "simple menu: One-Hit Kill enabled"
+                                              : "simple menu: One-Hit Kill disabled");
     }
 }
 
