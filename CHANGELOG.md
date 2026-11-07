@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.2 — Restructure and runtime lifecycle
+
+- Reorganized the codebase into focused `src/config`, `src/logging`,
+  `src/mod_base`, `src/natives`, `src/platform`, `src/runtime`, and `src/ui`
+  modules.
+- Added shared internal-menu hosting for the Basic, Simple, and Advanced mod
+  menus, while keeping each menu’s actions in its demo source.
+- Added C++ formatting, clang-tidy, CTest, Unicorn validation, and GitHub
+  Actions quality checks.
+- Updated the Windows x86 build, deployment, Wine, and injector helpers around
+  the renamed mod artifacts and configuration files.
+- Fixed level switching to follow the game’s native unload/load sequence:
+  select mission, request Flow game event, then delete the current `Game` task.
+- Release injected QVM resources before changing levels so the menu can attach
+  again in the newly loaded mission.
+- Made the configured end key stop the resident host thread after safe cleanup;
+  the start key remains disabled until `igi.exe` exits.
+- Added Simple and Advanced menu screenshots, feature lists, and contributor
+  credits to the README.
+
 ## 0.1 — IGI 1 MVP
 
 - Added Windows x86 internal menu demos, configurable hotkeys, logging, and DLL lifecycle management.

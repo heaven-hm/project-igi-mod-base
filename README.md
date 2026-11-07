@@ -1,10 +1,26 @@
 # Project IGI Mod Base
 
-Version: 0.1
+Version: 0.2
 
 Project IGI Mod Base is a C++ foundation for creating single-player mods and in-game mod menus for Project I.G.I. It provides an in-game menu interface, game native bindings, runtime hooking and memory support, logging, and examples to build on.
 
 The internal in-game menu is implemented. An external DirectX 7/ImGui interface is planned; it is not yet a finished GUI.
+
+## Version 0.2: Restructure
+
+- Reorganized the implementation into focused `src/` modules for configuration,
+  logging, native bindings, runtime hooks, platform hosting, UI, and the shared
+  mod-menu host.
+- Replaced the old SDK include layout with a smaller public mod base and kept
+  menu-specific actions inside `demos/internal/`.
+- Added Basic, Simple, and Advanced internal menu targets that share one
+  game-thread host and typed native helpers.
+- Added formatting, clang-tidy, CTest, and Unicorn verification to the local
+  workflow and GitHub Actions.
+- Fixed level switching to use the game’s Flow request and `Game` cleanup path,
+  releasing injected QVM resources before the new level attaches.
+- Made the configured end key safely stop the resident menu host, preventing
+  the start key from reopening it until `igi.exe` exits.
 
 ## Included mod menus
 
@@ -30,6 +46,13 @@ The internal in-game menu is implemented. An external DirectX 7/ImGui interface 
 
 All controls run through the game-thread menu runtime. The mod menu pauses the
 game while open and restores input when it closes.
+
+### External ImGui Advanced Menu (separate branch)
+
+![ImGui Advanced Menu running in Project I.G.I.](assets/imgui-advanced-mod-menu.png)
+
+This Direct3D 7/ImGui implementation is being tested on its own branch. It is
+not part of `develop` until that branch is merged.
 
 Target: the EU/Chinese Windows x86 IGI 1 executable. Native Windows is
 supported directly. On macOS and Linux, run the same Windows x86 game and DLL

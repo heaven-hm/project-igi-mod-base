@@ -386,9 +386,12 @@ bool prepareMenuForLevelChange() {
     menuRegistration.stop();
     menuCallbacks.reset();
     menuBridge.reset();
-    menuResource.abandon();
-    reopenResource.abandon();
-    closeResource.abandon();
+    if (!menuResource.release())
+        log(LogLevel::Error, "level change: menu resource release failed");
+    if (!reopenResource.release())
+        log(LogLevel::Error, "level change: reopen resource release failed");
+    if (!closeResource.release())
+        log(LogLevel::Error, "level change: close resource release failed");
     menuScreenCreated = false;
     menuScreenAttached = false;
     safeToShutdown.store(true, std::memory_order_release);
