@@ -20,6 +20,11 @@ struct ModMenuItemConfig {
     std::string nativeAction;
     std::vector<std::string> values;
     bool defaultToggle = false;
+    std::size_t defaultSelection = 0;
+    int sliderMinimum = 0;
+    int sliderMaximum = 100;
+    int sliderStep = 1;
+    int sliderDefault = 0;
 };
 
 struct ImGuiMenuConfig {

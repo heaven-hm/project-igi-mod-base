@@ -9,6 +9,11 @@ MenuValues::MenuValues(const MenuConfig &config)
     for (std::size_t i = 0; i < items_.size(); ++i) {
         toggles_[i] = items_[i].defaultToggle;
         committedToggles_[i] = items_[i].defaultToggle;
+        if (items_[i].kind == ModMenuItemKind::List &&
+            items_[i].defaultSelection < items_[i].values.size()) {
+            selected_[i] = items_[i].defaultSelection;
+            committedSelected_[i] = items_[i].defaultSelection;
+        }
     }
 }
 
@@ -53,7 +58,7 @@ bool MenuValues::setToggle(std::size_t item, bool value) noexcept {
 std::size_t MenuValues::choiceCount(std::size_t item) const noexcept {
     if (item >= items_.size() || items_[item].kind != ModMenuItemKind::List)
         return 0;
-    return std::min<std::size_t>(items_[item].values.size(), 64);
+    return items_[item].values.size();
 }
 
 std::optional<std::string_view> MenuValues::choice(std::size_t item,

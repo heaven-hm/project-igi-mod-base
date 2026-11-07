@@ -10,6 +10,7 @@
 #include "ui/menu_manager.hpp"
 #include "ui/mod_menu.hpp"
 
+#include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -92,7 +93,11 @@ void initializeMenuStateBuffers() {
     toggleValues.resize(menuConfig.items.size(), false);
     sliderValues.assign(menuConfig.items.size(), 0);
     for (std::size_t index = 0; index < menuConfig.items.size(); ++index) {
-        toggleValues[index] = menuConfig.items[index].defaultToggle;
+        const auto &item = menuConfig.items[index];
+        toggleValues[index] = item.defaultToggle;
+        sliderValues[index] = item.sliderDefault;
+        if (item.defaultSelection < item.values.size())
+            listSelections[index] = static_cast<int>(item.defaultSelection);
     }
     pauseWhileOpen = menuConfig.imgui.pauseGame;
     lastStatusMessage = "Ready";
@@ -107,14 +112,15 @@ bool populatePortableMenuModel() {
         const auto &item = menuConfig.items[index];
         switch (item.kind) {
         case igi::ModMenuItemKind::List:
-            if (!menuModel->addList(
-                    "main", item.label, item.values, 0, [index](std::size_t selectedIndex) {
-                        if (index < menuConfig.items.size() &&
-                            selectedIndex < menuConfig.items[index].values.size()) {
-                            runModMenu(menuConfig, runtime, index,
-                                       menuConfig.items[index].values[selectedIndex]);
-                        }
-                    })) {
+            if (!menuModel->addList("main", item.label, item.values, item.defaultSelection,
+                                    [index](std::size_t selectedIndex) {
+                                        if (index < menuConfig.items.size() &&
+                                            selectedIndex < menuConfig.items[index].values.size()) {
+                                            runModMenu(
+                                                menuConfig, runtime, index,
+                                                menuConfig.items[index].values[selectedIndex]);
+                                        }
+                                    })) {
                 return false;
             }
             break;
@@ -127,9 +133,14 @@ bool populatePortableMenuModel() {
             }
             break;
         case igi::ModMenuItemKind::Slider:
-            if (!menuModel->addInteger("main", item.label, 0, 0, 100, 1, [index](int value) {
-                    runModMenu(menuConfig, runtime, index, std::to_string(value));
-                })) {
+            if (item.sliderMinimum > item.sliderMaximum || item.sliderStep <= 0 ||
+                item.sliderDefault < item.sliderMinimum || item.sliderDefault > item.sliderMaximum)
+                return false;
+            if (!menuModel->addInteger("main", item.label, item.sliderDefault, item.sliderMinimum,
+                                       item.sliderMaximum, item.sliderStep, [index](int value) {
+                                           runModMenu(menuConfig, runtime, index,
+                                                      std::to_string(value));
+                                       })) {
                 return false;
             }
             break;
@@ -558,7 +569,12 @@ void renderImGuiModWindow() {
                 if (index >= sliderValues.size())
                     sliderValues.resize(menuConfig.items.size(), 0);
                 int value = sliderValues[index];
-                if (ImGui::SliderInt(item.label.c_str(), &value, 0, 100)) {
+                if (ImGui::SliderInt(item.label.c_str(), &value, item.sliderMinimum,
+                                     item.sliderMaximum)) {
+                    const int offset = value - item.sliderMinimum;
+                    value = item.sliderMinimum +
+                            ((offset + item.sliderStep / 2) / item.sliderStep) * item.sliderStep;
+                    value = std::clamp(value, item.sliderMinimum, item.sliderMaximum);
                     sliderValues[index] = value;
                     queueMenuAction(index, std::to_string(value));
                 }

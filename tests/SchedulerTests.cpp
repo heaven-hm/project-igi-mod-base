@@ -297,6 +297,15 @@ int main() {
     assert((filledChoices == std::vector<std::string>{"off", "on"}));
     assert(!menuValues.fill(1, [](std::string_view, int) {}));
     assert(!menuValues.fill(0, {}));
+    auto extendedChoices = modConfig;
+    extendedChoices.items[0].values.resize(65);
+    for (std::size_t index = 0; index < extendedChoices.items[0].values.size(); ++index)
+        extendedChoices.items[0].values[index] = "choice-" + std::to_string(index);
+    extendedChoices.items[0].defaultSelection = 64;
+    igi::MenuValues extendedValues(extendedChoices);
+    assert(extendedValues.choiceCount(0) == 65);
+    assert(extendedValues.selected(0) == 64);
+    assert(extendedValues.choice(0, 64) == "choice-64");
     std::string selectedWeather;
     igi::MenuScriptBridge listBridge(modConfig, [&](std::size_t item, std::string_view value) {
         if (item == 0) selectedWeather = value;
