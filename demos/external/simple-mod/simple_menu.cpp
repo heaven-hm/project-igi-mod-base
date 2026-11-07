@@ -80,7 +80,7 @@ bool configureSimpleMenu(igi::MenuConfig &config) {
     g_selectedWeapon = 0;
 
     config.items = {
-        {"weather", igi::ModMenuItemKind::List, "Weather", "", {"Off", "Rain"}},
+        {"weather", igi::ModMenuItemKind::List, "Weather", "", {"Off", "Rain", "Snow"}},
         {"fps", igi::ModMenuItemKind::List, "FPS", "", {"30", "60", "120"}},
         std::move(weaponList),
         {"pickup", igi::ModMenuItemKind::Action, "Pick Up Selected Weapon", "", {}},
@@ -124,7 +124,7 @@ void simpleMenuAction(const igi::MenuConfig &config, igi::Runtime &runtime, std:
         return;
     }
 
-    if (id == "weather") { // Weather: Off, Rain
+    if (id == "weather") { // Weather: Off, Rain, Snow
         igi::setWeather(runtime, value);
     } else if (id == "fps") { // FPS: 30, 60, 120
         igi::setFps(runtime, value);

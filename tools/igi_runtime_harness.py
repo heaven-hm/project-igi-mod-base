@@ -933,8 +933,11 @@ def run_menu_helpers_check(args, emu_module) -> int:
         'Task_New(',
         'RainEffect',
         'IGIModPrecipitation',
+        "IGI::LEVEL::GET",
         "IGI::TASK::FIND_BY_ID",
         "IGI::TASK::DELETE_TASK",
+        "Param_GetChangedEvent",
+        "Task_Broadcast",
         "kModPrecipitationTaskId = 4095",
     )
     missing_weather_lifecycle = [

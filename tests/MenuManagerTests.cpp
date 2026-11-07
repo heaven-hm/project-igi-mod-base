@@ -78,7 +78,7 @@ void rainEffectCommandCompilerTest() {
     std::string error;
     const std::string command =
         "Task_New(4095, \"RainEffect\", \"IGIModPrecipitation\", FALSE, 50.0, 20.0, "
-        "\"TRUE\\n\", 0.06);";
+        "\"TRUE\\n\", 0.3125);";
     assert(igi::compileIgiMenuCommandScript(command, qvm, error));
     assert(!qvm.empty());
 }
