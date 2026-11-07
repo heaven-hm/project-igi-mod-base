@@ -12,6 +12,59 @@
 #include <vector>
 
 namespace igi {
+namespace {
+constexpr int kModPrecipitationTaskId = 4095;
+
+IGI::Game *g_precipitationGame = nullptr;
+bool g_precipitationActive = false;
+
+bool removePrecipitationTask() {
+    auto *game = IGI::GAME::GET();
+    if (!g_precipitationActive || !game || game != g_precipitationGame) {
+        g_precipitationActive = false;
+        g_precipitationGame = nullptr;
+        return true;
+    }
+
+    auto *task = IGI::TASK::FIND_BY_ID(kModPrecipitationTaskId);
+    if (task)
+        IGI::TASK::DELETE_TASK(task);
+    g_precipitationActive = false;
+    g_precipitationGame = nullptr;
+    return true;
+}
+
+bool createPrecipitationTask(std::string_view weather) {
+    auto *game = IGI::GAME::GET();
+    if (!game)
+        return false;
+
+    if (!removePrecipitationTask())
+        return false;
+    if (IGI::TASK::FIND_BY_ID(kModPrecipitationTaskId)) {
+        log(LogLevel::Error, "weather: reserved precipitation task ID is already in use");
+        return false;
+    }
+
+    const bool snow = weather == "Snow" || weather == "snow";
+    const std::string script = "Task_New(" + std::to_string(kModPrecipitationTaskId) +
+                               ", \"RainEffect\", \"IGIModPrecipitation\", " +
+                               (snow ? "FALSE" : "TRUE") + ", 50.0, 20.0, \"TRUE\\n\", 0.06);";
+    if (!executeMenuCommand(script)) {
+        log(LogLevel::Error, "weather: RainEffect task creation command failed");
+        return false;
+    }
+
+    if (!IGI::TASK::FIND_BY_ID(kModPrecipitationTaskId)) {
+        log(LogLevel::Error, "weather: RainEffect task was not registered");
+        return false;
+    }
+    g_precipitationGame = game;
+    g_precipitationActive = true;
+    return true;
+}
+} // namespace
+
 bool requireLiveGameThread(Runtime &runtime) {
     if (runtime.allowDirectNativeCallbackThread())
         return true;
@@ -46,17 +99,27 @@ bool refreshLiveMenu(Runtime &runtime, std::string_view effect) {
 bool setWeather(Runtime &runtime, std::string_view weather) {
     if (weather == "Off" || weather == "off" || weather == "false") {
         const char off[] = {'r', 0, '\0'};
+        (void)removePrecipitationTask();
         IGI::GAME::SET_RAINING(off);
         IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, "IGI MOD: Weather set to Off");
-        log(LogLevel::Info, "weather set to Off via IGI::GAME::SET_RAINING");
+        log(LogLevel::Info, "weather: RainEffect removed and Game_SetRaining disabled");
         (void)refreshLiveMenu(runtime, "weather off");
         return true;
     }
+
+    const bool snow = weather == "Snow" || weather == "snow";
+    if (!createPrecipitationTask(weather)) {
+        IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, "IGI MOD: Weather effect failed");
+        return false;
+    }
     const char code[] = {'r', 1, '\0'};
     IGI::GAME::SET_RAINING(code);
-    IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, "IGI MOD: Rain enabled");
-    log(LogLevel::Info, "rain enabled via IGI::GAME::SET_RAINING");
-    (void)refreshLiveMenu(runtime, "rain");
+    const char *label = snow ? "Snow" : "Rain";
+    IGI::MISC::STATUS_MESSAGE_SHOW(nullptr,
+                                   (std::string("IGI MOD: ") + label + " enabled").c_str());
+    log(LogLevel::Info,
+        std::string("weather: ") + label + " created through the retail RainEffect task lifecycle");
+    (void)refreshLiveMenu(runtime, snow ? "snow" : "rain");
     return true;
 }
 
@@ -209,6 +272,7 @@ bool changeLevel(Runtime &runtime, int levelId) {
     auto *game = IGI::GAME::GET();
     if (!game)
         return false;
+    (void)removePrecipitationTask();
     if (!prepareMenuForLevelChange()) {
         log(LogLevel::Error, "level change: injected menu cleanup failed");
         return false;

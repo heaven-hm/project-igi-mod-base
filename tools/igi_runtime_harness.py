@@ -929,10 +929,22 @@ def run_source_scan(args, emu_module) -> int:
 def run_menu_helpers_check(args, emu_module) -> int:
     source = MENU_HELPERS.read_text(encoding="utf-8")
     host_source = MENU_HOST.read_text(encoding="utf-8")
-    forbidden = ("temp_rain.qvm", "RainEffect", "Task_New(")
-    present = [token for token in forbidden if token in source]
-    if present:
-        raise RuntimeError(f"menu helpers create a weather task: {', '.join(present)}")
+    required_weather_lifecycle = (
+        'Task_New(',
+        'RainEffect',
+        'IGIModPrecipitation',
+        "IGI::TASK::FIND_BY_ID",
+        "IGI::TASK::DELETE_TASK",
+        "kModPrecipitationTaskId = 4095",
+    )
+    missing_weather_lifecycle = [
+        token for token in required_weather_lifecycle if token not in source
+    ]
+    if missing_weather_lifecycle:
+        raise RuntimeError(
+            "menu helpers do not create and clean up the retail RainEffect task: "
+            + ", ".join(missing_weather_lifecycle)
+        )
     native_call = source.find("IGI::GAME::SET_RAINING")
     if native_call < 0:
         raise RuntimeError("menu helpers do not call IGI::GAME::SET_RAINING")
@@ -964,7 +976,7 @@ def run_menu_helpers_check(args, emu_module) -> int:
     result = runtime.verify_raining(raining)
     if not result["ok"]:
         raise RuntimeError(f"Game_SetRaining emulator check failed: {result['error']}")
-    print("PASS menu helpers use Game_SetRaining without creating a weather task")
+    print("PASS menu helpers create and clean up the retail RainEffect task")
     print("PASS Game_SetRaining toggled gRaining on and off in Unicorn")
     print("PASS live effects use the typed MenuManager_Refresh wrapper")
     print("PASS level change uses the engine Flow request and Game task unload sequence")

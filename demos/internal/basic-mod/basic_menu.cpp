@@ -6,7 +6,7 @@
 bool configureBasicMenu(igi::MenuConfig &config) {
     config.title = "Basic Mod Menu";
     config.items = {
-        {"weather", igi::ModMenuItemKind::List, "Weather", "", {"Off", "Rain"}},
+        {"weather", igi::ModMenuItemKind::List, "Weather", "", {"Off", "Rain", "Snow"}},
         {"fps", igi::ModMenuItemKind::List, "FPS", "", {"30", "60", "120"}},
         {"music", igi::ModMenuItemKind::List, "Music volume", "", {"Normal", "Low", "Mute"}},
         {"ammo", igi::ModMenuItemKind::Action, "Unlimited ammo", "", {}},

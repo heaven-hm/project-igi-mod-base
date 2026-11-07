@@ -28,7 +28,7 @@ The internal in-game menu is implemented. An external DirectX 7/ImGui interface 
 
 ### Simple Mod Menu
 
-- Rain state toggle and frame-rate selection (30, 60, or 120 FPS)
+- Live rain, snow, or off selection and frame-rate selection (30, 60, or 120 FPS)
 - Weapon list and pickup for Glock 17, MP5SD, UZI, M16A2, AK-47, Dragunov SVD, Minimi, and Spas 12
 - First-person or third-person camera view
 - Level selection for levels 1–14
@@ -161,9 +161,13 @@ injected menu before the game destroys the old level. AI or building
 creation/removal needs a verified object-specific native lifecycle; do not use
 raw task memory or a generic task deletion helper for it.
 
-`GAME::SET_RAINING` only changes the game's `gRaining` state. A level's own
-`RainEffect` task owns visible precipitation; there is no verified global
-native for creating, deleting, or converting that level-owned task into snow.
+`GAME::SET_RAINING` only changes the game's `gRaining` state. Visible
+precipitation belongs to the level's `RainEffect` task. `setWeather()` follows
+the retail level-QVM lifecycle: it creates `RainEffect` through `Task_New`,
+tracks the injected task by an unused level ID, and deletes only that task when
+Weather is set to Off or the level changes. Its `Is Rain` parameter selects
+rain (`TRUE`) or snow (`FALSE`); only one injected precipitation effect exists
+at a time.
 
 ## Config
 

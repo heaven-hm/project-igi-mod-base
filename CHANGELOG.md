@@ -19,6 +19,8 @@
   the start key remains disabled until `igi.exe` exits.
 - Added Simple and Advanced menu screenshots, feature lists, and contributor
   credits to the README.
+- Fixed visible weather: shared menu helpers now create the retail `RainEffect`
+  level task for rain or snow and remove their own task when weather is disabled.
 
 ## 0.1 — IGI 1 MVP
 
