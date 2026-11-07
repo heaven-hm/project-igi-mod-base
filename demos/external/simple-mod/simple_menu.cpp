@@ -11,7 +11,7 @@
 #include "natives/mvp_natives.hpp"
 #include "logging/logging.hpp"
 #include "ui/mod_menu.hpp"
-#include "../../internal/helpers/menu_helpers.hpp"
+#include "../../helpers/menu_helpers.hpp"
 
 namespace {
 
