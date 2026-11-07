@@ -171,9 +171,10 @@ void refreshControlValuesFromGame() {
             if (index < sliderValues.size() && parseInteger(*current, value)) {
                 const int offset =
                     std::clamp(value, item.sliderMinimum, item.sliderMaximum) - item.sliderMinimum;
-                sliderValues[index] =
+                sliderValues[index] = std::clamp(
                     item.sliderMinimum +
-                    ((offset + item.sliderStep / 2) / item.sliderStep) * item.sliderStep;
+                        ((offset + item.sliderStep / 2) / item.sliderStep) * item.sliderStep,
+                    item.sliderMinimum, item.sliderMaximum);
             }
             break;
         }
