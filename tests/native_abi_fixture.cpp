@@ -1,9 +1,9 @@
-#include "igi_sdk/IGI.hpp"
-#include "igi_sdk/logging/logging.hpp"
-#include "igi_sdk/natives/igi1_native_registry.hpp"
-#include "igi_sdk/natives/native_caller.hpp"
-#include "igi_sdk/natives/native_catalogue.hpp"
-#include "igi_sdk/runtime/scheduler.hpp"
+#include "natives/mvp_natives.hpp"
+#include "logging/logging.hpp"
+#include "natives/igi_native_registry.hpp"
+#include "natives/native_caller.hpp"
+#include "natives/native_catalogue.hpp"
+#include "runtime/scheduler.hpp"
 
 #include <new>
 
@@ -48,7 +48,7 @@ IGI_ABI_EXPORT int igi_sdk_probe_initialize() {
     }
     scheduler->bindGameThread();
     caller = new (callerStorage) igi::NativeCaller(*catalogue, *scheduler, true);
-    igi::bindIgi1NativeCaller(caller);
+    igi::bindIgiNativeCaller(caller);
     igi::setLogLevel(igi::LogLevel::Critical);
     return 1;
 }

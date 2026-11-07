@@ -24,7 +24,22 @@ ROOT = Path(__file__).resolve().parents[1]
 if not (ROOT / "data/igi-natives.csv").is_file():
     print("SKIP: local IGI native catalogue is unavailable")
     raise SystemExit(77)
-RE_ROOT = Path(os.environ.get("IGI_RE_ROOT", ROOT.parent / "IGI-RE"))
+
+
+def discover_re_root() -> Path:
+    configured = os.environ.get("IGI_RE_ROOT")
+    candidates = [
+        Path(configured).expanduser() if configured else ROOT.parent / "IGI-RE",
+        ROOT.parent / "IGI-RE",
+        Path.home() / "Documents" / "Code" / "IGI-RE",
+    ]
+    for candidate in candidates:
+        if (candidate / "tests" / "emu.py").is_file():
+            return candidate
+    return candidates[0]
+
+
+RE_ROOT = discover_re_root()
 EXE = os.environ.get("IGI_EXE", "")
 
 if not EXE:

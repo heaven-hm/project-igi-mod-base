@@ -1,6 +1,6 @@
-#include "igi_sdk/config/menu_config.hpp"
-#include "igi_sdk/ui/menu_manager.hpp"
-#include "igi_sdk/runtime/scheduler.hpp"
+#include "config/menu_config.hpp"
+#include "ui/menu_manager.hpp"
+#include "runtime/scheduler.hpp"
 
 #include <cassert>
 #include <cstdio>

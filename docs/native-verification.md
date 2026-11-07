@@ -45,7 +45,7 @@ menu exposes controls with an implemented adapter. Its weather adapter passes
 `weather[1]` read. The ammo control is a one-way action. Free camera,
 invulnerability, speed, and weapon-grant controls are outside this MVP menu.
 
-The automated executable gate is `tools/verify_igi1_hook.sh`. It verifies the
+The automated executable gate is `tools/verify_igi_hook.sh`. It verifies the
 target hash and the prologues for `Game_RunHandler` (`0x00416260`),
 `Flow_RunHandler` (`0x00402260`), and `Game_Update` (`0x00401050`).
 

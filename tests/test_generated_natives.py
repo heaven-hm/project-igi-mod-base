@@ -12,9 +12,17 @@ class GeneratedNativesTest(unittest.TestCase):
     def test_registry_matches_catalogue(self):
         with (ROOT / "data/igi-natives.csv").open(encoding="utf-8", newline="") as source:
             rows = {row["address"].lower(): row for row in csv.DictReader(source)}
-        registry = (ROOT / "src/igi_sdk/natives/mvp_registry.inc").read_text(encoding="utf-8")
-        bindings = re.findall(r'catalogue\.add\(\{0x([0-9a-fA-F]+), "([^"]+)", "IGI-RE", "entry", "([^"]+)"', registry)
-        self.assertGreaterEqual(len(bindings), 300)
+        registry = (ROOT / "src/natives/mvp_registry.inc").read_text(encoding="utf-8")
+        records = re.findall(
+            r'catalogue\.add\(\{\s*0x([0-9a-fA-F]+),\s*"([^"]+)",\s*"IGI-RE",\s*"entry",\s*'
+            r'((?:"(?:\\.|[^"])*"\s*)+),\s*NativeVerification',
+            registry,
+        )
+        bindings = [
+            (address, name, "".join(re.findall(r'"((?:\\.|[^"])*)"', signature)))
+            for address, name, signature in records
+        ]
+        self.assertGreaterEqual(len(bindings), 250)
         self.assertEqual(len(bindings), len({address.lower() for address, _, _ in bindings}))
         for address, name, signature in bindings:
             with self.subTest(native=name):

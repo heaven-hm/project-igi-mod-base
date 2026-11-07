@@ -1,16 +1,14 @@
 # IGI 1 MVP architecture
 
-Public headers are grouped by responsibility using the module paths
-`igi_sdk/ui`, `igi_sdk/runtime`, `igi_sdk/natives`, and `igi_sdk/logging`.
-Implementations use the same layout under `src/igi_sdk`, so include paths and
-source ownership are easy to discover on both case-sensitive and
-case-insensitive filesystems.
+Headers and implementations are grouped by responsibility under `src/`,
+including `src/ui`, `src/runtime`, `src/natives`, and `src/logging`. The shared
+menu host lives in `src/mod_base`; mods include `natives/mvp_natives.hpp` directly.
 
 ## Source roles
 
 | Source | Role in this SDK | Current treatment |
 | --- | --- | --- |
-| `project-igi-natives` | historical design input | Not copied into the build; the active SDK has one `include/igi_sdk` + `src/igi_sdk` implementation tree. |
+| `project-igi-natives` | historical design input | Not copied into the build; the active implementation is grouped under `src/`. |
 | Neonix Modding Team `IGI-RE` | IGI 1 native address/name/signature research | Imported as catalogued metadata only; no implementation source is compiled. |
 | BigBaseV2 | runtime, script-scheduler, hook/lifecycle design reference | Architectural reference only; no code copied. |
 | GTLibCpp | optional generic utility reference | Not linked or exposed; its process-memory surface conflicts with the SDK's native-first public boundary. |

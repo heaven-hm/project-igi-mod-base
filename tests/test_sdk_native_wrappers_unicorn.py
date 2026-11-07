@@ -8,7 +8,22 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-RE_ROOT = Path(os.environ.get("IGI_RE_ROOT", ROOT.parent / "IGI-RE"))
+
+
+def discover_re_root() -> Path:
+    configured = os.environ.get("IGI_RE_ROOT")
+    candidates = [
+        Path(configured).expanduser() if configured else ROOT.parent / "IGI-RE",
+        ROOT.parent / "IGI-RE",
+        Path.home() / "Documents" / "Code" / "IGI-RE",
+    ]
+    for candidate in candidates:
+        if (candidate / "tests" / "emu.py").is_file():
+            return candidate
+    return candidates[0]
+
+
+RE_ROOT = discover_re_root()
 EXE = os.environ.get("IGI_EXE", "")
 DLL = os.environ.get("IGI_SDK_TEST_DLL", "") or (sys.argv[1] if len(sys.argv) > 1 else "")
 
@@ -31,7 +46,7 @@ spec.loader.exec_module(emu_module)
 
 CASES = [
     ("FRAMES_SET", 0x00402820, "igi_sdk_probe_frames_set", [37], None),
-    ("SET_RAINING", 0x00416110, "igi_sdk_probe_set_raining", [b"rain\0"], None),
+    ("SET_RAINING", 0x00416110, "igi_sdk_probe_set_raining", [b"\0\x01"], None),
     ("SET_UNLIMITED_AMMO", 0x00410360, "igi_sdk_probe_unlimited_ammo", [], None),
     ("SET_DISPLAY_MODE", 0x00416010, "igi_sdk_probe_display_mode", [], None),
     ("MUSIC_SET_VOLUME", 0x00495E70, "igi_sdk_probe_music_volume", [0.5, 0.75], None),

@@ -42,14 +42,14 @@ set "ARTIFACT_DIR=%TEMP%\igi-live-validation"
 if not exist "%ARTIFACT_DIR%" mkdir "%ARTIFACT_DIR%"
 
 echo ==^> Windows x86 build
-cmake --build "%BUILD_WIN32%" --parallel --target igi_basic_mod_menu igi1_injector igi1_keypress
+cmake --build "%BUILD_WIN32%" --parallel --target igi_basic_mod_menu igi_injector igi_keypress
 if errorlevel 1 (
     echo error: build failed 1>&2
     exit /b 1
 )
 copy /Y "%BUILD_WIN32%\igi-basic-mod-internal.dll" "%GAME_DIR%\igi-basic-mod-internal.dll" >nul
-copy /Y "%BUILD_WIN32%\IGI1-Injector.exe" "%GAME_DIR%\IGI-Injector.exe" >nul
-copy /Y "%BUILD_WIN32%\IGI1-Keypress.exe" "%GAME_DIR%\IGI1-Keypress.exe" >nul
+copy /Y "%BUILD_WIN32%\IGI-Injector.exe" "%GAME_DIR%\IGI-Injector.exe" >nul
+copy /Y "%BUILD_WIN32%\IGI-Keypress.exe" "%GAME_DIR%\IGI-Keypress.exe" >nul
 
 for /L %%A in (1,1,%ATTEMPTS%) do (
     echo ==^> Native live attempt %%A/%ATTEMPTS%
@@ -134,9 +134,9 @@ if "!INJECTED!"=="0" (
 )
 
 rem Dismiss the intro/cutscene, then open the mod menu.
-"%GAME_DIR%\IGI1-Keypress.exe" --pid "%WIN_PID%" escape >nul 2>nul
+"%GAME_DIR%\IGI-Keypress.exe" --pid "%WIN_PID%" escape >nul 2>nul
 ping -n 2 127.0.0.1 >nul
-"%GAME_DIR%\IGI1-Keypress.exe" --pid "%WIN_PID%" f5 >nul 2>nul
+"%GAME_DIR%\IGI-Keypress.exe" --pid "%WIN_PID%" f5 >nul 2>nul
 ping -n 6 127.0.0.1 >nul
 
 rem Health check: game alive AND all three SDK markers present.
@@ -166,7 +166,7 @@ if not "%ALIVE%%MARK_AUTOSTART%%MARK_HOOK%%MARK_MENU%"=="1111" (
 echo PASS: game stayed live and demo mod-menu screen attached ^(screen_id=990^).
 
 rem End-key health check: shutdown must not take the game down with it.
-"%GAME_DIR%\IGI1-Keypress.exe" --pid "%WIN_PID%" end >nul 2>nul
+"%GAME_DIR%\IGI-Keypress.exe" --pid "%WIN_PID%" end >nul 2>nul
 ping -n 3 127.0.0.1 >nul
 tasklist /FI "IMAGENAME eq igi.exe" /FO CSV /NH 2>nul | findstr /I "igi.exe" >nul
 if errorlevel 1 (

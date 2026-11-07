@@ -1,0 +1,9 @@
+---
+Checks: >
+  -*,
+  clang-diagnostic-*,
+  clang-analyzer-*
+WarningsAsErrors: ''
+HeaderFilterRegex: '(^|.*/)src/.*'
+FormatStyle: file
+...
