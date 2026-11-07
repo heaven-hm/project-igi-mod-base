@@ -149,16 +149,13 @@ bool installMenuScriptCallbacks() {
             runModMenu(menuConfig, runtime, item, value);
         },
         [] {
-            if (!igi::resumeFromMenu(runtime)) {
-                igi::log(igi::LogLevel::Error,
-                         "internal menu close rejected: unable to resume game");
+            if (pendingTransition != MenuTransition::None)
                 return;
-            }
-            menuScreenAttached = false;
-            if (!shutdownPending.load(std::memory_order_acquire))
-                safeToShutdown.store(true, std::memory_order_release);
+            pendingTransition = MenuTransition::Closing;
+            transitionDeadlineFrame = runtime.scheduler().gameHookInvocationCount() + 120;
+            safeToShutdown.store(false, std::memory_order_release);
             igi::log(igi::LogLevel::Info,
-                     "internal menu close: game resumed and human input enabled");
+                     "internal menu close: awaiting retail screen transition before resuming");
         },
         /*deferUntilApply=*/true);
     menuCallbacks = std::make_unique<igi::MenuScriptCallbacks>(*menuBridge, script);
@@ -300,7 +297,7 @@ bool rebuildMenuResources() {
         !igi::compileIgiMenuCommandScript("MenuManager_RequestScreen(" +
                                               std::to_string(menuConfig.screenId) + ", FALSE);",
                                           reopen, error) ||
-        !igi::compileIgiMenuCommandScript("MenuManager_LeaveMenus(900, 9);", close, error)) {
+        !igi::compileIgiMenuCommandScript("MenuManager_PopScreen(FALSE);", close, error)) {
         igi::log(igi::LogLevel::Error,
                  std::string("internal menu resource compilation failed: ") + error);
         return false;
