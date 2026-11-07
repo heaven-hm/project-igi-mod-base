@@ -20,12 +20,12 @@ def level_value(value):
 
 def configured_key(game_dir):
     config = configparser.ConfigParser(interpolation=None, strict=False)
-    config.read(game_dir / "project-igi-sdk-config.ini", encoding="utf-8")
+    config.read(game_dir / "project-igi-mod-config.ini", encoding="utf-8")
     key = config.get("mod_menu", "start_key", fallback="").strip().lower()
     if not key:
         key = config.get("mod_menu", "hotkey", fallback="").strip().lower()
     if not key:
-        raise ValueError("project-igi-sdk-config.ini does not specify [mod_menu] start_key; use --key")
+        raise ValueError("project-igi-mod-config.ini does not specify [mod_menu] start_key; use --key")
     return key
 
 

@@ -25,7 +25,7 @@ What this does not prove
 Usage
 -----
     export IGI_EXE=/path/to/igi.exe
-    export IGI_DLL=/path/to/IGI-MenuManager-Internal.dll
+    export IGI_DLL=/path/to/igi-basic-mod-internal.dll
     python3 tools/igi_runtime_harness.py [--frames N] [--lenient]
 
 Exit codes: 0 success, 77 skipped (missing inputs), 1 failure.
@@ -45,7 +45,7 @@ RE_ROOT = Path(os.environ.get("IGI_RE_ROOT", ROOT.parent / "IGI-RE"))
 NATIVES_HEADER = ROOT / "include" / "igi_sdk" / "natives" / "mvp_natives.hpp"
 NATIVES_SOURCE = ROOT / "src" / "igi_sdk" / "natives" / "mvp_natives.cpp"
 EXE = os.environ.get("IGI_EXE", "")
-DLL = os.environ.get("IGI_DLL", str(ROOT / "build-win32-release" / "IGI-MenuManager-Internal.dll"))
+DLL = os.environ.get("IGI_DLL", str(ROOT / "build-win32-release" / "igi-basic-mod-internal.dll"))
 
 # Retail IGI 1 x86 addresses this harness drives.
 DISPLAY_ADD_FRAME_CALLBACK = 0x004916C0
@@ -881,7 +881,7 @@ def main() -> int:
     parser.add_argument("--frames", type=int, default=30, help="frames to dispatch (default 30)")
     parser.add_argument("--lenient", action="store_true", help="treat unknown imports as zero-return")
     parser.add_argument("--exe", default=EXE, help="path to retail igi.exe")
-    parser.add_argument("--dll", default=DLL, help="path to IGI-MenuManager-Internal.dll")
+    parser.add_argument("--dll", default=DLL, help="path to igi-basic-mod-internal.dll")
     parser.add_argument(
         "--path",
         type=Path,

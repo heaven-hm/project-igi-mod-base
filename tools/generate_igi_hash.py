@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Convert the IGI-RE symbol table into HASH namespace constants.
 
-Reads data/IGI1/neonix-igi-re-names.tsv (address, name, evidence, kind) from the
+Reads data/igi-natives.csv (address, name, evidence, kind, signature) from the
 IGI-RE project and writes include/igi_sdk/natives/igi_re/hashes.hpp:
 
     namespace HASH {
@@ -16,10 +16,11 @@ Duplicate names are skipped. Run from the repository root:
 """
 
 import sys
+import csv
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-TSV = ROOT / "data/IGI1/neonix-igi-re-names.tsv"
+TSV = ROOT / "data/igi-natives.csv"
 OUT = ROOT / "include/igi_sdk/natives/igi_re/hashes.hpp"
 
 
@@ -32,8 +33,7 @@ def main() -> int:
     seen = set()
     skipped = 0
     with TSV.open(encoding="utf-8") as table:
-        for line in table:
-            row = line.rstrip("\n").split("\t")
+        for row in csv.reader(table):
             if len(row) < 2:
                 continue
             address, name = row[0].strip(), row[1].strip()

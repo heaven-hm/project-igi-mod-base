@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Generate typed IGI 1 bindings from recovered IGI-RE declarations."""
 import json
+import csv
 import re
 from collections import Counter
 from pathlib import Path
@@ -129,9 +130,8 @@ def select_mvp(rows):
 
 
 def main():
-    rows = [line.split('\t', 4) for line in
-            (ROOT/'data/IGI1/neonix-igi-re-signatures.tsv').read_text().splitlines()
-            if line and not line.startswith('#')]
+    with (ROOT/'data/igi-natives.csv').open(encoding='utf-8', newline='') as source:
+        rows = list(csv.reader(source))[1:]
     selected = select_mvp(rows)
     hash_counts = Counter(item['hash'] for item in selected)
     for item in selected:
@@ -209,8 +209,7 @@ def main():
             '} // namespace IGI', '#undef NATIVE_INVOKE']
     outputs = {'include/igi_sdk/natives/mvp_natives.hpp': header,
                'src/igi_sdk/natives/mvp_natives.cpp': cpp,
-               'src/igi_sdk/natives/mvp_registry.inc': records,
-               'data/IGI1/mvp-300.tsv': manifest}
+               'src/igi_sdk/natives/mvp_registry.inc': records}
     for path, lines in outputs.items():
         (ROOT/path).write_text('\n'.join(lines)+'\n')
     print(f'Generated {len(selected)} typed natives:', dict(Counter(i['domain'] for i in selected)))

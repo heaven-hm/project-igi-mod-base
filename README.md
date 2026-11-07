@@ -25,6 +25,8 @@ Out of scope: multiplayer, trainers, memory editors, process scanners.
 - A 32-bit mingw-w64 toolchain (`i686-w64-mingw32-g++`), or a 32-bit MSVC toolset
 - Python 3 (used to regenerate the hash table at build time)
 
+The `data/` directory is local-only and ignored by Git. Builds use the checked-in native bindings when it is absent; regenerating bindings and running catalogue comparison tests requires the local IGI1 data files.
+
 ## Build
 
 Everything is built by `tools/build-win32-dll.sh`. It sets the C, C++ and RC
@@ -52,7 +54,7 @@ Outputs land in `build-win32-release/` (`build-win32-debug/` with `--debug`):
 
 | Artifact                       | Role                                                |
 | ------------------------------ | --------------------------------------------------- |
-| `IGI-MenuManager-Internal.dll` | The mod menu                                        |
+| `igi-basic-mod-internal.dll` | The mod menu                                        |
 | `IGI1-Injector.exe`            | Loads the DLL into a running `igi.exe`              |
 | `IGI1-Keypress.exe`            | Sends keys to the Wine/Windows desktop during tests |
 
@@ -83,7 +85,7 @@ The full symbol table is also available as `IGI::HASH::<Name>` constants.
 
 ## Config
 
-`project-igi-sdk-config.ini` sits beside `igi.exe` and is read on startup.
+`project-igi-mod-config.ini` sits beside `igi.exe` and is read on startup.
 
 ```ini
 [mod_menu]
@@ -98,6 +100,7 @@ width=755
 height=500
 hook=display_add_frame_callback
 log_level=debug           ; trace|debug|info|warning|error|critical
+log_file=project-igi-mod.log
 console=true
 ```
 
@@ -106,10 +109,11 @@ console=true
 read these keys from this file; nothing hardcodes a hotkey.
 
 Each menu DLL owns its items in C++; `[mod_menu.items]` is not read.
+Set `log_file` under `[mod_menu]` to a filename beside `igi.exe`; both Debug and Release builds use it. Directory paths are not accepted.
 
 ## Create, build and run a menu
 
-Use `demos/simple-menu/simple_menu.cpp` as the menu template. Edit its items
+Use `demos/internal/simple-mod/simple_menu.cpp` as the menu template. Edit its items
 and typed `IGI::` native actions, then build `igi_simple_mod_menu`.
 
 On native Windows, launch `igi.exe` normally and inject the built DLL with
@@ -123,7 +127,7 @@ the DLL.
 export IGI_GAME_DIR=/path/to/IGI
 export IGI_WINEPREFIX=/path/to/wine-prefix
 export WINE_BIN=/path/to/wine
-cp demos/internal-menumanager/config.ini "$IGI_GAME_DIR/project-igi-sdk-config.ini"
+cp demos/internal/runtime/config.ini "$IGI_GAME_DIR/project-igi-mod-config.ini"
 ```
 
 Build and check the exact menu source and DLL:
@@ -131,27 +135,27 @@ Build and check the exact menu source and DLL:
 ```sh
 tools/build-win32-dll.sh --debug --target igi_simple_mod_menu
 IGI_RE_ROOT=/path/to/IGI-RE python3 tools/igi_runtime_harness.py \
-  --path demos/simple-menu/simple_menu.cpp --exe "$IGI_GAME_DIR/igi.exe" \
-  --dll build-win32-debug/igi-simple-mod-menu.dll
+  --path demos/internal/simple-mod/simple_menu.cpp --exe "$IGI_GAME_DIR/igi.exe" \
+  --dll build-win32-debug/igi-simple-mod-internal.dll
 ```
 
 Launch, inject and open the menu automatically:
 
 ```sh
-python3 tools/run_igi_wine.py level9 build-win32-debug/igi-simple-mod-menu.dll \
+python3 tools/run_igi_wine.py level9 build-win32-debug/igi-simple-mod-internal.dll \
   --attempts 10 --press-menu-key
 ```
 
 The launcher sends Escape, injects the DLL, presses the configured start key,
 and stops on its first successful injection. It retries failed launches up to
 `--attempts`. Logs are in `/private/tmp/igi-live-validation/` and
-`$IGI_GAME_DIR/project-igi-sdk.log`.
+`$IGI_GAME_DIR/project-igi-mod.log` (or the filename set by `log_file`).
 
 For an already-running game, inject without launching a new level:
 
 ```sh
 WINEPREFIX="$IGI_WINEPREFIX" tools/wine_igi_inject.sh \
-  build-win32-debug/igi-simple-mod-menu.dll igi.exe
+  build-win32-debug/igi-simple-mod-internal.dll igi.exe
 ```
 
 ## Verification
@@ -160,7 +164,7 @@ Before injecting a mod menu, run the Unicorn x86 emulator with the source and
 the exact DLL you built:
 
 ```sh
-IGI_RE_ROOT=/path/to/IGI-RE python3 tools/igi_runtime_harness.py --path demos/simple-menu/simple_menu.cpp --exe /path/to/igi.exe --dll build-win32-debug/igi-simple-mod-menu.dll
+IGI_RE_ROOT=/path/to/IGI-RE python3 tools/igi_runtime_harness.py --path demos/internal/simple-mod/simple_menu.cpp --exe /path/to/igi.exe --dll build-win32-debug/igi-simple-mod-internal.dll
 ```
 
 The scan maps `IGI::DOMAIN::NAME` calls to their declared native signatures and
@@ -193,12 +197,12 @@ flowchart TD
     A[DLLMain] --> B[igiSdkMainThread]
     B --> C[Common menu runtime]
     C --> D{Menu DLL}
-    D --> E[IGI-MenuManager-Internal]
-    D --> F[igi-simple-mod-menu]
-    D --> G[igi-basic-mod-menu]
-    E --> H[Default menu actions]
+    D --> E[igi-basic-mod-internal]
+    D --> F[igi-simple-mod-internal]
+    D --> G[igi-advanced-mod-internal]
+    E --> H[Basic menu actions]
     F --> I[Weather, FPS, weapons]
-    G --> J[FPS, music, unlimited ammo]
+    G --> J[Player, weapon and game actions]
     H --> K[Game frame callback]
     I --> K
     J --> K
@@ -224,7 +228,7 @@ void runModMenuAction(const igi::MenuConfig& config,
 ```
 
 To create a new menu, implement both functions in your menu source file and
-link that file with `internal_demo.cpp` and `src/igi_sdk/platform/windows_dll_host.cpp`.
+link that file with `internal_demo.cpp` and `src/igi_sdk/platform/windows_dll.cpp`.
 
 `configureModMenu()` defines the menu items and values. The shared runtime
 calls it during `IGI_MenuManager_Internal_Initialize()`.
@@ -236,13 +240,13 @@ an action.
 The existing implementations are:
 
 ```text
-IGI-MenuManager-Internal → default_menu.cpp → executeMenuNativeAction
-igi-simple-mod-menu      → simple_menu.cpp  → simpleMenuAction
-igi-basic-mod-menu       → basic_menu.cpp   → basicMenuAction
+igi-basic-mod-internal    → basic_menu.cpp    → basicMenuAction
+igi-simple-mod-internal   → simple_menu.cpp   → simpleMenuAction
+igi-advanced-mod-internal → advanced_menu.cpp → simple and advanced actions
 ```
 
 Your new menu should follow the same two-function pattern as
-`demos/simple-menu/simple_menu.cpp` or `demos/basic-menu/basic_menu.cpp`.
+`demos/internal/simple-mod/simple_menu.cpp` or `demos/internal/basic-mod/basic_menu.cpp`.
 
 ## License and credits
 

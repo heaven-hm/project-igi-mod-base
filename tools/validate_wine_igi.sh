@@ -34,7 +34,7 @@ game_pid() {
     wine cmd /c 'tasklist /FI "IMAGENAME eq igi.exe" /FO CSV /NH' 2>/dev/null |
         awk -F ',' 'tolower($1) == "\"igi.exe\"" {gsub(/\"/, "", $2); print $2; exit}'
 }
-sdk_log="$game_dir/project-igi-sdk.log"
+sdk_log="$game_dir/$(python3 "$root/tools/igi_log_config.py" "$game_dir")"
 artifact_dir="${TMPDIR:-/tmp}/igi-live-validation"
 mkdir -p "$artifact_dir"
 keypress_win=""
@@ -43,8 +43,8 @@ echo "==> x86 emulator probe"
 ctest --test-dir "$build_macos" -R '^igi_demo_natives_unicorn$' --output-on-failure
 
 echo "==> Windows x86 build"
-cmake --build "$build_win32" --parallel --target igi_menu_manager_internal igi1_injector igi1_keypress
-install -m 755 "$build_win32/IGI-MenuManager-Internal.dll" "$game_dir/IGI-MenuManager-Internal.dll"
+cmake --build "$build_win32" --parallel --target igi_basic_mod_menu igi1_injector igi1_keypress
+install -m 755 "$build_win32/igi-basic-mod-internal.dll" "$game_dir/igi-basic-mod-internal.dll"
 install -m 755 "$build_win32/IGI1-Injector.exe" "$game_dir/IGI-Injector.exe"
 install -m 755 "$build_win32/IGI1-Keypress.exe" "$game_dir/IGI1-Keypress.exe"
 
@@ -64,7 +64,7 @@ for ((attempt = 1; attempt <= attempts; ++attempt)); do
         cd "$game_dir"
         # The supplied runner owns level launch, Windows PID discovery and DLL
         # injection. Its complete stdout/stderr is retained per attempt.
-        IGI_SDK_AUTOSTART=1 ./run-igi-wine.sh "$game_dir/IGI-MenuManager-Internal.dll" level5 true
+        IGI_SDK_AUTOSTART=1 ./run-igi-wine.sh "$game_dir/igi-basic-mod-internal.dll" level5 true
     ) >"$artifact_dir/attempt-$attempt.log" 2>&1 &
     runner_pid=$!
 

@@ -6,6 +6,7 @@
 #include <ctime>
 #include <functional>
 #include <mutex>
+#include <string>
 #include <thread>
 
 namespace {
@@ -13,6 +14,7 @@ std::mutex logMutex;
 igi::LogSink logSink = nullptr;
 std::FILE* logFile = nullptr;
 bool logFileInitialized = false;
+std::string logFilename = "project-igi-mod.log";
 std::atomic<igi::LogLevel> minimumLevel{igi::LogLevel::Trace};
 
 const char* levelName(igi::LogLevel level) noexcept {
@@ -40,7 +42,7 @@ void writeLine(std::FILE* stream, igi::LogLevel level, std::string_view message)
     localtime_r(&seconds, &local);
 #endif
     const auto threadHash = std::hash<std::thread::id>{}(std::this_thread::get_id());
-    std::fprintf(stream, "[IGI SDK][%s][t%04lu][%04d-%02d-%02d %02d:%02d:%02d.%03ld] %.*s\n",
+    std::fprintf(stream, "[IGI MOD][%s][t%04lu][%04d-%02d-%02d %02d:%02d:%02d.%03ld] %.*s\n",
                  levelName(level), static_cast<unsigned long>(threadHash % 10000u),
                  local.tm_year + 1900, local.tm_mon + 1, local.tm_mday,
                  local.tm_hour, local.tm_min, local.tm_sec, millis,
@@ -49,6 +51,18 @@ void writeLine(std::FILE* stream, igi::LogLevel level, std::string_view message)
 }
 
 namespace igi {
+void setLogFile(std::string_view filename) {
+    if (filename.empty() || filename == "." || filename == ".." ||
+        filename.find_first_of("/\\:") != std::string_view::npos ||
+        filename.find('\0') != std::string_view::npos) return;
+    std::lock_guard lock(logMutex);
+    if (logFilename == filename) return;
+    if (logFile) std::fclose(logFile);
+    logFile = nullptr;
+    logFileInitialized = false;
+    logFilename.assign(filename);
+}
+
 void setLogSink(LogSink sink) noexcept {
     std::lock_guard lock(logMutex);
     logSink = sink;
@@ -69,7 +83,7 @@ void log(LogLevel level, std::string_view message) noexcept {
 
     if (!logFileInitialized) {
         logFileInitialized = true;
-        logFile = std::fopen("project-igi-sdk.log", "ab");
+        logFile = std::fopen(logFilename.c_str(), "ab");
     }
 
     if (logSink != nullptr) {

@@ -10,9 +10,22 @@ from unittest.mock import patch
 spec = importlib.util.spec_from_file_location("launcher", Path(__file__).resolve().parents[1] / "tools" / "run_igi_wine.py")
 launcher = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(launcher)
+log_spec = importlib.util.spec_from_file_location("igi_log_config", Path(__file__).resolve().parents[1] / "tools" / "igi_log_config.py")
+log_config = importlib.util.module_from_spec(log_spec)
+log_spec.loader.exec_module(log_config)
 
 
 class LauncherTest(unittest.TestCase):
+    def test_configured_log_filename(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config = root / "project-igi-mod-config.ini"
+            self.assertEqual(log_config.log_filename(root), "project-igi-mod.log")
+            config.write_text("[mod_menu]\nlog_file=MyMod.log\n")
+            self.assertEqual(log_config.log_filename(root), "MyMod.log")
+            config.write_text("[mod_menu]\nlog_file=../bad.log\n")
+            self.assertEqual(log_config.log_filename(root), "project-igi-mod.log")
+
     def test_existing_game_is_injected_without_launch_or_escape(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -48,7 +61,7 @@ class LauncherTest(unittest.TestCase):
             root = Path(temporary)
             for name in ("wine", "igi.exe", "IGI-Injector.exe", "IGI1-Keypress.exe", "mod.dll"):
                 (root / name).touch()
-            (root / "project-igi-sdk-config.ini").write_text("[mod_menu]\nstart_key=F7\n")
+            (root / "project-igi-mod-config.ini").write_text("[mod_menu]\nstart_key=F7\n")
             state = {"running": False, "launches": [], "injections": 0, "keys": [], "query_timeouts": 0}
 
             class Process:

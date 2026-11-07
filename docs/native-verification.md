@@ -5,7 +5,7 @@ The supported profile is the EU/Chinese IGI 1 executable with SHA-256:
 `dea34892d417715873ea61d7b2ba5556655f1ad65385104348146f9679915a01`
 
 The imported research catalogue remains separate from the MVP wrapper set.
-`data/IGI1/mvp-300.tsv` contains exactly 300 generated x86 `__cdecl` wrappers.
+The local `data/igi-natives.csv` contains the IGI-RE native catalogue used to generate the x86 `__cdecl` wrappers.
 Its validation status distinguishes source declarations from the small ABI
 probe. A wrapper build alone does not prove gameplay behavior. Verification
 of a native requires, at minimum:

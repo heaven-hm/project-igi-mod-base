@@ -37,17 +37,22 @@ set_target_properties(igi_qsc_compiler PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(igi_qsc_compiler PUBLIC third_party/igi1conv)
 
 # IGI-RE native bindings: regenerates include/igi_sdk/natives/igi_re/hashes.hpp
-# from data/IGI1/neonix-igi-re-names.tsv whenever the symbol table changes.
+# from the local native catalogue whenever the symbol table changes.
 set(IGI_RE_HASH_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/include/igi_sdk/natives/igi_re/hashes.hpp)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/data/igi-natives.csv")
 add_custom_command(
     OUTPUT ${IGI_RE_HASH_HEADER}
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_igi_hash.py
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_igi_hash.py
-            ${CMAKE_CURRENT_SOURCE_DIR}/data/IGI1/neonix-igi-re-names.tsv
+            ${CMAKE_CURRENT_SOURCE_DIR}/data/igi-natives.csv
     COMMENT "Generating IGI-RE HASH bindings from names.tsv"
     VERBATIM
 )
 add_custom_target(igi_re_hash_bindings DEPENDS ${IGI_RE_HASH_HEADER})
+else()
+    message(STATUS "Local IGI1 data absent; using checked-in native bindings")
+    add_custom_target(igi_re_hash_bindings)
+endif()
 
 add_library(igi_sdk STATIC
     src/igi_sdk/config/menu_config.cpp
@@ -84,46 +89,51 @@ target_link_libraries(igi_menu_script PRIVATE igi_sdk)
 option(IGI_SDK_BUILD_DEMOS "Build the internal and external-style demo targets" ON)
 
 if(IGI_SDK_BUILD_DEMOS)
-    set(IGI_INTERNAL_MENU_PLATFORM demos/internal-menumanager/platform_linux.cpp)
+    set(IGI_INTERNAL_MENU_PLATFORM demos/internal/runtime/platform_linux.cpp)
     if(APPLE)
-        set(IGI_INTERNAL_MENU_PLATFORM demos/internal-menumanager/platform_macos.cpp)
+        set(IGI_INTERNAL_MENU_PLATFORM demos/internal/runtime/platform_macos.cpp)
     elseif(WIN32)
         set(IGI_INTERNAL_MENU_PLATFORM src/igi_sdk/platform/windows_dll.cpp)
     endif()
-    add_library(igi_menu_manager_internal SHARED
-        demos/internal-menumanager/internal_demo.cpp
-        demos/internal-menumanager/default_menu.cpp
+    add_library(igi_basic_mod_menu SHARED
+        demos/internal/runtime/internal_demo.cpp
+        demos/internal/basic-mod/basic_menu.cpp
         ${IGI_INTERNAL_MENU_PLATFORM}
     )
-    target_link_libraries(igi_menu_manager_internal PRIVATE igi_sdk)
-    target_include_directories(igi_menu_manager_internal PRIVATE include)
+    target_link_libraries(igi_basic_mod_menu PRIVATE igi_sdk)
+    target_include_directories(igi_basic_mod_menu PRIVATE include)
     if(WIN32)
-        target_link_options(igi_menu_manager_internal PRIVATE -static)
+        target_link_options(igi_basic_mod_menu PRIVATE -static)
     endif()
-    set_target_properties(igi_menu_manager_internal PROPERTIES OUTPUT_NAME "IGI-MenuManager-Internal" PREFIX "")
+    set_target_properties(igi_basic_mod_menu PROPERTIES OUTPUT_NAME "igi-basic-mod-internal" PREFIX "")
 
     if(WIN32)
-        add_library(igi_simple_mod_menu SHARED demos/simple-menu/simple_menu.cpp demos/internal-menumanager/internal_demo.cpp ${IGI_INTERNAL_MENU_PLATFORM})
+        add_library(igi_simple_mod_menu SHARED demos/internal/simple-mod/simple_menu.cpp demos/internal/runtime/internal_demo.cpp ${IGI_INTERNAL_MENU_PLATFORM})
         target_link_libraries(igi_simple_mod_menu PRIVATE igi_sdk)
         target_link_options(igi_simple_mod_menu PRIVATE -static)
-        set_target_properties(igi_simple_mod_menu PROPERTIES OUTPUT_NAME "igi-simple-mod-menu" PREFIX "")
-        add_library(igi_basic_mod_menu SHARED demos/basic-menu/basic_menu.cpp demos/internal-menumanager/internal_demo.cpp ${IGI_INTERNAL_MENU_PLATFORM})
-        target_link_libraries(igi_basic_mod_menu PRIVATE igi_sdk)
-        target_link_options(igi_basic_mod_menu PRIVATE -static)
-        set_target_properties(igi_basic_mod_menu PROPERTIES OUTPUT_NAME "igi-basic-mod-menu" PREFIX "")
+        set_target_properties(igi_simple_mod_menu PROPERTIES OUTPUT_NAME "igi-simple-mod-internal" PREFIX "")
+        add_library(igi_advanced_mod_menu SHARED demos/internal/advanced-mod/advanced_menu.cpp demos/internal/simple-mod/simple_menu.cpp demos/internal/runtime/internal_demo.cpp ${IGI_INTERNAL_MENU_PLATFORM})
+        target_link_libraries(igi_advanced_mod_menu PRIVATE igi_sdk)
+        target_compile_definitions(igi_advanced_mod_menu PRIVATE IGI_ADVANCED_MENU=1)
+        target_link_options(igi_advanced_mod_menu PRIVATE -static)
+        set_target_properties(igi_advanced_mod_menu PROPERTIES OUTPUT_NAME "igi-advanced-mod-internal" PREFIX "")
+        if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/demos/status-message/status_message_demo.cpp")
         add_library(igi_natives_inject_test SHARED demos/status-message/status_message_demo.cpp)
         target_link_libraries(igi_natives_inject_test PRIVATE igi_sdk)
         target_include_directories(igi_natives_inject_test PRIVATE include)
         target_compile_definitions(igi_natives_inject_test PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
         target_link_options(igi_natives_inject_test PRIVATE -static)
         set_target_properties(igi_natives_inject_test PROPERTIES OUTPUT_NAME "igi-natives-inject-test" PREFIX "")
+        endif()
     endif()
 
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/demos/imgui/external_demo.cpp")
     add_executable(igi_menu_manager_external demos/imgui/external_demo.cpp)
     target_link_libraries(igi_menu_manager_external PRIVATE igi_sdk)
     target_include_directories(igi_menu_manager_external PRIVATE include)
     target_compile_definitions(igi_menu_manager_external PRIVATE IGI_SDK_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     set_target_properties(igi_menu_manager_external PROPERTIES OUTPUT_NAME "IGI-MenuManager-External")
+    endif()
 endif()
 
 if(WIN32)
@@ -176,24 +186,28 @@ if(WIN32)
 endif()
 target_compile_definitions(igi_sdk_tests PRIVATE IGI_SDK_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/data/igi-natives.csv")
 add_custom_command(
     OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/tests/generated_demo_natives.cpp
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_demo_native_tests.py
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_demo_native_tests.py
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/demo-natives.tsv
-            ${CMAKE_CURRENT_SOURCE_DIR}/data/IGI1/mvp-300.tsv
+            ${CMAKE_CURRENT_SOURCE_DIR}/data/igi-natives.csv
             ${CMAKE_CURRENT_SOURCE_DIR}/include/igi_sdk/IGI.hpp
 )
+endif()
 add_executable(igi_demo_native_contract_tests tests/generated_demo_natives.cpp)
 target_link_libraries(igi_demo_native_contract_tests PRIVATE igi_sdk)
 target_compile_definitions(igi_demo_native_contract_tests PRIVATE IGI_SDK_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
 enable_testing()
 add_test(NAME igi_sdk_tests COMMAND igi_sdk_tests)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/data/igi-natives.csv")
 add_test(NAME igi_generated_natives
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_generated_natives.py)
 add_test(NAME igi_demo_native_contract
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_demo_native_contract.py)
+endif()
 # The Unicorn ABI probe loads the retail 32-bit IGI 1 PE. On Apple Silicon the
 # script must run under x86_64 Python via Rosetta, so wrap the interpreter when
 # the host is arm64 macOS. IGI_TEST_EXE points at the supported retail

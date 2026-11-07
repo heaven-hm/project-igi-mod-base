@@ -11,7 +11,7 @@ set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 configuration=Debug
-target=igi_menu_manager_internal
+target=igi_basic_mod_menu
 clean=0
 demo=
 verify=0
@@ -80,9 +80,9 @@ cmake -S "$root" -B "$build_dir" \
 cmake --build "$build_dir" --parallel --target "$target"
 
 case "$target" in
-    igi_menu_manager_internal) artifact=${IGI_DLL_NAME:-IGI-MenuManager-Internal.dll} ;;
-    igi_simple_mod_menu) artifact=${IGI_DLL_NAME:-igi-simple-mod-menu.dll} ;;
-    igi_basic_mod_menu) artifact=${IGI_DLL_NAME:-igi-basic-mod-menu.dll} ;;
+    igi_advanced_mod_menu) artifact=${IGI_DLL_NAME:-igi-advanced-mod-internal.dll} ;;
+    igi_simple_mod_menu) artifact=${IGI_DLL_NAME:-igi-simple-mod-internal.dll} ;;
+    igi_basic_mod_menu) artifact=${IGI_DLL_NAME:-igi-basic-mod-internal.dll} ;;
     igi_natives_inject_test) artifact=${IGI_DLL_NAME:-igi-natives-inject-test.dll} ;;
     *) artifact=${IGI_DLL_NAME:-} ;;
 esac
@@ -94,9 +94,9 @@ if ((verify)); then
     fi
     if [[ -z "$demo" ]]; then
         case "$target" in
-            igi_menu_manager_internal) demo=demos/internal-menumanager/internal_demo.cpp ;;
-            igi_simple_mod_menu) demo=demos/simple-menu/simple_menu.cpp ;;
-            igi_basic_mod_menu) demo=demos/basic-menu/basic_menu.cpp ;;
+            igi_advanced_mod_menu) demo=demos/internal/advanced-mod/advanced_menu.cpp ;;
+            igi_simple_mod_menu) demo=demos/internal/simple-mod/simple_menu.cpp ;;
+            igi_basic_mod_menu) demo=demos/internal/basic-mod/basic_menu.cpp ;;
             igi_natives_inject_test) demo=demos/status-message/status_message_demo.cpp ;;
             *) printf 'error: --demo is required for target %s\n' "$target" >&2; exit 2 ;;
         esac

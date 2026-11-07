@@ -24,6 +24,7 @@ struct ModMenuItemConfig {
 struct MenuConfig {
     bool enabled = true;
     std::string title = "IGI SDK Mod Menu";
+    std::string logFile = "project-igi-mod.log";
     // Start key opens/initializes the menu. Accepted in config.ini as either
     // `start_key` or the legacy `hotkey`.
     std::uint8_t hotkey = 0x3F; // DIK_F5
@@ -40,7 +41,7 @@ struct MenuConfig {
     std::int32_t width = 455;
     std::int32_t height = 300;
     // Debug builds default to a console and trace output; release builds write
-    // to project-igi-sdk.log at Info unless config.ini asks for more.
+    // to the configured log file at Info unless the config asks for more.
 #ifndef NDEBUG
     LogLevel minimumLogLevel = LogLevel::Trace;
     bool console = true;

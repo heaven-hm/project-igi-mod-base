@@ -167,7 +167,9 @@ void simpleMenuAction(const igi::MenuConfig& config, igi::Runtime& runtime, std:
     }
 }
 
+#ifndef IGI_ADVANCED_MENU
 bool configureModMenu(igi::MenuConfig& config) { return configureSimpleMenu(config); }
 void runModMenuAction(const igi::MenuConfig& config, igi::Runtime& runtime, std::size_t item, std::string_view value) {
     simpleMenuAction(config, runtime, item, value);
 }
+#endif

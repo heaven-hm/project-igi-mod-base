@@ -9,7 +9,9 @@ bool configureBasicMenu(igi::MenuConfig& config) {
         {"weather", igi::ModMenuItemKind::List, "Weather", "", {"Off", "Rain", "Snow"}},
         {"fps", igi::ModMenuItemKind::List, "FPS", "", {"30", "60", "120"}},
         {"music", igi::ModMenuItemKind::List, "Music volume", "", {"Normal", "Low", "Mute"}},
-        {"ammo", igi::ModMenuItemKind::Action, "Unlimited ammo", "", {}}
+        {"ammo", igi::ModMenuItemKind::Action, "Unlimited ammo", "", {}},
+        {"display", igi::ModMenuItemKind::Action, "Refresh Display", "", {}},
+        {"diagnostics", igi::ModMenuItemKind::Action, "Log Game State", "", {}}
     };
     return true;
 }

@@ -14,7 +14,7 @@ extern "C" IGI_DEMO_EXPORT void IGI_SDK_GameFrame() {
     using WidgetListFn = int (*)(IgiMenuWidget*, int, int*);
     using ActivateFn = void (*)(std::uint32_t);
     using KeyState = std::uint8_t*;
-    static const igi::MenuConfig config = igi::loadMenuConfig("project-igi-sdk-config.ini");
+    static const igi::MenuConfig config = igi::loadMenuConfig("project-igi-mod-config.ini");
     static bool keyWasDown = false;
     static int phase = 0;
     if (!config.enabled) return;

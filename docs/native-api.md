@@ -6,7 +6,7 @@ loaded catalogue and the executable matches the supported build. The manifest
 separately records which wrappers passed the Unicorn ABI probe; in-game
 effects require live-game validation.
 
-Each record in `data/IGI1/neonix-igi-re-signatures.tsv` contains:
+Each record in the local `data/igi-natives.csv` contains:
 
 1. the retail executable address;
 2. the recovered native name;

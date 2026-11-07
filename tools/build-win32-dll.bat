@@ -14,7 +14,7 @@ setlocal EnableDelayedExpansion
 
 set "ROOT=%~dp0.."
 set "CONFIGURATION=Debug"
-set "TARGET=igi_menu_manager_internal"
+set "TARGET=igi_basic_mod_menu"
 set "CLEAN=0"
 
 :parse_args

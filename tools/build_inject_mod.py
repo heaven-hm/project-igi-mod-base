@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import time
+from igi_log_config import log_filename
 
 ROOT = Path(__file__).resolve().parents[1]
 GAME = Path(os.environ.get("IGI_GAME_DIR", str(Path.home() / "Downloads/IGI")))
@@ -33,7 +34,7 @@ def _config_key(name, fallback):
     """Read a hotkey name from the deployed config.ini so the injected key
     matches whatever start_key/end_key the game folder is configured with."""
     try:
-        for line in (GAME / "project-igi-sdk-config.ini").read_text(encoding="utf-8", errors="replace").splitlines():
+        for line in (GAME / "project-igi-mod-config.ini").read_text(encoding="utf-8", errors="replace").splitlines():
             line = line.strip()
             if not line or line.startswith(";") or line.startswith("#") or line.startswith("["):
                 continue
@@ -49,7 +50,7 @@ def _config_key(name, fallback):
 BUILD = _detect_build_dir()
 TEST_BUILD = Path(os.environ.get("IGI_TEST_BUILD_DIR", str(ROOT / "build-macos-verify")))
 LOGDIR = Path(os.environ.get("IGI_VALIDATION_LOG_DIR", "/private/tmp/igi-live-validation"))
-SDK_LOG = GAME / "project-igi-sdk.log"
+SDK_LOG = GAME / log_filename(GAME)
 START_KEY = _config_key("start_key", "f5")
 END_KEY = _config_key("end_key", "f12")
 ENV = dict(os.environ, WINEPREFIX=str(PREFIX), IGI_WINEPREFIX=str(PREFIX), WINEDEBUG="-all,+seh", IGI_ESCAPE_BEFORE_INJECT="true", IGI_ESCAPE_SETTLE_SECONDS="3")
@@ -118,12 +119,12 @@ def main():
             shutil.move(str(proxy), str(backup / proxy.name))
             log(f"moved local proxy={proxy} recoverable_backup={backup / proxy.name}")
     for command in (["ctest", "--test-dir", TEST_BUILD, "-R", "^igi_demo_natives_unicorn$", "--output-on-failure"],
-                    ["cmake", "--build", BUILD, "--parallel", "--target", "igi_menu_manager_internal", "igi1_injector", "igi1_keypress"]):
+                    ["cmake", "--build", BUILD, "--parallel", "--target", "igi_basic_mod_menu", "igi1_injector", "igi1_keypress"]):
         result = run(command, 180)
         if not result or result.returncode:
             log("FAILURE emulator or build failed")
             return 1
-    for source, dest in (("IGI-MenuManager-Internal.dll", "IGI-MenuManager-Internal.dll"), ("IGI1-Injector.exe", "IGI-Injector.exe"), ("IGI1-Keypress.exe", "IGI1-Keypress.exe")):
+    for source, dest in (("igi-basic-mod-internal.dll", "igi-basic-mod-internal.dll"), ("IGI1-Injector.exe", "IGI-Injector.exe"), ("IGI1-Keypress.exe", "IGI1-Keypress.exe")):
         shutil.copy2(BUILD / source, GAME / dest)
     levels = []
     for attempt in itertools.count(1):
@@ -144,7 +145,7 @@ def main():
         offset = SDK_LOG.stat().st_size if SDK_LOG.exists() else 0
         runner_log = LOGDIR / f"{report.stem}-attempt-{attempt}.log"
         with runner_log.open("w", encoding="utf-8") as output:
-            runner = subprocess.Popen([str(GAME / "run-igi-wine.sh"), str(GAME / "IGI-MenuManager-Internal.dll"), level, "true"], cwd=GAME, env=ENV, stdout=output, stderr=subprocess.STDOUT)
+            runner = subprocess.Popen([str(GAME / "run-igi-wine.sh"), str(GAME / "igi-basic-mod-internal.dll"), level, "true"], cwd=GAME, env=ENV, stdout=output, stderr=subprocess.STDOUT)
             deadline = time.monotonic() + 120
             target = None
             sent = False

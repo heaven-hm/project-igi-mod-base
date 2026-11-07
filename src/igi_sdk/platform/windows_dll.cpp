@@ -43,7 +43,7 @@ BOOL WINAPI consoleControlHandler(DWORD event) {
 void attachConsole() {
     if (!AllocConsole()) return;
     SetConsoleCtrlHandler(consoleControlHandler, TRUE);
-    SetConsoleTitleA("IGI SDK - mod menu");
+    SetConsoleTitleA("IGI Mod - mod menu");
     std::freopen("CONOUT$", "w", stdout);
     std::freopen("CONOUT$", "w", stderr);
 }
@@ -138,7 +138,8 @@ void mainLoopTick(const igi::DllMenuCallbacks& callbacks, igi::hotkeys::KeyTrack
 
 DWORD WINAPI igiSdkMainThread(void* rawModule) {
     (void)rawModule;
-    const auto config = igi::loadMenuConfig("project-igi-sdk-config.ini");
+    const auto config = igi::loadMenuConfig("project-igi-mod-config.ini");
+    igi::setLogFile(config.logFile);
     igi::setLogLevel(config.minimumLogLevel);
 #ifndef NDEBUG
     attachConsole();

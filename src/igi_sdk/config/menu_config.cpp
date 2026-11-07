@@ -53,6 +53,8 @@ void applyMenuKey(igi::MenuConfig& config, const std::string& key, const std::st
     else if (key == "hook") config.hook = igi::parseTickHook(value, config.hook);
     else if (key == "console") config.console = parseBool(value, config.console);
     else if (key == "log_level") config.minimumLogLevel = igi::parseLogLevel(value, config.minimumLogLevel);
+    else if (key == "log_file" && !value.empty() && value != "." && value != ".." &&
+             value.find_first_of("/\\:") == std::string::npos) config.logFile = value;
 }
 }
 
@@ -117,8 +119,6 @@ const char* tickHookName(igi1::TickHook hook) noexcept {
 MenuConfig loadMenuConfig(const std::filesystem::path& path) {
     MenuConfig config;
     std::ifstream file(path);
-    if (!file && path == "project-igi-sdk-config.ini") file.open("config.ini");
-    else if (!file && path == "config.ini") file.open("project-igi-sdk-config.ini");
     if (!file) return config;
 
     // `[mod_menu]` applies always; `[mod_menu.debug]` and `[mod_menu.release]`
@@ -146,12 +146,12 @@ MenuConfig loadMenuConfig(const std::filesystem::path& path) {
             break;
         case Section::DebugOnly:
 #ifndef NDEBUG
-            applyMenuKey(config, key, value);
+            if (key != "log_file") applyMenuKey(config, key, value);
 #endif
             break;
         case Section::ReleaseOnly:
 #ifdef NDEBUG
-            applyMenuKey(config, key, value);
+            if (key != "log_file") applyMenuKey(config, key, value);
 #endif
             break;
         case Section::None:

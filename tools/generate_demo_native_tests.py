@@ -10,7 +10,7 @@ import csv
 import re
 
 ROOT = Path(__file__).resolve().parents[1]
-MANIFEST = ROOT / "data/IGI1/mvp-300.tsv"
+MANIFEST = ROOT / "data/igi-natives.csv"
 CASES = ROOT / "tests/demo-natives.tsv"
 OUTPUT = ROOT / "tests/generated_demo_natives.cpp"
 
@@ -19,7 +19,8 @@ def read_tsv(path):
         return [r for r in csv.reader((x for x in f if not x.startswith("#")), delimiter="\t") if r]
 
 def main():
-    source = {r[2].lower(): r for r in read_tsv(MANIFEST)}
+    with MANIFEST.open(encoding="utf-8", newline="") as f:
+        source = {r["address"].lower(): r for r in csv.DictReader(f)}
     cases = read_tsv(CASES)
     if len(cases) != 10:
         raise SystemExit(f"expected exactly 10 demo natives, found {len(cases)}")
@@ -33,7 +34,7 @@ def main():
         if row is None:
             raise SystemExit(f"{name}: address {address} is absent from the generated catalogue")
         # Manifest columns: domain, api, address, name, signature, verification.
-        if (row[0], row[1], row[2].lower(), row[3], row[4]) != (domain, api, address.lower(), name, signature):
+        if (row["name"], row["signature"]) != (name, signature):
             raise SystemExit(f"{name}: demo contract does not match manifest: {row}")
         prefix, params = signature.split("(", 1)
         match = re.fullmatch(r"(.+?)([A-Za-z_]\w*)", prefix.rstrip())

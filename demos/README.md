@@ -1,21 +1,5 @@
-# Demonstration targets
+# Demo menus
 
-The repository contains two deliberately separate demo entry points:
+The `internal/` directory contains basic, simple and advanced in-game menus and their shared runtime. Build the Windows x86 targets `igi_basic_mod_menu`, `igi_simple_mod_menu`, and `igi_advanced_mod_menu`.
 
-- `IGI-MenuManager-Internal.dll` / `libIGI-MenuManager-Internal.dylib` — a
-  complete shared-library example with exported initialize, run-frame, and
-  shutdown entry points. It creates a real `MenuManager` and routes its work
-  through the SDK scheduler.
-- `IGI-MenuManager-External` — a standalone companion/catalogue inspector. It
-  is not a game-process injector and does not claim external game control.
-
-The external-style target remains intentionally limited until a reviewed IPC
-contract is added. This avoids falsely presenting a DLL or standalone process
-as a working out-of-process game modification interface.
-
-Both targets use the same SDK modules and can be built with the normal CMake
-commands in the root README. The internal shared library is loaded by a mod's
-own in-process plugin loader; this repository does not include a remote
-process injector. On macOS, call the exported entry points from a test host or
-load the dylib through `dlopen`; it intentionally does not patch the Windows
-x86 IGI executable. No game assets or executable files are included.
+The matching directories under `external/` are reserved for future external menu implementations; they do not currently build external mods.

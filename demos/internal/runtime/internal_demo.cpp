@@ -337,7 +337,7 @@ bool toggleMenuScreenOnGameThread() {
 
 extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_Internal_Initialize() {
     igi::log(igi::LogLevel::Debug, "internal initialize: begin");
-    menuConfig = igi::loadMenuConfig("project-igi-sdk-config.ini");
+    menuConfig = igi::loadMenuConfig("project-igi-mod-config.ini");
     if (!configureModMenu(menuConfig)) return false;
     igi::log(igi::LogLevel::Debug, menuConfig.enabled ? "internal initialize: config enabled" : "internal initialize: config disabled");
     if (menuConfig.screenId == 900 || menuConfig.screenId == 902 || menuConfig.screenId == 903 ||

@@ -37,17 +37,17 @@ if not exist "%GAME_DIR%\igi.exe" (
     exit /b 2
 )
 
-set "SDK_LOG=%GAME_DIR%\project-igi-sdk.log"
+for /f "delims=" %%L in ('python "%ROOT%\tools\igi_log_config.py" "%GAME_DIR%"') do set "SDK_LOG=%GAME_DIR%\%%L"
 set "ARTIFACT_DIR=%TEMP%\igi-live-validation"
 if not exist "%ARTIFACT_DIR%" mkdir "%ARTIFACT_DIR%"
 
 echo ==^> Windows x86 build
-cmake --build "%BUILD_WIN32%" --parallel --target igi_menu_manager_internal igi1_injector igi1_keypress
+cmake --build "%BUILD_WIN32%" --parallel --target igi_basic_mod_menu igi1_injector igi1_keypress
 if errorlevel 1 (
     echo error: build failed 1>&2
     exit /b 1
 )
-copy /Y "%BUILD_WIN32%\IGI-MenuManager-Internal.dll" "%GAME_DIR%\IGI-MenuManager-Internal.dll" >nul
+copy /Y "%BUILD_WIN32%\igi-basic-mod-internal.dll" "%GAME_DIR%\igi-basic-mod-internal.dll" >nul
 copy /Y "%BUILD_WIN32%\IGI1-Injector.exe" "%GAME_DIR%\IGI-Injector.exe" >nul
 copy /Y "%BUILD_WIN32%\IGI1-Keypress.exe" "%GAME_DIR%\IGI1-Keypress.exe" >nul
 
@@ -115,7 +115,7 @@ if "%WIN_PID%"=="" (
 echo attempt !N!: igi.exe Windows PID %WIN_PID%
 
 rem Inject the DLL. The injector's own output goes to the attempt log.
-"%GAME_DIR%\IGI-Injector.exe" -n "igi.exe" -i "%GAME_DIR%\IGI-MenuManager-Internal.dll" -v >"%LOG%" 2>&1
+"%GAME_DIR%\IGI-Injector.exe" -n "igi.exe" -i "%GAME_DIR%\igi-basic-mod-internal.dll" -v >"%LOG%" 2>&1
 set "INJECTED=0"
 for /L %%W in (1,1,20) do (
     if "!INJECTED!"=="0" (

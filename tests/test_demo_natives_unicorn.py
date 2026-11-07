@@ -21,6 +21,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+if not (ROOT / "data/igi-natives.csv").is_file():
+    print("SKIP: local IGI native catalogue is unavailable")
+    raise SystemExit(77)
 RE_ROOT = Path(os.environ.get("IGI_RE_ROOT", ROOT.parent / "IGI-RE"))
 EXE = os.environ.get("IGI_EXE", "")
 
@@ -69,7 +72,8 @@ def read_rows(path):
 
 
 cases = read_rows(ROOT / "tests/demo-natives.tsv")
-catalogue = {row[2].lower(): row for row in read_rows(ROOT / "data/IGI1/mvp-300.tsv")}
+with (ROOT / "data/igi-natives.csv").open(encoding="utf-8", newline="") as source:
+    catalogue = {row["address"].lower(): row for row in csv.DictReader(source)}
 if len(cases) != 10:
     raise SystemExit(f"expected exactly 10 demo natives, found {len(cases)}")
 
@@ -99,9 +103,7 @@ emu = emu_module.Emu(exe=EXE, dll="")
 for api, domain, name, address, signature in cases:
     address_i = int(address, 16)
     row = catalogue.get(address.lower())
-    if row is None or (row[0], row[1], row[2].lower(), row[3], row[4]) != (
-        domain, api, address.lower(), name, signature
-    ):
+    if row is None or (row["name"], row["signature"]) != (name, signature):
         raise AssertionError(f"{name}: demo contract differs from generated IGI-RE catalogue")
 
     params = parse_parameters(signature)
