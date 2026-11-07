@@ -1,8 +1,6 @@
 # Project IGI Mod Base
 
-Version: 0.2
-
-Project IGI Mod Base is a C++ foundation for creating single-player mods and in-game mod menus for Project I.G.I. It provides an in-game menu interface, game native bindings, runtime hooking and memory support, logging, and examples to build on.
+Project IGI Mod Base is a foundation for creating single-player mods and in-game mod menus for Project I.G.I. It provides an in-game menu interface, game native bindings, runtime hooking and memory support, logging, and examples to build on.
 
 ## Branch Architecture
 
@@ -550,6 +548,7 @@ Your new menu should follow the same two-function pattern as
 Read [`CREDITS.md`](CREDITS.md), [`NOTICE`](NOTICE) and `LICENSES/` before
 redistributing. Metadata is attributed and kept as address/signature
 research only.
-
 - SlickDaddy and BlanknameEs — Project I.G.I. native research and information
+- Cukier for ImGUI DirectX 7 Wrapper project ([https://github.com/AndenDev/D3D7Imgui](https://github.com/AndenDev/D3D7Imgui))
 - Artiom — QVM tools and compiler work
+- Inspired by BigBase V2 from GTA V modding community [https://github.com/BigBase/BigBase-V2](https://github.com/BigBase/BigBase-V2)

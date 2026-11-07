@@ -34,9 +34,10 @@
   live rain and snow precipitation effects.
 - Added prebuilt x86 release DLLs in `binaries/` (`igi-advanced-mod-internal.dll`
   and `igi-advanced-mod-external.dll`) with automatic deployment on build completion.
-- Established clear repository branching: `develop` is dedicated to the retail
-  IGI Game Menu UI (Internal Mod Menu via QVM MenuManager), while `feature/imgui-mod`
-  provides Dear ImGui Direct3D 7 external overlay mod menus.
+- Clarified repository branching model: `develop` is strictly dedicated to the
+  retail IGI Game Menu UI (Internal Mod Menu via QVM MenuManager), while
+  `feature/imgui-mod` provides the external Dear ImGui Direct3D 7 menu
+  implementation backed by [AndenDev/D3D7Imgui](https://github.com/AndenDev/D3D7Imgui).
 
 ## 0.1 — IGI 1 MVP
 
