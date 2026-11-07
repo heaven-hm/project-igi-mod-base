@@ -53,7 +53,7 @@ bool writeMenuScript(std::ostream &out, const MenuConfig &config, bool standalon
             << config.screenId << ", \"LOCAL:menusystem/ingamemenu.res\", FALSE, ";
     out << "Task_New(" << config.screenId << ", \"MenuScreen\", \"IGI SDK\", \"\", " << config.x
         << ", " << config.y << ", " << config.x + config.width << ", " << config.y + config.height
-        << ", \"IGI_SDK_Cancel() - MenuManager_LeaveMenus(900, 9)\", \"\", \"\", Task_New(-1, "
+        << ", \"IGI_SDK_Cancel() - MenuManager_PopScreen(FALSE)\", \"\", \"\", Task_New(-1, "
            "\"MenuFrame\", \"\", \"\", "
         << config.x << ", " << config.y << ", " << config.width << ", " << config.height
         << ", 1, 4, 4, FALSE";
@@ -114,7 +114,7 @@ bool writeMenuScript(std::ostream &out, const MenuConfig &config, bool standalon
         << "Task_New(-1, \"MenuText\", \"okay\", \"Okay\", \"font3.fnt\", 2, \"IGI_SDK_Apply() - "
            "MenuManager_LeaveMenus(900, 9)\", \"menu_ok\"), "
         << "Task_New(-1, \"MenuText\", \"cancel\", \"Cancel\", \"font3.fnt\", 2, "
-           "\"IGI_SDK_Cancel() - MenuManager_LeaveMenus(900, 9)\", \"menu_cancel\"))";
+           "\"IGI_SDK_Cancel() - MenuManager_PopScreen(FALSE)\", \"menu_cancel\"))";
     out << (standaloneManager ? ")));\n" : "));\n");
     if (!standaloneManager)
         out << "MenuManager_RequestScreen(" << config.screenId << ", FALSE);\n";

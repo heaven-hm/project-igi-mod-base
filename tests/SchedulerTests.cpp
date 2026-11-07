@@ -452,7 +452,8 @@ int main() {
     assert(menuScript.str().find("Task_New(-1, \"MenuText\", \"cancel\", \"Cancel\"") != std::string::npos);
     assert(menuScript.str().find("IGI_SDK_Cancel() - MenuManager_LeaveMenus(900, 12)") != std::string::npos);
     assert(menuScript.str().find("IGI_SDK_Apply() - MenuManager_LeaveMenus(900, 9)") != std::string::npos);
-    assert(menuScript.str().find("IGI_SDK_Cancel() - MenuManager_LeaveMenus(900, 9)") != std::string::npos);
+    assert(menuScript.str().find("IGI_SDK_Cancel() - MenuManager_PopScreen(FALSE)") !=
+           std::string::npos);
     std::vector<std::uint8_t> compiledMenu;
     if (!igi::compileIgiMenuScript(modConfig, compiledMenu, compileError)) {
         std::fprintf(stderr, "menu compile error: %s\n", compileError.c_str());
