@@ -79,6 +79,12 @@ def main(argv=None):
         help="seconds to wait for igi.exe (default: 45)",
     )
     parser.add_argument(
+        "--post-inject-wait",
+        type=float,
+        default=5,
+        help="seconds to verify the game remains alive after injection (default: 5)",
+    )
+    parser.add_argument(
         "--game-dir",
         type=Path,
         default=Path(os.environ.get("IGI_GAME_DIR", Path.home() / "Downloads/IGI")),
@@ -113,10 +119,13 @@ def main(argv=None):
         ),
     )
     args = parser.parse_args(argv)
-    if args.attempts < 1 or args.load_wait < 0 or args.startup_timeout <= 0:
-        parser.error(
-            "attempts and startup timeout must be positive; load wait must be non-negative"
-        )
+    if (
+        args.attempts < 1
+        or args.load_wait < 0
+        or args.post_inject_wait < 0
+        or args.startup_timeout <= 0
+    ):
+        parser.error("attempts and startup timeout must be positive; waits must be non-negative")
     game = args.game_dir.expanduser().resolve()
     dll = args.dll.expanduser().resolve()
     wine = args.wine.expanduser().resolve()
@@ -307,10 +316,21 @@ def main(argv=None):
                                 ):
                                     injected_successfully = True
                                     if menu_key is None or send(owned_pid, menu_key):
-                                        log(
-                                            f"SUCCESS pid={owned_pid} injection confirmed menu_key={menu_key or 'not requested'}; game remains running"
+                                        if args.post_inject_wait:
+                                            time.sleep(args.post_inject_wait)
+                                        still_running = (
+                                            (runner is None or runner.poll() is None)
+                                            and owned_pid in pids()
+                                            and not crashed(wine_log)
                                         )
-                                        return 0
+                                        if still_running:
+                                            log(
+                                                f"SUCCESS pid={owned_pid} injection confirmed menu_key={menu_key or 'not requested'}; game remained running for {args.post_inject_wait:g}s"
+                                            )
+                                            return 0
+                                        log("game exited or Wine reported a crash after injection")
+                                        injected_successfully = False
+                                        continue
                                     log(
                                         "menu key delivery failed after injection; stopping to avoid injecting twice"
                                     )
