@@ -165,7 +165,11 @@ bool runMenuCommand(const char *resource, const char *operation) {
     auto *manager = IGI::TASK::FIND_CHILD(root, IGI::MENU::GET_TYPE());
     if (!manager)
         return false;
-    (void)IGI::TASK::RUN_SCRIPT(manager, resource, 0);
+    if (!IGI::TASK::RUN_SCRIPT(manager, resource, 0)) {
+        igi::log(igi::LogLevel::Error,
+                 std::string("internal menu command: ") + operation + " Task_RunScript failed");
+        return false;
+    }
     igi::log(igi::LogLevel::Info,
              std::string("internal menu command: ") + operation + " requested");
     return true;
@@ -327,10 +331,10 @@ void menuFrameWork() {
 }
 
 bool closeMenuScreen() {
-    if (menuBridge)
-        menuBridge->cancel();
     if (!runMenuCommand("LOCAL:mod_base/modmenu-close.qvm", "close"))
         return false;
+    if (menuBridge)
+        menuBridge->cancel();
     menuScreenAttached = false;
     if (!menuBridge && !igi::resumeFromMenu(runtime)) {
         igi::log(igi::LogLevel::Warning, "internal menu close: unable to resume game");
@@ -345,12 +349,12 @@ bool reopenMenuScreen() {
     if (menuScreenCreated) {
         if (!runMenuCommand("LOCAL:mod_base/modmenu-reopen.qvm", "reopen"))
             return false;
-        menuScreenAttached = true;
-        safeToShutdown.store(false, std::memory_order_release);
         if (!igi::pauseForMenu(runtime)) {
             igi::log(igi::LogLevel::Error, "internal menu reopen: unable to pause game");
             return false;
         }
+        menuScreenAttached = true;
+        safeToShutdown.store(false, std::memory_order_release);
         if (menuBridge)
             menuBridge->snapshot();
         igi::log(igi::LogLevel::Info, "internal menu reopen: game paused and human input disabled");
