@@ -232,6 +232,7 @@ Internal menus are hosted by `src/mod_base/menu_host.cpp`. Each menu implements 
 #include "config/menu_config.hpp"
 #include "mod_base/menu_host.hpp"
 #include "natives/mvp_natives.hpp"
+#include "demos/internal/helpers/menu_helpers.hpp"
 
 // 1. Define menu title, items, and initial choices
 bool configureModMenu(igi::MenuConfig& config) {
@@ -277,16 +278,41 @@ External menus share the exact same configuration and action interface as intern
 ```cpp
 #include "config/menu_config.hpp"
 #include "mod_base/menu_host.hpp"
+#include "natives/mvp_natives.hpp"
+#include "demos/internal/helpers/menu_helpers.hpp"
 
-bool configureBasicMenu(igi::MenuConfig &config);
-void basicMenuAction(const igi::MenuConfig &config, igi::Runtime &runtime, std::size_t item, std::string_view value);
+// 1. Define ImGui window title, options, and items (rendered via Dear ImGui D3D7)
+bool configureModMenu(igi::MenuConfig& config) {
+    config.title = "My Custom ImGui Mod Menu";
+    // Optional ImGui overlay window configuration
+    config.imgui.theme = "Dark";       // "Dark", "Light", or "Classic"
+    config.imgui.fontSize = 16.0f;
+    config.imgui.collapsible = true;
 
-bool configureModMenu(igi::MenuConfig &config) {
-    return configureBasicMenu(config);
+    // 3 Menu Options (rendered as buttons and combo dropdowns in Dear ImGui)
+    config.items = {
+        {"godmode", igi::ModMenuItemKind::Action, "Unlimited Ammo", "", {}},
+        {"weather", igi::ModMenuItemKind::List, "Weather", "", {"Off", "Rain", "Snow"}},
+        {"fps", igi::ModMenuItemKind::List, "FPS Limit", "", {"30", "60", "120"}}
+    };
+    return true;
 }
 
-void runModMenu(const igi::MenuConfig &config, igi::Runtime &runtime, std::size_t item, std::string_view value) {
-    basicMenuAction(config, runtime, item, value);
+// 2. Handle player interaction (invoked when ImGui buttons are clicked or combo items selected)
+void runModMenu(const igi::MenuConfig& config,
+                igi::Runtime& runtime,
+                std::size_t item,
+                std::string_view value) {
+    if (item >= config.items.size()) return;
+    const auto& id = config.items[item].id;
+
+    if (id == "godmode") {
+        IGI::PLAYER::SET_UNLIMITED_AMMO();
+    } else if (id == "weather") {
+        igi::setWeather(runtime, value);
+    } else if (id == "fps") {
+        igi::setFps(runtime, value);
+    }
 }
 ```
 
