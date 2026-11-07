@@ -8,6 +8,7 @@
 #include <atomic>
 #include <cstdint>
 #include <cstring>
+#include <string>
 #if defined(_WIN32) && (defined(__i386__) || defined(_M_IX86))
 #include <windows.h>
 #include <MinHook.h>
@@ -27,6 +28,13 @@ bool runHookCreated = false;
 bool getStringHookCreated = false;
 // True while the SDK owns a live tick in the game's frame callback list.
 std::atomic<bool> tickRegistered{false};
+// Callback-list mutations must happen from Display_RunCallbacks, the verified
+// render-thread frame boundary. The injected worker and the AddFrameCallback
+// detour only request that work; they never inspect or mutate the list.
+std::atomic<bool> tickRegistrationRequested{false};
+std::atomic<bool> tickRemovalRequested{false};
+std::atomic<bool> tickRemovalCompleted{true};
+std::atomic<DWORD> frameDispatchThreadId{0};
 
 // Display_AddFrameCallback's verified retail prologue:
 //   mov eax,[esp+4]        ; 8B 44 24 04  (callback argument)
@@ -124,7 +132,7 @@ void sdkFrameTick() noexcept {
 // Registers IGISDK_Tick into the game's display frame callback list when the
 // list does not already hold it. Cheap enough to call from a watchdog: the pool
 // holds at most 32 nodes. Returns true when the tick is present afterwards.
-bool registerFrameTick() noexcept {
+bool registerFrameTickOnFrameThread() noexcept {
     if (!displayAddFrameCallbackOriginal)
         return false;
     if (tickNodePresent()) {
@@ -137,6 +145,41 @@ bool registerFrameTick() noexcept {
     return present;
 }
 
+void processFrameTickRequests() noexcept {
+    const auto threadId = GetCurrentThreadId();
+    if (tickRemovalRequested.exchange(false, std::memory_order_acq_rel)) {
+        unregisterFrameTick();
+        tickRemovalCompleted.store(true, std::memory_order_release);
+        igi::log(igi::LogLevel::Info,
+                 "frame tick: callback removed on Display_RunCallbacks thread id=" +
+                     std::to_string(threadId));
+        return;
+    }
+    if (tickRegistrationRequested.exchange(false, std::memory_order_acq_rel)) {
+        const bool registered = registerFrameTickOnFrameThread();
+        igi::log(registered ? igi::LogLevel::Info : igi::LogLevel::Warning,
+                 registered ? "frame tick: callback registered on Display_RunCallbacks thread id=" +
+                                  std::to_string(threadId)
+                            : "frame tick: callback registration failed on Display_RunCallbacks "
+                              "thread id=" +
+                                  std::to_string(threadId));
+    }
+}
+
+void recordFrameDispatchThread() noexcept {
+    const DWORD current = GetCurrentThreadId();
+    DWORD expected = 0;
+    if (frameDispatchThreadId.compare_exchange_strong(expected, current,
+                                                      std::memory_order_acq_rel)) {
+        igi::log(igi::LogLevel::Info,
+                 "frame tick: Display_RunCallbacks dispatch thread id=" + std::to_string(current));
+    } else if (expected != current) {
+        igi::log(igi::LogLevel::Error, "frame tick: Display_RunCallbacks moved from thread id=" +
+                                           std::to_string(expected) +
+                                           " to thread id=" + std::to_string(current));
+    }
+}
+
 // Detour for Display_AddFrameCallback itself. It fires when the game registers a
 // callback (usually once during startup). The detour forwards to the registrar so
 // the game's callback is installed, then makes sure our tick is still present so a
@@ -144,10 +187,7 @@ bool registerFrameTick() noexcept {
 extern "C" int __cdecl displayAddFrameCallbackDetour(void *callback) {
     const int result =
         displayAddFrameCallbackOriginal ? displayAddFrameCallbackOriginal(callback) : 0;
-    registerFrameTick();
-    if (igi::Scheduler *scheduler = activeScheduler.load(std::memory_order_acquire)) {
-        scheduler->runPendingFromGameHook();
-    }
+    tickRegistrationRequested.store(true, std::memory_order_release);
     return result;
 }
 
@@ -155,6 +195,8 @@ extern "C" int __cdecl displayAddFrameCallbackDetour(void *callback) {
 // from ScreenDraw. It suppresses the duplicate list-walk tick, runs the original
 // frame dispatch, then drains the scheduler for the completed frame.
 extern "C" int __cdecl displayRunCallbacksDetour() {
+    recordFrameDispatchThread();
+    processFrameTickRequests();
     frameTickHandled.store(true, std::memory_order_release);
     const int result = displayRunCallbacksOriginal ? displayRunCallbacksOriginal() : 0;
     frameTickHandled.store(false, std::memory_order_release);
@@ -218,10 +260,22 @@ bool installDisplayFrameHook(igi::Scheduler &scheduler, void *&trampolineOut) {
                 "Display_RunCallbacks hook creation failed; relying on the callback list only");
         }
     }
-    if (runHookCreated &&
+    if (!runHookCreated ||
         MH_EnableHook(reinterpret_cast<void *>(igi::game::displayRunCallbacks)) != MH_OK) {
-        igi::log(LogLevel::Warning, "Display_RunCallbacks hook enable failed");
-        runHookCreated = false;
+        MH_DisableHook(reinterpret_cast<void *>(igi::game::displayAddFrameCallback));
+        MH_RemoveHook(reinterpret_cast<void *>(igi::game::displayAddFrameCallback));
+        addHookCreated = false;
+        displayAddFrameCallbackOriginal = nullptr;
+        if (runHookCreated) {
+            MH_DisableHook(reinterpret_cast<void *>(igi::game::displayRunCallbacks));
+            MH_RemoveHook(reinterpret_cast<void *>(igi::game::displayRunCallbacks));
+            runHookCreated = false;
+            displayRunCallbacksOriginal = nullptr;
+        }
+        activeScheduler.store(nullptr, std::memory_order_release);
+        igi::log(LogLevel::Error,
+                 "Display_RunCallbacks hook is required to serialize callback-list mutations");
+        return false;
     }
 
     if (!getStringHookCreated) {
@@ -240,19 +294,15 @@ bool installDisplayFrameHook(igi::Scheduler &scheduler, void *&trampolineOut) {
 
     trampolineOut = reinterpret_cast<void *>(displayAddFrameCallbackOriginal);
 
-    const bool registered = registerFrameTick();
+    tickRegistrationRequested.store(true, std::memory_order_release);
+    tickRemovalRequested.store(false, std::memory_order_release);
+    tickRemovalCompleted.store(true, std::memory_order_release);
+    frameDispatchThreadId.store(0, std::memory_order_release);
     igi::log(LogLevel::Info,
              "IGI 1 Display_AddFrameCallback hook installed at 0x004916C0; frame tick registered");
-    igi::log(
-        LogLevel::Info,
-        runHookCreated
-            ? "IGI 1 Display_RunCallbacks per-frame driver hooked at 0x00491D00"
-            : "IGI 1 Display_RunCallbacks driver unavailable; tick depends on the callback list");
-    if (!registered) {
-        igi::log(
-            LogLevel::Warning,
-            "Display_AddFrameCallback tick not present after registration; watchdog will retry");
-    }
+    igi::log(LogLevel::Info, "IGI 1 Display_RunCallbacks per-frame driver hooked at 0x00491D00");
+    igi::log(LogLevel::Info,
+             "Display_AddFrameCallback tick registration requested for the frame thread");
     return true;
 }
 } // namespace
@@ -271,7 +321,7 @@ bool HookManager::installDisplayAddFrameCallbackTick() {
             MH_EnableHook(reinterpret_cast<void *>(game::displayRunCallbacks));
         if (getStringHookCreated)
             MH_EnableHook(reinterpret_cast<void *>(game::menuManagerGetString));
-        registerFrameTick();
+        tickRegistrationRequested.store(true, std::memory_order_release);
         installed_ = true;
         log(LogLevel::Info, "IGI 1 Display_AddFrameCallback hook re-enabled");
         return true;
@@ -307,7 +357,8 @@ bool HookManager::ensureFrameTickRegistered() noexcept {
 #if defined(_WIN32) && (defined(__i386__) || defined(_M_IX86))
     if (!installed_ || !displayAddFrameCallbackOriginal)
         return false;
-    return registerFrameTick();
+    tickRegistrationRequested.store(true, std::memory_order_release);
+    return true;
 #else
     return false;
 #endif
@@ -325,7 +376,28 @@ bool HookManager::uninstall() noexcept {
     // returns without touching SDK state that is about to be destroyed.
     activeScheduler.store(nullptr, std::memory_order_release);
 
-    unregisterFrameTick();
+    if (scheduler_.isGameThread()) {
+        unregisterFrameTick();
+        tickRemovalCompleted.store(true, std::memory_order_release);
+        log(LogLevel::Info, "frame tick: callback removed directly on verified frame thread");
+    } else {
+        // The worker must not walk or modify the retail callback list. Wait for
+        // Display_RunCallbacks to remove our node after its current list walk.
+        tickRemovalCompleted.store(false, std::memory_order_release);
+        tickRemovalRequested.store(true, std::memory_order_release);
+        constexpr DWORD kFrameRemovalTimeoutMs = 5000;
+        const DWORD deadline = GetTickCount() + kFrameRemovalTimeoutMs;
+        while (!tickRemovalCompleted.load(std::memory_order_acquire) &&
+               static_cast<LONG>(GetTickCount() - deadline) < 0) {
+            Sleep(1);
+        }
+    }
+    if (!tickRemovalCompleted.load(std::memory_order_acquire)) {
+        log(LogLevel::Error,
+            "frame tick removal timed out; preserving hooks and SDK state to avoid a cross-thread "
+            "callback-list mutation");
+        return false;
+    }
 
     bool restored = true;
     if (addHookCreated) {

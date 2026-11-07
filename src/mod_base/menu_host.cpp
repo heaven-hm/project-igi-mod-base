@@ -39,6 +39,19 @@ enum class IgiMenuScreenState : std::int32_t {
     Restart = 5,
 };
 
+enum class MenuTransition { None, Closing, Reopening };
+
+// Retail IGI 1 MenuManager layout recovered from the menu-script entry points:
+// MenuManager_RequestScreen (0x004174a0) and MenuManager_LeaveMenus (0x00417790)
+// both write the "Current menuscreen" parameter at +0x20.  FLOW_GET_SCREEN
+// returns this MenuManager object, not the active MenuScreen task.
+struct RetailMenuManagerLayout {
+    std::byte taskHeaderAndUnknown[0x20];
+    std::int32_t currentScreenId;
+};
+
+static_assert(offsetof(RetailMenuManagerLayout, currentScreenId) == 0x20);
+
 // Consolidated mod-menu state container (BigBase v2 style).
 struct InternalMenuState {
     igi::Runtime runtime;
@@ -62,6 +75,8 @@ struct InternalMenuState {
     std::atomic<bool> shutdownPending{false};
     bool menuScreenCreated = false;
     bool menuScreenAttached = false;
+    MenuTransition pendingTransition = MenuTransition::None;
+    std::uint64_t transitionDeadlineFrame = 0;
     std::atomic<bool> initialAttachPending{false};
 };
 
@@ -84,6 +99,8 @@ auto &safeToShutdown = g_menu.safeToShutdown;
 auto &shutdownPending = g_menu.shutdownPending;
 auto &menuScreenCreated = g_menu.menuScreenCreated;
 auto &menuScreenAttached = g_menu.menuScreenAttached;
+auto &pendingTransition = g_menu.pendingTransition;
+auto &transitionDeadlineFrame = g_menu.transitionDeadlineFrame;
 auto &initialAttachPending = g_menu.initialAttachPending;
 
 struct GameRootLayout {
@@ -132,16 +149,13 @@ bool installMenuScriptCallbacks() {
             runModMenu(menuConfig, runtime, item, value);
         },
         [] {
-            if (!igi::resumeFromMenu(runtime)) {
-                igi::log(igi::LogLevel::Error,
-                         "internal menu close rejected: unable to resume game");
+            if (pendingTransition != MenuTransition::None)
                 return;
-            }
-            menuScreenAttached = false;
-            if (!shutdownPending.load(std::memory_order_acquire))
-                safeToShutdown.store(true, std::memory_order_release);
+            pendingTransition = MenuTransition::Closing;
+            transitionDeadlineFrame = runtime.scheduler().gameHookInvocationCount() + 120;
+            safeToShutdown.store(false, std::memory_order_release);
             igi::log(igi::LogLevel::Info,
-                     "internal menu close: game resumed and human input enabled");
+                     "internal menu close: awaiting retail screen transition before resuming");
         },
         /*deferUntilApply=*/true);
     menuCallbacks = std::make_unique<igi::MenuScriptCallbacks>(*menuBridge, script);
@@ -165,10 +179,98 @@ bool runMenuCommand(const char *resource, const char *operation) {
     auto *manager = IGI::TASK::FIND_CHILD(root, IGI::MENU::GET_TYPE());
     if (!manager)
         return false;
-    (void)IGI::TASK::RUN_SCRIPT(manager, resource, 0);
+    if (!IGI::TASK::RUN_SCRIPT(manager, resource, 0)) {
+        igi::log(igi::LogLevel::Error,
+                 std::string("internal menu command: ") + operation + " Task_RunScript failed");
+        return false;
+    }
     igi::log(igi::LogLevel::Info,
              std::string("internal menu command: ") + operation + " requested");
     return true;
+}
+
+bool isConfiguredMenuScreenActive() {
+    auto *manager = static_cast<const RetailMenuManagerLayout *>(IGI::OTHER::FLOW_GET_SCREEN());
+    return manager && manager->currentScreenId == menuConfig.screenId &&
+           IGI::TASK::FIND_BY_ID(menuConfig.screenId) != nullptr;
+}
+
+void completeShutdownOnGameThread() {
+    IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, "IGI SDK Mod Menu: disabled");
+    menuRegistration.stop();
+    menuCallbacks.reset();
+    menuBridge.reset();
+    if (!menuResource.release())
+        igi::log(igi::LogLevel::Error,
+                 "internal menu resource: release refused because ownership changed");
+    reopenResource.release();
+    closeResource.release();
+    menuScreenCreated = false;
+    menuScreenAttached = false;
+    pendingTransition = MenuTransition::None;
+    shutdownPending.store(false, std::memory_order_release);
+    safeToShutdown.store(true, std::memory_order_release);
+    igi::log(igi::LogLevel::Info, "internal unload: game-thread cleanup finished");
+}
+
+void completeCloseTransition() {
+    pendingTransition = MenuTransition::None;
+    menuScreenAttached = false;
+    if (menuBridge)
+        menuBridge->cancel();
+    else if (!igi::resumeFromMenu(runtime))
+        igi::log(igi::LogLevel::Warning, "internal menu close: unable to resume game");
+    if (shutdownPending.load(std::memory_order_acquire)) {
+        completeShutdownOnGameThread();
+        return;
+    }
+    safeToShutdown.store(true, std::memory_order_release);
+    igi::log(igi::LogLevel::Info,
+             "internal menu close: retail screen transition confirmed; game resumed");
+}
+
+void processPendingMenuTransition() {
+    if (pendingTransition == MenuTransition::None)
+        return;
+
+    const auto currentFrame = runtime.scheduler().gameHookInvocationCount();
+    const bool screenActive = isConfiguredMenuScreenActive();
+    if (pendingTransition == MenuTransition::Closing && !screenActive) {
+        completeCloseTransition();
+        return;
+    }
+    if (pendingTransition == MenuTransition::Reopening && screenActive) {
+        pendingTransition = MenuTransition::None;
+        menuScreenAttached = true;
+        safeToShutdown.store(false, std::memory_order_release);
+        if (!igi::pauseForMenu(runtime)) {
+            igi::log(igi::LogLevel::Error, "internal menu reopen: unable to pause game");
+            return;
+        }
+        if (menuBridge)
+            menuBridge->snapshot();
+        igi::log(igi::LogLevel::Info,
+                 "internal menu reopen: retail screen transition confirmed and game paused");
+        return;
+    }
+    if (currentFrame < transitionDeadlineFrame)
+        return;
+
+    const bool wasClosing = pendingTransition == MenuTransition::Closing;
+    pendingTransition = MenuTransition::None;
+    if (wasClosing) {
+        menuScreenAttached = true;
+        safeToShutdown.store(false, std::memory_order_release);
+        shutdownPending.store(false, std::memory_order_release);
+        igi::log(igi::LogLevel::Error, "internal menu close: retail screen did not transition; "
+                                       "retaining callbacks and resources");
+        return;
+    }
+    menuScreenAttached = false;
+    safeToShutdown.store(true, std::memory_order_release);
+    (void)igi::resumeFromMenu(runtime);
+    igi::log(igi::LogLevel::Error,
+             "internal menu reopen: retail screen did not transition; game input recovered");
 }
 
 bool writeMenuResourceFile() {
@@ -195,7 +297,7 @@ bool rebuildMenuResources() {
         !igi::compileIgiMenuCommandScript("MenuManager_RequestScreen(" +
                                               std::to_string(menuConfig.screenId) + ", FALSE);",
                                           reopen, error) ||
-        !igi::compileIgiMenuCommandScript("MenuManager_LeaveMenus(900, 9);", close, error)) {
+        !igi::compileIgiMenuCommandScript("MenuManager_PopScreen(FALSE);", close, error)) {
         igi::log(igi::LogLevel::Error,
                  std::string("internal menu resource compilation failed: ") + error);
         return false;
@@ -253,7 +355,12 @@ bool selectFreeMenuScreenId() {
 // the game root task. Every step is logged so an in-game failure points at the
 // exact call that broke.
 void menuFrameWork() {
-    if (!runtime.initialized() || menuScreenAttached)
+    if (!runtime.initialized())
+        return;
+    processPendingMenuTransition();
+    if (menuScreenAttached || pendingTransition != MenuTransition::None)
+        return;
+    if (!initialAttachPending.load(std::memory_order_acquire))
         return;
     igi::log(igi::LogLevel::Info, "internal menu frame: checking game state");
     auto *game = IGI::GAME::GET();
@@ -327,17 +434,13 @@ void menuFrameWork() {
 }
 
 bool closeMenuScreen() {
-    if (menuBridge)
-        menuBridge->cancel();
     if (!runMenuCommand("LOCAL:mod_base/modmenu-close.qvm", "close"))
         return false;
-    menuScreenAttached = false;
-    if (!menuBridge && !igi::resumeFromMenu(runtime)) {
-        igi::log(igi::LogLevel::Warning, "internal menu close: unable to resume game");
-    } else {
-        igi::log(igi::LogLevel::Info, "internal menu close: game resumed and human input enabled");
-    }
-    safeToShutdown.store(true, std::memory_order_release);
+    pendingTransition = MenuTransition::Closing;
+    transitionDeadlineFrame = runtime.scheduler().gameHookInvocationCount() + 120;
+    safeToShutdown.store(false, std::memory_order_release);
+    igi::log(igi::LogLevel::Info,
+             "internal menu close: awaiting retail screen transition before cleanup");
     return true;
 }
 
@@ -345,19 +448,16 @@ bool reopenMenuScreen() {
     if (menuScreenCreated) {
         if (!runMenuCommand("LOCAL:mod_base/modmenu-reopen.qvm", "reopen"))
             return false;
-        menuScreenAttached = true;
+        pendingTransition = MenuTransition::Reopening;
+        transitionDeadlineFrame = runtime.scheduler().gameHookInvocationCount() + 120;
         safeToShutdown.store(false, std::memory_order_release);
-        if (!igi::pauseForMenu(runtime)) {
-            igi::log(igi::LogLevel::Error, "internal menu reopen: unable to pause game");
-            return false;
-        }
-        if (menuBridge)
-            menuBridge->snapshot();
-        igi::log(igi::LogLevel::Info, "internal menu reopen: game paused and human input disabled");
+        igi::log(igi::LogLevel::Info,
+                 "internal menu reopen: awaiting retail screen transition before pausing game");
         return true;
     }
     menuScreenCreated = false;
     menuScreenAttached = false;
+    initialAttachPending.store(true, std::memory_order_release);
     menuFrameWork();
     return menuScreenAttached;
 }
@@ -436,8 +536,7 @@ extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_Internal_Initialize() {
     initialAttachPending.store(true, std::memory_order_release);
     igi::log(igi::LogLevel::Info, "internal startup stage: enqueue begin");
     runtime.scheduler().enqueueEveryFrame([] {
-        if (initialAttachPending.load(std::memory_order_acquire))
-            menuFrameWork();
+        menuFrameWork();
         igi::renderThirdPersonCrosshair();
     });
     igi::log(igi::LogLevel::Info, "internal startup stage: enqueue complete");
@@ -531,21 +630,11 @@ extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_Internal_RequestShutdown() {
             shutdownPending.store(false, std::memory_order_release);
             return;
         }
+        if (wasAttached)
+            return;
         if (!wasAttached)
             (void)igi::resumeFromMenu(runtime);
-        IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, "IGI SDK Mod Menu: disabled");
-        menuRegistration.stop();
-        menuCallbacks.reset();
-        menuBridge.reset();
-        if (!menuResource.release())
-            igi::log(igi::LogLevel::Error,
-                     "internal menu resource: release refused because ownership changed");
-        reopenResource.release();
-        closeResource.release();
-        menuScreenCreated = false;
-        menuScreenAttached = false;
-        igi::log(igi::LogLevel::Info, "internal unload: game-thread cleanup finished");
-        safeToShutdown.store(true, std::memory_order_release);
+        completeShutdownOnGameThread();
     });
     igi::log(igi::LogLevel::Info, "internal menu close: queued for the display frame thread");
     return true;

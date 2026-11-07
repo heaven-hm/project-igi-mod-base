@@ -59,13 +59,15 @@ if ((clean)); then
     rm -rf "$build_dir"
 fi
 
-# A cache created with the host compiler cannot be converted in place; CMake
-# would keep using AppleClang/gcc and fail to link a Windows PE image.
+# A cache created with the host compiler or in a different directory cannot
+# be converted in place; CMake would fail or keep pointing at the old path.
 if [[ -f "$build_dir/CMakeCache.txt" ]]; then
     cached_c=$(sed -n 's/^CMAKE_C_COMPILER:[^=]*=//p' "$build_dir/CMakeCache.txt" | head -1)
     cached_cxx=$(sed -n 's/^CMAKE_CXX_COMPILER:[^=]*=//p' "$build_dir/CMakeCache.txt" | head -1)
-    if [[ "$cached_c" != *mingw* || "$cached_cxx" != *mingw* ]]; then
-        printf 'discarding stale build tree (host compiler): %s\n' "$build_dir"
+    cached_home=$(sed -n 's/^CMAKE_HOME_DIRECTORY:[^=]*=//p' "$build_dir/CMakeCache.txt" | head -1)
+    cached_bdir=$(sed -n 's/^CMAKE_CACHEFILE_DIR:[^=]*=//p' "$build_dir/CMakeCache.txt" | head -1)
+    if [[ "$cached_c" != *mingw* || "$cached_cxx" != *mingw* || "$cached_home" != "$root" || "$cached_bdir" != "$build_dir" ]]; then
+        printf 'discarding stale build tree: %s\n' "$build_dir"
         rm -rf "$build_dir"
     fi
 fi
