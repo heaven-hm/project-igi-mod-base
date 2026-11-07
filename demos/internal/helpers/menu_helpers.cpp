@@ -206,20 +206,21 @@ bool executeMenuCommand(std::string_view commandScript) {
 bool changeLevel(Runtime &runtime, int levelId) {
     if (levelId < 1 || levelId > 14)
         return false;
-    if (!IGI::GAME::GET())
+    auto *game = IGI::GAME::GET();
+    if (!game)
         return false;
     if (!prepareMenuForLevelChange()) {
         log(LogLevel::Error, "level change: injected menu cleanup failed");
         return false;
     }
-    const std::string script =
-        "Game_SetMission(" + std::to_string(levelId) + "); MenuManager_LeaveMenus(-1, 13);";
-    if (!executeMenuCommand(script)) {
-        log(LogLevel::Error, "level change: start-game command failed");
+    if (!executeMenuCommand("Game_SetMission(" + std::to_string(levelId) + ");")) {
+        log(LogLevel::Error, "level change: mission selection command failed");
         return false;
     }
+    IGI::OTHER::FLOW_SET_REQUEST(4);
+    IGI::TASK::DELETE_TASK(reinterpret_cast<IGI::Task *>(game));
     log(LogLevel::Info,
-        "level change: direct start requested for level " + std::to_string(levelId));
+        "level change: game task unloaded; Flow will load level " + std::to_string(levelId));
     return true;
 }
 } // namespace igi
