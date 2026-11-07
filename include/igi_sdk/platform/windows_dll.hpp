@@ -18,3 +18,4 @@ struct DllMenuCallbacks {
 const DllMenuCallbacks& getDllMenuCallbacks() noexcept;
 
 }  // namespace igi
+

@@ -9,6 +9,12 @@
 namespace igi {
 bool pauseForMenu(Runtime& runtime);
 bool resumeFromMenu(Runtime& runtime);
+bool lockHumanInput();
+bool unlockHumanInput();
 void executeMenuNativeAction(const MenuConfig& config, Runtime& runtime, std::size_t item,
                              std::string_view value);
+bool executeMenuCommand(std::string_view commandScript);
+bool changeLevel(int levelId);
+bool setWeather(std::string_view weather);
+bool setFps(std::string_view value);
 }

@@ -3,12 +3,12 @@
 
 bool configureModMenu(igi::MenuConfig& config) {
     config.items = {
-        {"weather", igi::ModMenuItemKind::List, "Rain", "IGI_SDK_SetWeather(this.value)", {"off", "on"}},
-        {"ammo", igi::ModMenuItemKind::Action, "Enable Unlimited Ammo", "IGI_SDK_EnableUnlimitedAmmo()", {}},
-        {"frames", igi::ModMenuItemKind::Toggle, "Frame Limit", "IGI_SDK_ToggleFrameLimit()", {"true"}, true},
-        {"music", igi::ModMenuItemKind::List, "Music Volume", "IGI_SDK_SetMusicVolume(this.value)", {"mute", "low", "normal"}},
-        {"display", igi::ModMenuItemKind::Action, "Refresh Display", "IGI_SDK_RefreshDisplay()", {}},
-        {"diagnostics", igi::ModMenuItemKind::Action, "Log Game State", "IGI_SDK_LogGameState()", {}},
+        {"weather", igi::ModMenuItemKind::List, "Weather", "", {"Off", "Rain", "Snow"}},
+        {"fps", igi::ModMenuItemKind::List, "FPS", "", {"30", "60", "120"}},
+        {"ammo", igi::ModMenuItemKind::Action, "Enable Unlimited Ammo", "", {}},
+        {"music", igi::ModMenuItemKind::List, "Music Volume", "", {"Normal", "Low", "Mute"}},
+        {"display", igi::ModMenuItemKind::Action, "Refresh Display", "", {}},
+        {"diagnostics", igi::ModMenuItemKind::Action, "Log Game State", "", {}},
     };
     return true;
 }

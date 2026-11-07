@@ -10,6 +10,7 @@
 #include "igi_sdk/config/menu_config.hpp"
 #include "igi_sdk/logging/logging.hpp"
 #include "igi_sdk/runtime/hotkeys.hpp"
+#include "igi_sdk/IGI.hpp"
 
 namespace {
 
@@ -68,15 +69,21 @@ std::uint8_t virtualKeyFor(std::uint8_t dik) noexcept {
         case 0x44: return VK_F10;
         case 0x57: return VK_F11;
         case 0x58: return VK_F12;
-        case 0x47: return VK_HOME;
-        case 0x4F: return VK_END;
-        case 0x49: return VK_PRIOR;
-        case 0x51: return VK_NEXT;
-        case 0x52: return VK_INSERT;
-        case 0x53: return VK_DELETE;
-        default:
-            return static_cast<std::uint8_t>(MapVirtualKeyA(dik, MAPVK_VSC_TO_VK_EX));
+        case 0x47:
+        case 0xC7: return VK_HOME;
+        case 0x4F:
+        case 0xCF: return VK_END;
+        case 0x49:
+        case 0xC9: return VK_PRIOR;
+        case 0x51:
+        case 0xD1: return VK_NEXT;
+        case 0x52:
+        case 0xD2: return VK_INSERT;
+        case 0x53:
+        case 0xD3: return VK_DELETE;
+        default: break;
     }
+    return static_cast<std::uint8_t>(MapVirtualKeyA(dik, MAPVK_VSC_TO_VK_EX));
 }
 
 bool validationAutoStartEnabled() noexcept {
@@ -84,14 +91,6 @@ bool validationAutoStartEnabled() noexcept {
     const DWORD length = GetEnvironmentVariableA("IGI_SDK_AUTOSTART", value, sizeof(value));
     return length > 0 && length < sizeof(value) &&
            (std::strcmp(value, "1") == 0 || std::strcmp(value, "true") == 0);
-}
-
-void showLifecycleStatus(const char* text) noexcept {
-    using StatusMessageShow = void (__cdecl*)(int, const char*, const char*, std::uint8_t*);
-    const int context = *reinterpret_cast<const int*>(0x00A758AC);
-    if (context == 0) return;
-    auto* const byte = reinterpret_cast<std::uint8_t*>(0x00567C74);
-    reinterpret_cast<StatusMessageShow>(0x00485970)(context, text, "STATUSSCREEN:note.spr", byte);
 }
 
 void mainLoopTick(const igi::DllMenuCallbacks& callbacks, igi::hotkeys::KeyTracker& keys) {
@@ -120,7 +119,6 @@ void mainLoopTick(const igi::DllMenuCallbacks& callbacks, igi::hotkeys::KeyTrack
         if (!g_state.initialized) {
             if (callbacks.initialize && callbacks.initialize()) {
                 g_state.initialized = true;
-                showLifecycleStatus("IGI SDK Mod Menu: enabled");
                 igi::log(igi::LogLevel::Info, "internal menu: initialized and opened from configured start key");
             } else {
                 igi::log(igi::LogLevel::Warning, "internal menu: initialization deferred until gameplay is active");
@@ -175,8 +173,10 @@ DWORD WINAPI igiSdkMainThread(void* rawModule) {
     }
 
     if (!g_state.initialized) {
+        igi::log(igi::LogLevel::Info, "internal unload: exited before initialization; unloading DLL");
         detachConsole();
-        return 0;
+        igi::closeLogFile();
+        FreeLibraryAndExitThread(static_cast<HMODULE>(rawModule), 0);
     }
 
     if (callbacks.requestShutdown && !callbacks.requestShutdown()) {
@@ -194,12 +194,13 @@ DWORD WINAPI igiSdkMainThread(void* rawModule) {
         return 0;
     }
 
-    showLifecycleStatus("IGI SDK Mod Menu: disabled");
     if (callbacks.shutdown) callbacks.shutdown();
     igi::log(igi::LogLevel::Info,
-             "internal unload: callbacks and resources released; SDK detached and left resident");
+             "internal unload: callbacks and resources released; unloading DLL");
+    Sleep(50);
     detachConsole();
-    return 0;
+    igi::closeLogFile();
+    FreeLibraryAndExitThread(static_cast<HMODULE>(rawModule), 0);
 }
 
 }  // namespace
@@ -211,3 +212,4 @@ BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID) {
     }
     return TRUE;
 }
+

@@ -3,21 +3,12 @@
 #include <cstdint>
 
 #include "igi_sdk/logging/logging.hpp"
-#include "igi_sdk/natives/igi_re/hashes.hpp"
+#include "igi_sdk/natives/mvp_natives.hpp"
 
 namespace {
-using StatusMessageShow = void (__cdecl*)(int, const char*, const char*, std::uint8_t*);
-constexpr std::uintptr_t statusMessageShowAddress = igi::re::HASH::StatusMessageShow;
-constexpr std::uintptr_t statusMessageContextAddress = 0x00A758AC;
-constexpr std::uintptr_t statusMessageByteAddress = 0x00567C74;
-constexpr char statusMessageSprite[] = "STATUSSCREEN:note.spr";
-
 void showStatusMessage() noexcept {
-    const auto show = reinterpret_cast<StatusMessageShow>(statusMessageShowAddress);
-    const int context = *reinterpret_cast<const int*>(statusMessageContextAddress);
-    auto* const statusByte = reinterpret_cast<std::uint8_t*>(statusMessageByteAddress);
-    igi::log(igi::LogLevel::Info, "inject test: F5 received; calling reference StatusMessageShow ABI");
-    show(context, "IGI SDK NATIVE INJECT TEST", statusMessageSprite, statusByte);
+    igi::log(igi::LogLevel::Info, "inject test: F5 received; calling IGI::MISC::STATUS_MESSAGE_SHOW");
+    IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, "IGI SDK NATIVE INJECT TEST", "STATUSSCREEN:note.spr");
     igi::log(igi::LogLevel::Info, "inject test: StatusMessageShow returned normally");
 }
 

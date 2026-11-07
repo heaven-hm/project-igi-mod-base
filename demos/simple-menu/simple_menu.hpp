@@ -4,4 +4,4 @@
 #include <string_view>
 
 bool configureSimpleMenu(igi::MenuConfig& config);
-void simpleMenuAction(igi::Runtime& runtime, std::size_t item, std::string_view value);
+void simpleMenuAction(const igi::MenuConfig& config, igi::Runtime& runtime, std::size_t item, std::string_view value);

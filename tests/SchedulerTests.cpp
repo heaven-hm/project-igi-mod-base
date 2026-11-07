@@ -33,7 +33,7 @@ int scriptItemsAdded = 0;
 int scriptRegistrations = 0;
 int scriptRemovals = 0;
 bool scriptSymbolExists = false;
-igi::ScriptCallback registeredCallbacks[7]{};
+igi::ScriptCallback registeredCallbacks[9]{};
 void* registeredContext = nullptr;
 int fakeResourceObject = 0;
 void* fakeResourceCurrent = nullptr;
@@ -61,7 +61,7 @@ int throwingScriptGetInt(void*, int) { throw std::runtime_error("script argument
 void fakeScriptAddItem(const char*, int id) { assert(id == scriptItemsAdded++); }
 void fakeRegister(const char*, igi::ScriptCallback callback, void* context, int argc) {
     assert(callback && context && (argc == 0 || argc == 1 || argc == 2));
-    registeredCallbacks[scriptRegistrations % 7] = callback;
+    registeredCallbacks[scriptRegistrations % 9] = callback;
     registeredContext = context;
     ++scriptRegistrations;
 }
@@ -275,6 +275,38 @@ int main() {
     assert(actionBridge.activate(2) && activatedItem == 2 && activatedValue == "false");
     assert(!actionBridge.activate(-1));
     assert(selectedWeather == "on");
+    std::vector<std::pair<std::size_t, std::string>> appliedEvents;
+    bool closedCalled = false;
+    igi::MenuScriptBridge deferredBridge(modConfig, [&](std::size_t item, std::string_view value) {
+        appliedEvents.emplace_back(item, std::string(value));
+    }, [&] {
+        closedCalled = true;
+    }, /*deferUntilApply=*/true);
+
+    deferredBridge.snapshot();
+    assert(deferredBridge.getToggle(2) == 1);
+    assert(deferredBridge.setToggle(2, 0));
+    assert(appliedEvents.empty());
+    assert(deferredBridge.setList(0, 1));
+    assert(appliedEvents.empty());
+
+    deferredBridge.cancel();
+    assert(closedCalled);
+    assert(deferredBridge.getToggle(2) == 1);
+    assert(deferredBridge.getList(0) == 0);
+    assert(appliedEvents.empty());
+
+    closedCalled = false;
+    assert(deferredBridge.setToggle(2, 0));
+    assert(deferredBridge.setList(0, 1));
+    deferredBridge.apply();
+    assert(closedCalled);
+    assert(deferredBridge.getToggle(2) == 0);
+    assert(deferredBridge.getList(0) == 1);
+    assert(appliedEvents.size() == 2);
+    assert(appliedEvents[0].first == 0 && appliedEvents[0].second == "on");
+    assert(appliedEvents[1].first == 2 && appliedEvents[1].second == "false");
+
     igi::MenuScriptBridge failingBridge(modConfig, [](std::size_t, std::string_view) {
         throw std::runtime_error("feature rejected selection");
     });
@@ -303,7 +335,7 @@ int main() {
     scriptSymbolExists = true;
     assert(!igi::registerMenuScriptCallbacks(callbacks, registry) && scriptRegistrations == 0);
     scriptSymbolExists = false;
-    assert(igi::registerMenuScriptCallbacks(callbacks, registry) && scriptRegistrations == 7);
+    assert(igi::registerMenuScriptCallbacks(callbacks, registry) && scriptRegistrations == 9);
     assert(registeredCallbacks[0] && registeredContext == &callbacks);
     igi::MenuScriptCallbacks throwingCallbacks(listBridge, {throwingScriptGetInt, fakeScriptAddItem});
     assert(registeredCallbacks[0](&scriptResult, &throwingCallbacks, scriptArgs) == &scriptResult);
@@ -317,9 +349,15 @@ int main() {
     assert(scriptResult.integer == 0);
     assert(registeredCallbacks[5] && registeredCallbacks[5](&scriptResult, &throwingCallbacks, scriptArgs) == &scriptResult);
     assert(scriptResult.integer == 0);
+    assert(registeredCallbacks[6] && registeredCallbacks[6](&scriptResult, &throwingCallbacks, scriptArgs) == &scriptResult);
+    assert(scriptResult.integer == 1);
+    assert(registeredCallbacks[7] && registeredCallbacks[7](&scriptResult, &throwingCallbacks, scriptArgs) == &scriptResult);
+    assert(scriptResult.integer == 1);
+    assert(registeredCallbacks[8] && registeredCallbacks[8](&scriptResult, &throwingCallbacks, scriptArgs) == &scriptResult);
+    assert(scriptResult.integer == 1);
     scriptSymbolExists = true;
     igi::unregisterMenuScriptCallbacks(callbacks, registry);
-    assert(scriptRemovals == 7);
+    assert(scriptRemovals == 9);
     igi::MenuScriptRegistration registration;
     scriptSymbolExists = false;
     assert(registration.start(callbacks, registry));
@@ -327,7 +365,7 @@ int main() {
     scriptSymbolExists = true;
     registration.stop();
     registration.stop();
-    assert(!registration.active() && scriptRemovals == 14);
+    assert(!registration.active() && scriptRemovals == 18);
     scriptArgs[1] = -1;
     assert(callbacks.set(&scriptResult, scriptArgs)->integer == 0);
     std::ostringstream menuScript;
@@ -339,7 +377,7 @@ int main() {
     assert(igi::writeIgi1MenuScreenScript(screenOnlyScript, modConfig));
     assert(screenOnlyScript.str().find("Task_New(-1, \"MenuManager\"") == std::string::npos);
     assert(screenOnlyScript.str().find("Task_New(990, \"MenuScreen\"") != std::string::npos);
-    assert(screenOnlyScript.str().find("MenuManager_PushScreen(990)") != std::string::npos);
+    assert(screenOnlyScript.str().find("MenuManager_RequestScreen(990, FALSE)") != std::string::npos);
     std::vector<std::uint8_t> screenOnlyQvm;
     assert(igi::compileIgi1MenuScreenScript(modConfig, screenOnlyQvm, compileError));
     assert(screenOnlyQvm.size() > 16);
@@ -347,10 +385,17 @@ int main() {
     assert(menuScript.str().find("Enable Unlimited Ammo") != std::string::npos);
     assert(menuScript.str().find("IGI_SDK_SetWeather") == std::string::npos);
     assert(menuScript.str().find("IGI_SDK_Action(5)") != std::string::npos);
-    assert(menuScript.str().find("Task_New(-1, \"ToggleBox\"") != std::string::npos);
+    assert(menuScript.str().find("Task_New(993, \"ToggleBox\"") != std::string::npos);
     assert(menuScript.str().find("IGI_SDK_FillList(0)") != std::string::npos);
     assert(menuScript.str().find("IGI_SDK_SetList(0,this.nActiveID)") != std::string::npos);
-    assert(menuScript.str().find("IGI_SDK_GetList(0)\", \"\", \"IGI_SDK_SetList(0,this.nActiveID)") != std::string::npos);
+    assert(menuScript.str().find("IGI_SDK_GetList(0)\", \"IGI_SDK_SetList(0,this.nActiveID)\", \"IGI_SDK_SetList(0,this.nActiveID)") != std::string::npos);
+    assert(menuScript.str().find("Task_New(-1, \"MenuFrame\", \"ControlsFrame\"") != std::string::npos);
+    assert(menuScript.str().find("Task_New(-1, \"MenuText\", \"restart\", \"Restart\"") != std::string::npos);
+    assert(menuScript.str().find("Task_New(-1, \"MenuText\", \"okay\", \"Okay\"") != std::string::npos);
+    assert(menuScript.str().find("Task_New(-1, \"MenuText\", \"cancel\", \"Cancel\"") != std::string::npos);
+    assert(menuScript.str().find("IGI_SDK_Cancel() - MenuManager_LeaveMenus(900, 12)") != std::string::npos);
+    assert(menuScript.str().find("IGI_SDK_Apply() - MenuManager_LeaveMenus(900, 9)") != std::string::npos);
+    assert(menuScript.str().find("IGI_SDK_Cancel() - MenuManager_LeaveMenus(900, 9)") != std::string::npos);
     std::vector<std::uint8_t> compiledMenu;
     if (!igi::compileIgi1MenuScript(modConfig, compiledMenu, compileError)) {
         std::fprintf(stderr, "menu compile error: %s\n", compileError.c_str());

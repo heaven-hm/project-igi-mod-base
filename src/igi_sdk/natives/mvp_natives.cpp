@@ -40,6 +40,13 @@ NATIVE_DECL void FRAMES_SET(int fps) {
 NATIVE_DECL void LOAD_PARAMETERS() {
     return NATIVE_INVOKE<Void>(HASH::GAME_MATERIAL_LOAD_PARAMETERS, "void GameMaterial_LoadParameters(void)");
 }
+NATIVE_DECL StatusMessage * STATUS_MESSAGE_SHOW(void * owner, const char * text, const char * portrait, const char * sound) {
+    if (!owner) {
+        owner = static_cast<void*>(LEVEL::GET_DYNAMIC());
+    }
+    if (!owner) return nullptr;
+    return NATIVE_INVOKE<StatusMessage *>(HASH::STATUS_MESSAGE_SHOW, "StatusMessage *StatusMessageShow(void *owner, const char *text, const char *portrait, const char *sound)", owner, text, portrait, sound);
+}
 }
 namespace GAME {
 NATIVE_DECL void SET_RAINING(const char * weather) {
@@ -237,6 +244,21 @@ NATIVE_DECL char IS_CROUCHING(Human * h) {
 }
 NATIVE_DECL char IS_ACTIVE(Human * h) {
     return NATIVE_INVOKE<char>(HASH::HUMAN_IS_ACTIVE, "char Human_IsActive(Human *h)", h);
+}
+NATIVE_DECL void LOCK_INPUT(Human * h) {
+    return NATIVE_INVOKE<Void>(HASH::HUMAN_LOCK_INPUT, "void Human_LockInput(Human *h)", h);
+}
+NATIVE_DECL void UNLOCK_INPUT(Human * h) {
+    return NATIVE_INVOKE<Void>(HASH::HUMAN_UNLOCK_INPUT, "void Human_UnlockInput(Human *h)", h);
+}
+NATIVE_DECL void ENABLE_LOOK(Human * h) {
+    return NATIVE_INVOKE<Void>(HASH::HUMAN_ENABLE_LOOK, "void Human_EnableLook(Human *h)", h);
+}
+NATIVE_DECL void DISABLE_LOOK(Human * h) {
+    return NATIVE_INVOKE<Void>(HASH::HUMAN_DISABLE_LOOK, "void Human_DisableLook(Human *h)", h);
+}
+NATIVE_DECL void VIEW_CAM(Human * h, int mode) {
+    return NATIVE_INVOKE<Void>(HASH::HUMAN_VIEW_CAM, "void HumanViewCam(Human *h, int mode)", h, mode);
 }
 }
 namespace SOLDIER {
@@ -829,6 +851,9 @@ NATIVE_DECL Task * RUN_SCRIPT(Task * parent, const char * path, char insertHead)
 NATIVE_DECL Task * FIND_BY_ID(int id) {
     return NATIVE_INVOKE<Task *>(HASH::TASK_FIND_BY_ID, "Task *Task_FindById(int id)", id);
 }
+NATIVE_DECL void DELETE_TASK(Task * task) {
+    NATIVE_INVOKE<void>(HASH::TASK_DELETE, "void Task_Delete(Task *task)", task);
+}
 NATIVE_DECL uint16_t GET_MASK(uint16_t type) {
     return NATIVE_INVOKE<uint16_t>(HASH::TASK_TYPE_GET_MASK, "uint16_t TaskType_GetMask(uint16_t type)", type);
 }
@@ -978,6 +1003,6 @@ NATIVE_DECL int PROFILE_GET_LANGUAGE() {
     return NATIVE_INVOKE<int>(HASH::PROFILE_GET_LANGUAGE, "int Profile_GetLanguage(void)");
 }
 }
-std::size_t NativeBindingCount() noexcept { return 303; }
+std::size_t NativeBindingCount() noexcept { return 310; }
 } // namespace IGI
 #undef NATIVE_INVOKE

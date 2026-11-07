@@ -1,6 +1,9 @@
 #include "simple_menu.hpp"
 
+#include <algorithm>
 #include <cstdint>
+#include <cstring>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -12,117 +15,162 @@
 
 namespace {
 
-constexpr std::uintptr_t gAICurrentAddr = 0x005bda58;
-constexpr std::uintptr_t gMoveScaleAddr = 0x0056e1e8;
+struct WeaponEntry {
+    int id = 0;
+    int ammo = 0;
+    std::string name;
+};
 
-bool g_ghostMode = false;
-bool g_godMode = false;
-bool g_oneHitKill = false;
-float g_currentSpeed = 1.0f;
-double g_defaultSightRange = 100.0;
+std::vector<WeaponEntry> g_weapons;
+std::size_t g_selectedWeapon = 0;
 
-std::uint8_t* getCurrentAi() noexcept {
-    auto* const aiPtr = reinterpret_cast<std::uint8_t* const*>(gAICurrentAddr);
-    return aiPtr ? *aiPtr : nullptr;
+bool pickupWeapon() {
+    if (g_selectedWeapon >= g_weapons.size()) return false;
+    auto* player = IGI::GAME::GET_PLAYER(0);
+    if (!player) return false;
+    int args[] = {g_weapons[g_selectedWeapon].id, g_weapons[g_selectedWeapon].ammo};
+    IGI::PLAYER::PICK_UP_WEAPON(reinterpret_cast<IGI::Human*>(player), args);
+    return true;
 }
 
-std::uint8_t* getPlayerAi() noexcept {
-    auto* player = reinterpret_cast<std::uint8_t*>(IGI::GAME::GET_PLAYER(0));
-    if (!player) return nullptr;
-    auto* const aiPtr = reinterpret_cast<std::uint8_t* const*>(player + 0x800);
-    return aiPtr ? *aiPtr : nullptr;
+void clearFlashes() {
+    auto* player = IGI::GAME::GET_PLAYER(0);
+    if (!player) return;
+    auto* hp = reinterpret_cast<IGI::HumanPlayer*>(player);
+    IGI::PLAYER::FADE_HIT_FLASH(hp);
+    IGI::PLAYER::FADE_FLASH(hp);
 }
 
-void applyGhostMode(bool enabled) noexcept {
-    g_ghostMode = enabled;
-    auto* ai = getCurrentAi();
-    if (ai) {
-        if (enabled) {
-            const double current = *reinterpret_cast<const double*>(ai + 0xb0);
-            if (current > 0.0) g_defaultSightRange = current;
-            *reinterpret_cast<double*>(ai + 0xb0) = 0.0;
-            *reinterpret_cast<float*>(ai + 0xb0) = 0.0f;
-        } else {
-            *reinterpret_cast<double*>(ai + 0xb0) = g_defaultSightRange;
-            *reinterpret_cast<float*>(ai + 0xb0) = static_cast<float>(g_defaultSightRange);
-        }
-    }
+void setSfxVolume(std::string_view value) {
+    const float vol = (value == "Mute") ? 0.0f : (value == "Low") ? 0.35f : 1.0f;
+    IGI::AUDIO::SET_SFX_VOLUME(vol);
 }
 
-void applyGodMode(bool enabled) noexcept {
-    g_godMode = enabled;
-    const std::uint8_t flag = enabled ? 1 : 0;
-    auto* ai = getCurrentAi();
-    if (ai) {
-        *reinterpret_cast<std::uint8_t*>(ai + 0x3abc) = flag;
-    }
-    auto* playerAi = getPlayerAi();
-    if (playerAi) {
-        *reinterpret_cast<std::uint8_t*>(playerAi + 0x3abc) = flag;
-    }
-}
-
-void applyMoveSpeed(float scale) noexcept {
-    g_currentSpeed = scale;
-    *reinterpret_cast<float*>(gMoveScaleAddr) = scale;
-}
-
-void applyOneHitKill(bool enabled) noexcept {
-    g_oneHitKill = enabled;
-    const std::uint8_t flag = enabled ? 0 : 1;
-    auto* ai = getCurrentAi();
-    if (ai) {
-        *reinterpret_cast<std::uint8_t*>(ai + 0x3abd) = flag;
-    }
-    auto* playerAi = getPlayerAi();
-    if (playerAi) {
-        *reinterpret_cast<std::uint8_t*>(playerAi + 0x3abd) = flag;
-    }
+void logFlowDiagnostics() {
+    const int fps = IGI::OTHER::FLOW_GET_FPS();
+    const int frames = IGI::OTHER::FLOW_GET_FRAMES();
+    const int renders = IGI::OTHER::FLOW_GET_RENDERS();
+    std::ostringstream ss;
+    ss << "simple menu diagnostics: Flow FPS=" << fps
+       << " TotalFrames=" << frames
+       << " TotalRenders=" << renders;
+    igi::log(igi::LogLevel::Info, ss.str());
+    IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, ss.str().c_str());
 }
 
 }  // namespace
 
 bool configureSimpleMenu(igi::MenuConfig& config) {
+    g_weapons = {
+        {2, 30, "Glock 17"},
+        {3, 14, "Desert Eagle"},
+        {4, 60, "Colt Anaconda"},
+        {5, 90, "MP5SD"},
+        {6, 120, "UZI"},
+        {7, 120, "M16A2"},
+        {8, 120, "AK-47"},
+        {9, 30, "Dragunov SVD"},
+        {10, 200, "M249 SAW"},
+        {11, 24, "Jackhammer"},
+        {12, 16, "Spas 12"},
+        {14, 4, "LAW 80"},
+    };
+    igi::ModMenuItemConfig weaponList{"weapon", igi::ModMenuItemKind::List, "Weapon", "", {}};
+    for (const auto& w : g_weapons) {
+        weaponList.values.push_back(w.name);
+    }
+
+    g_selectedWeapon = 0;
+
     config.items = {
-        {"ghost", igi::ModMenuItemKind::Toggle, "Ghost Mode", "", {"false"}, false},
-        {"god", igi::ModMenuItemKind::Toggle, "God Mode", "", {"false"}, false},
-        {"speed", igi::ModMenuItemKind::List, "Player Speed", "", {"1.0x (Normal)", "2.0x (Fast)", "3.0x (Super)"}},
-        {"onehit", igi::ModMenuItemKind::Toggle, "One-Hit Kill", "", {"false"}, false},
+        {"weather", igi::ModMenuItemKind::List, "Weather", "", {"Off", "Rain", "Snow"}},
+        {"fps", igi::ModMenuItemKind::List, "FPS", "", {"30", "60", "120"}},
+        std::move(weaponList),
+        {"pickup", igi::ModMenuItemKind::Action, "Pick Up Selected Weapon", "", {}},
+        {"view", igi::ModMenuItemKind::List, "Camera View", "", {"First Person", "Third Person"}},
+        {"level", igi::ModMenuItemKind::List, "Level", "", {
+            "Level 1", "Level 2", "Level 3", "Level 4", "Level 5", "Level 6", "Level 7",
+            "Level 8", "Level 9", "Level 10", "Level 11", "Level 12", "Level 13", "Level 14"
+        }},
+        {"sfx", igi::ModMenuItemKind::List, "SFX Volume", "", {"Normal", "Low", "Mute"}},
+        {"flash", igi::ModMenuItemKind::Action, "Clear Screen Flash", "", {}},
+        {"perf", igi::ModMenuItemKind::Action, "Log Engine Performance", "", {}},
     };
     return true;
 }
 
-void simpleMenuAction(igi::Runtime& runtime, std::size_t item, std::string_view value) {
-    if (!igi::pauseForMenu(runtime)) return;
+void simpleMenuAction(const igi::MenuConfig& config, igi::Runtime& runtime, std::size_t item, std::string_view value) {
+    if (item >= config.items.size()) return;
+    if (!runtime.allowDirectNativeCallbackThread()) return;
+    const auto& id = config.items[item].id;
 
-    if (item == 0) {
-        const bool enabled = (value == "true" || value == "1" || value == "on");
-        applyGhostMode(enabled);
-        igi::log(igi::LogLevel::Info, enabled ? "simple menu: Ghost Mode (Blind AI) enabled"
-                                              : "simple menu: Ghost Mode (Blind AI) disabled");
-    } else if (item == 1) {
-        const bool enabled = (value == "true" || value == "1" || value == "on");
-        applyGodMode(enabled);
-        igi::log(igi::LogLevel::Info, enabled ? "simple menu: God Mode (Invulnerable) enabled"
-                                              : "simple menu: God Mode (Invulnerable) disabled");
-    } else if (item == 2) {
-        float scale = 1.0f;
-        if (value.find("2.0") != std::string_view::npos || value == "2") {
-            scale = 2.0f;
-        } else if (value.find("3.0") != std::string_view::npos || value == "3") {
-            scale = 3.0f;
+    if (id == "weapon") { // Weapon selection list
+        for (std::size_t i = 0; i < g_weapons.size(); ++i) {
+            if (g_weapons[i].name == value) {
+                g_selectedWeapon = i;
+                break;
+            }
         }
-        applyMoveSpeed(scale);
-        igi::log(igi::LogLevel::Info, "simple menu: Player Movement Speed set to " + std::string(value));
-    } else if (item == 3) {
-        const bool enabled = (value == "true" || value == "1" || value == "on");
-        applyOneHitKill(enabled);
-        igi::log(igi::LogLevel::Info, enabled ? "simple menu: One-Hit Kill enabled"
-                                              : "simple menu: One-Hit Kill disabled");
+        const bool ok = pickupWeapon();
+        igi::log(ok ? igi::LogLevel::Info : igi::LogLevel::Error,
+                 ok ? "simple menu: weapon selected and picked up: " + std::string(value)
+                    : "simple menu: weapon pickup failed");
+        if (ok) {
+            const std::string msg = "IGI SDK: Equipped " + std::string(value);
+            IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, msg.c_str());
+        }
+        return;
+    }
+
+    if (id == "weather") { // Weather: Off, Rain, Snow
+        igi::setWeather(value);
+    } else if (id == "fps") { // FPS: 30, 60, 120
+        igi::setFps(value);
+    } else if (id == "pickup") { // Pick up weapon
+        const bool ok = pickupWeapon();
+        igi::log(ok ? igi::LogLevel::Info : igi::LogLevel::Error,
+                 ok ? "simple menu: weapon pickup requested via IGI::PLAYER::PICK_UP_WEAPON"
+                    : "simple menu: weapon pickup failed");
+        if (ok && g_selectedWeapon < g_weapons.size()) {
+            const std::string msg = "IGI SDK: Equipped " + g_weapons[g_selectedWeapon].name;
+            IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, msg.c_str());
+        }
+    } else if (id == "view") { // Camera View: First Person, Third Person
+        auto* player = IGI::GAME::GET_PLAYER(0);
+        if (player) {
+            const int mode = (value == "Third Person") ? 2 : 1;
+            IGI::HUMAN::VIEW_CAM(reinterpret_cast<IGI::Human*>(player), mode);
+            igi::log(igi::LogLevel::Info, "simple menu: camera view set to " + std::string(value));
+            const std::string msg = "IGI SDK: Camera view set to " + std::string(value);
+            IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, msg.c_str());
+        }
+    } else if (id == "level") { // Level selection 1..14
+        int levelNum = 1;
+        if (value.starts_with("Level ")) {
+            try {
+                levelNum = std::stoi(std::string(value.substr(6)));
+            } catch (...) {
+                levelNum = 1;
+            }
+        }
+        runtime.scheduler().enqueueOnce([levelNum] {
+            const bool ok = igi::changeLevel(levelNum);
+            igi::log(ok ? igi::LogLevel::Info : igi::LogLevel::Error,
+                     ok ? "simple menu: level changed to Level " + std::to_string(levelNum)
+                        : "simple menu: level change failed");
+        });
+    } else if (id == "sfx") { // SFX volume
+        setSfxVolume(value);
+        igi::log(igi::LogLevel::Info, "simple menu: SFX volume set via IGI::AUDIO::SET_SFX_VOLUME");
+    } else if (id == "flash") { // Clear screen flash
+        clearFlashes();
+        igi::log(igi::LogLevel::Info, "simple menu: screen flashes cleared via IGI::PLAYER::FADE_HIT_FLASH / FADE_FLASH");
+    } else if (id == "perf") { // Engine performance
+        logFlowDiagnostics();
     }
 }
 
 bool configureModMenu(igi::MenuConfig& config) { return configureSimpleMenu(config); }
-void runModMenuAction(const igi::MenuConfig&, igi::Runtime& runtime, std::size_t item, std::string_view value) {
-    simpleMenuAction(runtime, item, value);
+void runModMenuAction(const igi::MenuConfig& config, igi::Runtime& runtime, std::size_t item, std::string_view value) {
+    simpleMenuAction(config, runtime, item, value);
 }

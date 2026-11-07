@@ -23,9 +23,17 @@ public:
     // Feed IGI's currently filling ListBox through a supplied game-thread adapter.
     bool fill(std::size_t item, const std::function<void(std::string_view, int)>& addItem) const;
 
+    void snapshot() noexcept;
+    void revert() noexcept;
+    void commit() noexcept;
+    bool selectedChanged(std::size_t item) const noexcept;
+    bool toggleChanged(std::size_t item) const noexcept;
+
 private:
     std::vector<ModMenuItemConfig> items_;
     std::vector<std::size_t> selected_;
     std::vector<bool> toggles_;
+    std::vector<std::size_t> committedSelected_;
+    std::vector<bool> committedToggles_;
 };
 }

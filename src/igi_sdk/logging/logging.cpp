@@ -86,4 +86,14 @@ void log(LogLevel level, std::string_view message) noexcept {
         std::fflush(logFile);
     }
 }
+
+void closeLogFile() noexcept {
+    std::lock_guard lock(logMutex);
+    if (logFile != nullptr) {
+        std::fflush(logFile);
+        std::fclose(logFile);
+        logFile = nullptr;
+    }
+    logFileInitialized = false;
+}
 }

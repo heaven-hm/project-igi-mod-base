@@ -1,6 +1,7 @@
 // Generated IGI-RE source bindings; in-game verification is tracked separately.
 if (!catalogue.add({0x00402820, "FramesSet", "IGI-RE", "entry", "void FramesSet(int fps)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x00408350, "GameMaterial_LoadParameters", "IGI-RE", "entry", "void GameMaterial_LoadParameters(void)", NativeVerification::Exposed})) return false;
+if (!catalogue.add({0x00485970, "StatusMessageShow", "IGI-RE", "entry", "StatusMessage *StatusMessageShow(void *owner, const char *text, const char *portrait, const char *sound)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x00416110, "Game_SetRaining", "IGI-RE", "entry", "void Game_SetRaining(const char *weather)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x00416010, "Game_SetDisplayMode", "IGI-RE", "entry", "void Game_SetDisplayMode(void)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x004167d0, "Game_GetEvent0", "IGI-RE", "entry", "uint8_t Game_GetEvent0(void)", NativeVerification::Exposed})) return false;
@@ -65,6 +66,11 @@ if (!catalogue.add({0x00463150, "Human_IsPlayer", "IGI-RE", "entry", "char Human
 if (!catalogue.add({0x00463170, "Human_IsDead", "IGI-RE", "entry", "char Human_IsDead(Human *h)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x00463180, "Human_IsCrouching", "IGI-RE", "entry", "char Human_IsCrouching(Human *h)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x00463190, "Human_IsActive", "IGI-RE", "entry", "char Human_IsActive(Human *h)", NativeVerification::Exposed})) return false;
+if (!catalogue.add({0x004635b0, "Human_LockInput", "IGI-RE", "entry", "void Human_LockInput(Human *h)", NativeVerification::Exposed})) return false;
+if (!catalogue.add({0x004635e0, "Human_UnlockInput", "IGI-RE", "entry", "void Human_UnlockInput(Human *h)", NativeVerification::Exposed})) return false;
+if (!catalogue.add({0x0048a320, "Human_EnableLook", "IGI-RE", "entry", "void Human_EnableLook(Human *h)", NativeVerification::Exposed})) return false;
+if (!catalogue.add({0x0048a330, "Human_DisableLook", "IGI-RE", "entry", "void Human_DisableLook(Human *h)", NativeVerification::Exposed})) return false;
+if (!catalogue.add({0x00463760, "HumanViewCam", "IGI-RE", "entry", "void HumanViewCam(Human *h, int mode)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x0045d030, "Soldier_GetParams", "IGI-RE", "entry", "void Soldier_GetParams(Human *h, void **out)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x0045d5a0, "Soldier_GetType", "IGI-RE", "entry", "uint16_t Soldier_GetType(void)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x0045d5b0, "Soldier_GetDeathVelocity", "IGI-RE", "entry", "void Soldier_GetDeathVelocity(double *out, Human *h, int model, int anim)", NativeVerification::Exposed})) return false;
@@ -254,6 +260,7 @@ if (!catalogue.add({0x004b7ea0, "Script_IntValue", "IGI-RE", "entry", "ScriptVal
 if (!catalogue.add({0x004b7f00, "Script_Bool8Value", "IGI-RE", "entry", "ScriptValue *Script_Bool8Value(ScriptValue *out, char *var)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x004f0cf0, "Task_RunScript", "IGI-RE", "entry", "Task *Task_RunScript(Task *parent, const char *path, char insertHead)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x004f1030, "Task_FindById", "IGI-RE", "entry", "Task *Task_FindById(int id)", NativeVerification::Exposed})) return false;
+if (!catalogue.add({0x004015f0, "Task_Delete", "IGI-RE", "entry", "void Task_Delete(Task *task)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x004014e0, "TaskType_GetMask", "IGI-RE", "entry", "uint16_t TaskType_GetMask(uint16_t type)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x004018f0, "Task_GetRootType", "IGI-RE", "entry", "uint16_t Task_GetRootType(void)", NativeVerification::Exposed})) return false;
 if (!catalogue.add({0x00401a60, "Task_GetCount", "IGI-RE", "entry", "int Task_GetCount(void)", NativeVerification::Exposed})) return false;

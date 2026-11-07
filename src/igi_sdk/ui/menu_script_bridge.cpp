@@ -1,5 +1,8 @@
 #include "igi_sdk/ui/menu_script_bridge.hpp"
+#include "igi_sdk/IGI.hpp"
 #include "igi_sdk/logging/logging.hpp"
+#include "igi_sdk/natives/igi1_native_registry.hpp"
+#include "igi_sdk/natives/igi_re/hashes.hpp"
 
 namespace igi {
 bool menuScriptSymbolMatches(const IgiScriptSymbol* symbol, ScriptCallback callback, void* context) noexcept {
@@ -27,7 +30,7 @@ bool MenuScriptBridge::setToggle(int item, int value) {
     const auto index = static_cast<std::size_t>(item);
     const auto previous = values_.toggle(index);
     if (!previous || !values_.setToggle(index, value != 0)) return false;
-    if (onSelection_) {
+    if (!deferUntilApply_ && onSelection_) {
         try {
             onSelection_(index, value ? "true" : "false");
         } catch (...) {
@@ -42,7 +45,7 @@ bool MenuScriptBridge::setList(int item, int value) {
     if (item < 0 || value < 0) return false;
     const auto previous = values_.selected(static_cast<std::size_t>(item));
     if (!previous || !values_.select(static_cast<std::size_t>(item), static_cast<std::size_t>(value))) return false;
-    if (onSelection_) {
+    if (!deferUntilApply_ && onSelection_) {
         const auto selected = values_.choice(static_cast<std::size_t>(item), static_cast<std::size_t>(value));
         try {
             if (selected) onSelection_(static_cast<std::size_t>(item), *selected);
@@ -60,7 +63,9 @@ bool MenuScriptBridge::activate(int item) {
     const auto index = static_cast<std::size_t>(item);
     if (const auto toggle = values_.toggle(index)) {
         if (!values_.setToggle(index, !*toggle)) return false;
-        onSelection_(index, *toggle ? "false" : "true");
+        if (!deferUntilApply_) {
+            onSelection_(index, *toggle ? "false" : "true");
+        }
         return true;
     }
     const auto selected = values_.choice(index, 0);
@@ -69,6 +74,42 @@ bool MenuScriptBridge::activate(int item) {
 }
 
 void MenuScriptBridge::close() {
+    if (onClose_) onClose_();
+}
+
+void MenuScriptBridge::apply() {
+#if defined(_WIN32) && (defined(__i386__) || defined(_M_IX86))
+    if (screenId_ >= 0 && igi1NativeCaller() != nullptr) {
+        if (auto* screenTask = IGI::TASK::FIND_BY_ID(screenId_)) {
+            using GetSaveEvent = std::uint8_t (__cdecl*)();
+            using Broadcast = void (__cdecl*)(IGI::Task*, std::uint8_t, void*);
+            const auto saveEvent = reinterpret_cast<GetSaveEvent>(igi::re::HASH::MenuWindow_GetSaveEvent)();
+            reinterpret_cast<Broadcast>(igi::re::HASH::Task_Broadcast)(screenTask, saveEvent, nullptr);
+        }
+    }
+#endif
+    if (deferUntilApply_ && onSelection_) {
+        const auto count = values_.itemCount();
+        for (std::size_t i = 0; i < count; ++i) {
+            if (values_.toggleChanged(i)) {
+                if (const auto toggle = values_.toggle(i)) {
+                    onSelection_(i, *toggle ? "true" : "false");
+                }
+            } else if (values_.selectedChanged(i)) {
+                if (const auto selected = values_.selected(i)) {
+                    if (const auto choice = values_.choice(i, *selected)) {
+                        onSelection_(i, *choice);
+                    }
+                }
+            }
+        }
+    }
+    values_.commit();
+    if (onClose_) onClose_();
+}
+
+void MenuScriptBridge::cancel() {
+    values_.revert();
     if (onClose_) onClose_();
 }
 
@@ -116,6 +157,14 @@ IgiScriptValue* MenuScriptCallbacks::action(IgiScriptValue* output, void* args) 
 }
 IgiScriptValue* MenuScriptCallbacks::close(IgiScriptValue* output, void*) {
     bridge_.close();
+    return result(output, 1);
+}
+IgiScriptValue* MenuScriptCallbacks::apply(IgiScriptValue* output, void*) {
+    bridge_.apply();
+    return result(output, 1);
+}
+IgiScriptValue* MenuScriptCallbacks::cancel(IgiScriptValue* output, void*) {
+    bridge_.cancel();
     return result(output, 1);
 }
 
@@ -176,6 +225,22 @@ IgiScriptValue* closeCallback(IgiScriptValue* out, void* context, void* args) {
         return result(out, 0);
     }
 }
+IgiScriptValue* applyCallback(IgiScriptValue* out, void* context, void* args) {
+    try {
+        return context ? static_cast<MenuScriptCallbacks*>(context)->apply(out, args) : result(out, 0);
+    } catch (...) {
+        log(LogLevel::Error, "IGI_SDK_Apply: callback threw");
+        return result(out, 0);
+    }
+}
+IgiScriptValue* cancelCallback(IgiScriptValue* out, void* context, void* args) {
+    try {
+        return context ? static_cast<MenuScriptCallbacks*>(context)->cancel(out, args) : result(out, 0);
+    } catch (...) {
+        log(LogLevel::Error, "IGI_SDK_Cancel: callback threw");
+        return result(out, 0);
+    }
+}
 }
 
 bool registerMenuScriptCallbacks(MenuScriptCallbacks& callbacks, ScriptRegistryApi registry) noexcept {
@@ -183,7 +248,8 @@ bool registerMenuScriptCallbacks(MenuScriptCallbacks& callbacks, ScriptRegistryA
     if (registry.containsSymbol("IGI_SDK_FillList") || registry.containsSymbol("IGI_SDK_GetList") ||
         registry.containsSymbol("IGI_SDK_SetList") || registry.containsSymbol("IGI_SDK_GetToggle") ||
         registry.containsSymbol("IGI_SDK_SetToggle") || registry.containsSymbol("IGI_SDK_Action") ||
-        registry.containsSymbol("IGI_SDK_CloseMenu")) return false;
+        registry.containsSymbol("IGI_SDK_CloseMenu") || registry.containsSymbol("IGI_SDK_Apply") ||
+        registry.containsSymbol("IGI_SDK_Cancel")) return false;
     registry.registerFunction("IGI_SDK_FillList", fillCallback, &callbacks, 1);
     registry.registerIntFunction("IGI_SDK_GetList", getCallback, &callbacks, 1);
     registry.registerFunction("IGI_SDK_SetList", setCallback, &callbacks, 2);
@@ -191,6 +257,8 @@ bool registerMenuScriptCallbacks(MenuScriptCallbacks& callbacks, ScriptRegistryA
     registry.registerFunction("IGI_SDK_SetToggle", setToggleCallback, &callbacks, 2);
     registry.registerFunction("IGI_SDK_Action", actionCallback, &callbacks, 1);
     registry.registerFunction("IGI_SDK_CloseMenu", closeCallback, &callbacks, 0);
+    registry.registerFunction("IGI_SDK_Apply", applyCallback, &callbacks, 0);
+    registry.registerFunction("IGI_SDK_Cancel", cancelCallback, &callbacks, 0);
     return true;
 }
 
@@ -204,6 +272,8 @@ void unregisterMenuScriptCallbacks(MenuScriptCallbacks& callbacks, ScriptRegistr
     if (registry.matchesSymbol("IGI_SDK_SetToggle", setToggleCallback, &callbacks)) registry.removeSymbol("IGI_SDK_SetToggle");
     if (registry.matchesSymbol("IGI_SDK_Action", actionCallback, &callbacks)) registry.removeSymbol("IGI_SDK_Action");
     if (registry.matchesSymbol("IGI_SDK_CloseMenu", closeCallback, &callbacks)) registry.removeSymbol("IGI_SDK_CloseMenu");
+    if (registry.matchesSymbol("IGI_SDK_Apply", applyCallback, &callbacks)) registry.removeSymbol("IGI_SDK_Apply");
+    if (registry.matchesSymbol("IGI_SDK_Cancel", cancelCallback, &callbacks)) registry.removeSymbol("IGI_SDK_Cancel");
 }
 
 bool MenuScriptRegistration::start(MenuScriptCallbacks& callbacks, ScriptRegistryApi registry) noexcept {

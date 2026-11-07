@@ -70,6 +70,8 @@ LIVE_GAME_ONLY_NATIVES = frozenset({
     "GAME::SET_DISPLAY_MODE",
     "SCRIPT::SET_SYMBOL_CONTEXT",
     "TASK::RUN_SCRIPT",
+    "TASK::DELETE_TASK",
+    "MISC::STATUS_MESSAGE_SHOW",
 })
 
 
@@ -755,7 +757,10 @@ class IGIRuntime:
                     values.append(30)
                 continue
 
-            memory = self.emu.alloc(64)
+            if "Human" in kind or "Soldier" in kind:
+                memory = self.emu.alloc(0x1000)
+            else:
+                memory = self.emu.alloc(64)
             if "char" in kind:
                 self.emu.write(memory, b"igi_sdk\0")
             elif "Task" in kind or "Graph" in kind:

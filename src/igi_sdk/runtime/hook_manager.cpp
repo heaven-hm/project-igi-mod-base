@@ -7,6 +7,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <cstring>
 #if defined(_WIN32) && (defined(__i386__) || defined(_M_IX86))
 #include <windows.h>
 #include <MinHook.h>
@@ -21,11 +22,9 @@ std::atomic<igi::Scheduler*> activeScheduler{nullptr};
 // the list-registered IGI1SDK_Tick does not run a second time in the same frame.
 std::atomic<bool> frameTickHandled{false};
 
-// Tracks whether each MinHook target currently owns a trampoline. Trampolines are
-// intentionally never freed: the module stays resident, and an in-flight detour
-// must never jump into released memory.
 bool addHookCreated = false;
 bool runHookCreated = false;
+bool getStringHookCreated = false;
 // True while the SDK owns a live tick in the game's frame callback list.
 std::atomic<bool> tickRegistered{false};
 
@@ -52,6 +51,12 @@ using DisplayRemoveFrameCallbackFn = int (__cdecl *)(void* callback);
 using DisplayRunCallbacksFn = int (__cdecl *)(void);
 DisplayRunCallbacksFn displayRunCallbacksOriginal = nullptr;
 
+// MenuManager_GetString (0x00418EA0) formats "RM: %s" into s->text when a menu
+// label is not present in the .RES language files. Stripping the "RM: " prefix
+// in-place in s->text lets custom SDK menu strings render cleanly.
+using MenuManagerGetStringFn = const char* (__cdecl *)(void* mm, const char* name);
+MenuManagerGetStringFn menuManagerGetStringOriginal = nullptr;
+
 struct FrameCallbackNode {
     FrameCallbackNode* next;
     void* callback;
@@ -74,6 +79,25 @@ bool tickNodePresent() noexcept {
         node = node->next;
     }
     return false;
+}
+
+void unregisterFrameTick() noexcept {
+    auto** headPtr = reinterpret_cast<FrameCallbackNode**>(
+        static_cast<std::uintptr_t>(igi::igi1::displayFrameCallbackHead));
+    FrameCallbackNode* prev = nullptr;
+    FrameCallbackNode* node = *headPtr;
+    for (int guard = 0; node && guard < 64; ++guard) {
+        if (node->callback == reinterpret_cast<void*>(&IGI1SDK_Tick)) {
+            if (prev) prev->next = node->next;
+            else *headPtr = node->next;
+            node->next = nullptr;
+            node->callback = nullptr;
+            break;
+        }
+        prev = node;
+        node = node->next;
+    }
+    tickRegistered.store(false, std::memory_order_release);
 }
 
 // Runs on the game thread once per displayed frame because the game's own
@@ -132,6 +156,15 @@ extern "C" int __cdecl displayRunCallbacksDetour() {
     return result;
 }
 
+extern "C" const char* __cdecl menuManagerGetStringDetour(void* mm, const char* name) {
+    const char* res = menuManagerGetStringOriginal ? menuManagerGetStringOriginal(mm, name) : nullptr;
+    if (res && std::strncmp(res, "RM: ", 4) == 0) {
+        char* mutableRes = const_cast<char*>(res);
+        std::memmove(mutableRes, res + 4, std::strlen(res + 4) + 1);
+    }
+    return res;
+}
+
 bool installDisplayFrameHook(igi::Scheduler& scheduler, void*& trampolineOut) {
     using igi::LogLevel;
     if (!igi::igi1::isSupportedExecutable()) {
@@ -180,6 +213,20 @@ bool installDisplayFrameHook(igi::Scheduler& scheduler, void*& trampolineOut) {
         runHookCreated = false;
     }
 
+    if (!getStringHookCreated) {
+        const auto strStatus = MH_CreateHook(
+            reinterpret_cast<void*>(igi::igi1::menuManagerGetString),
+            reinterpret_cast<void*>(&menuManagerGetStringDetour),
+            reinterpret_cast<void**>(&menuManagerGetStringOriginal));
+        if (strStatus == MH_OK || strStatus == MH_ERROR_ALREADY_CREATED) {
+            getStringHookCreated = true;
+        }
+    }
+    if (getStringHookCreated &&
+        MH_EnableHook(reinterpret_cast<void*>(igi::igi1::menuManagerGetString)) != MH_OK) {
+        getStringHookCreated = false;
+    }
+
     trampolineOut = reinterpret_cast<void*>(displayAddFrameCallbackOriginal);
 
     const bool registered = registerFrameTick();
@@ -203,11 +250,10 @@ bool HookManager::installDisplayAddFrameCallbackTick() {
     return macos::installGameTickHook(scheduler_, trampoline_);
 #elif defined(_WIN32) && (defined(__i386__) || defined(_M_IX86))
     if (installed_) {
-        // Re-enable an inert detach (the module stays resident so a restart can
-        // reattach without reloading the DLL).
         activeScheduler.store(&scheduler_, std::memory_order_release);
         if (addHookCreated) MH_EnableHook(reinterpret_cast<void*>(igi1::displayAddFrameCallback));
         if (runHookCreated) MH_EnableHook(reinterpret_cast<void*>(igi1::displayRunCallbacks));
+        if (getStringHookCreated) MH_EnableHook(reinterpret_cast<void*>(igi1::menuManagerGetString));
         registerFrameTick();
         installed_ = true;
         log(LogLevel::Info, "IGI 1 Display_AddFrameCallback hook re-enabled");
@@ -255,16 +301,18 @@ bool HookManager::uninstall() noexcept {
     // returns without touching SDK state that is about to be destroyed.
     activeScheduler.store(nullptr, std::memory_order_release);
 
-    // Restore the game's own code and leave the trampolines allocated. The module
-    // stays resident, so an in-flight detour never jumps into freed memory. The
-    // stale IGI1SDK_Tick node in the game's list is harmless: it observes a null
-    // scheduler and does nothing.
+    unregisterFrameTick();
+
     bool restored = true;
     if (addHookCreated) {
         const auto status = MH_DisableHook(reinterpret_cast<void*>(igi1::displayAddFrameCallback));
         if (status != MH_OK && status != MH_ERROR_DISABLED) {
             log(LogLevel::Error, "Display_AddFrameCallback restore failed; teardown remains pending");
             restored = false;
+        } else {
+            MH_RemoveHook(reinterpret_cast<void*>(igi1::displayAddFrameCallback));
+            addHookCreated = false;
+            displayAddFrameCallbackOriginal = nullptr;
         }
     }
     if (runHookCreated) {
@@ -272,6 +320,18 @@ bool HookManager::uninstall() noexcept {
         if (status != MH_OK && status != MH_ERROR_DISABLED) {
             log(LogLevel::Error, "Display_RunCallbacks restore failed; teardown remains pending");
             restored = false;
+        } else {
+            MH_RemoveHook(reinterpret_cast<void*>(igi1::displayRunCallbacks));
+            runHookCreated = false;
+            displayRunCallbacksOriginal = nullptr;
+        }
+    }
+    if (getStringHookCreated) {
+        const auto status = MH_DisableHook(reinterpret_cast<void*>(igi1::menuManagerGetString));
+        if (status == MH_OK || status == MH_ERROR_DISABLED) {
+            MH_RemoveHook(reinterpret_cast<void*>(igi1::menuManagerGetString));
+            getStringHookCreated = false;
+            menuManagerGetStringOriginal = nullptr;
         }
     }
     if (!restored || !igi1::isSupportedExecutable()) {
@@ -279,11 +339,10 @@ bool HookManager::uninstall() noexcept {
         return false;
     }
 
-    tickRegistered.store(false, std::memory_order_release);
     installed_ = false;
     trampoline_ = nullptr;
     log(LogLevel::Info,
-        "IGI 1 display frame hooks disabled; module left resident so in-flight callbacks stay valid");
+        "IGI 1 display frame hooks disabled and removed cleanly");
     return true;
 #else
     return true;

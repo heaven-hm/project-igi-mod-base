@@ -38,25 +38,27 @@ bool writeMenuScript(std::ostream& out, const MenuConfig& config, bool standalon
             << ", \"LOCAL:menusystem/ingamemenu.res\", FALSE, ";
     out << "Task_New(" << config.screenId << ", \"MenuScreen\", \"IGI SDK\", \"\", "
         << config.x << ", " << config.y << ", " << config.x + config.width << ", " << config.y + config.height
-        << ", \"IGI_SDK_CloseMenu(); MenuManager_PopScreen(FALSE)\", \"\", \"\", Task_New(-1, \"MenuFrame\", \"\", \"\", "
+        << ", \"IGI_SDK_Cancel() - MenuManager_LeaveMenus(900, 9)\", \"\", \"\", Task_New(-1, \"MenuFrame\", \"\", \"\", "
         << config.x << ", " << config.y << ", " << config.width << ", " << config.height << ", 1, 4, 4, FALSE";
     for (const auto& item : config.items) {
         const auto index = &item - config.items.data();
+        const auto widgetId = config.screenId >= 0 ? (config.screenId + 1 + static_cast<int>(index)) : -1;
         if (item.kind == ModMenuItemKind::List) {
             out << ", Task_New(-1, \"MenuFrame\", "; quoted(out, item.id);
             out << ", \"\", " << config.x << ", " << config.y << ", " << config.width
                 << ", 25, 8, 20, 4, TRUE, Task_New(-1, \"MenuText\", \"\", ";
             quoted(out, item.label);
-            out << ", \"font3.fnt\", 2, \"\", \"\"), Task_New(-1, \"ListBox\", \"\", \"slide\", \"font1.fnt\", 140, ";
+            out << ", \"font3.fnt\", 2, \"\", \"\"), Task_New(" << widgetId << ", \"ListBox\", \"\", \"slide\", \"font1.fnt\", 140, ";
             quoted(out, "IGI_SDK_FillList(" + std::to_string(index) + ")"); out << ", ";
-            quoted(out, "IGI_SDK_GetList(" + std::to_string(index) + ")"); out << ", \"\", ";
+            quoted(out, "IGI_SDK_GetList(" + std::to_string(index) + ")"); out << ", ";
+            quoted(out, "IGI_SDK_SetList(" + std::to_string(index) + ",this.nActiveID)"); out << ", ";
             quoted(out, "IGI_SDK_SetList(" + std::to_string(index) + ",this.nActiveID)"); out << "))";
         } else if (item.kind == ModMenuItemKind::Toggle) {
             out << ", Task_New(-1, \"MenuFrame\", "; quoted(out, item.id);
             out << ", \"\", " << config.x << ", " << config.y << ", " << config.width
                 << ", 25, 8, 20, 4, TRUE, Task_New(-1, \"MenuText\", \"\", ";
             quoted(out, item.label);
-            out << ", \"font3.fnt\", 2, \"\", \"\"), Task_New(-1, \"ToggleBox\", \"\", ";
+            out << ", \"font3.fnt\", 2, \"\", \"\"), Task_New(" << widgetId << ", \"ToggleBox\", \"\", ";
             quoted(out, "IGI_SDK_GetToggle(" + std::to_string(index) + ")");
             out << ", ";
             quoted(out, "IGI_SDK_SetToggle(" + std::to_string(index) + ",this.isOn)");
@@ -69,9 +71,14 @@ bool writeMenuScript(std::ostream& out, const MenuConfig& config, bool standalon
             out << ", \"\")";
         }
     }
+    out << ", Task_New(-1, \"MenuFrame\", \"ControlsFrame\", \"\", " << config.x << ", " << config.y << ", " << config.width
+        << ", 25, 8, 20, 4, TRUE, "
+        << "Task_New(-1, \"MenuText\", \"restart\", \"Restart\", \"font3.fnt\", 2, \"IGI_SDK_Cancel() - MenuManager_LeaveMenus(900, 12)\", \"menu_ok\"), "
+        << "Task_New(-1, \"MenuText\", \"okay\", \"Okay\", \"font3.fnt\", 2, \"IGI_SDK_Apply() - MenuManager_LeaveMenus(900, 9)\", \"menu_ok\"), "
+        << "Task_New(-1, \"MenuText\", \"cancel\", \"Cancel\", \"font3.fnt\", 2, \"IGI_SDK_Cancel() - MenuManager_LeaveMenus(900, 9)\", \"menu_cancel\"))";
     out << (standaloneManager ? ")));\n" : "));\n");
     if (!standaloneManager)
-        out << "MenuManager_PushScreen(" << config.screenId << ");\n";
+        out << "MenuManager_RequestScreen(" << config.screenId << ", FALSE);\n";
     return static_cast<bool>(out);
 }
 

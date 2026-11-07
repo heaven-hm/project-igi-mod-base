@@ -82,20 +82,6 @@ auto& menuScreenCreated = g_menu.menuScreenCreated;
 auto& menuScreenAttached = g_menu.menuScreenAttached;
 auto& initialAttachPending = g_menu.initialAttachPending;
 
-bool readMenuScreenState(std::int32_t& screen) noexcept {
-#if defined(_WIN32) && !defined(_WIN64)
-    constexpr std::uintptr_t gameStatePointerAddress = 0x00567C8C;
-    constexpr std::uintptr_t menuScreenOffset = 0x28;
-    const auto gameState = *reinterpret_cast<const std::uintptr_t*>(gameStatePointerAddress);
-    if (gameState == 0) return false;
-    screen = *reinterpret_cast<const std::int32_t*>(gameState + menuScreenOffset);
-    return true;
-#else
-    (void)screen;
-    return false;
-#endif
-}
-
 struct GameRootLayout {
     std::uint8_t prefix[0x44];
     void* root;
@@ -136,13 +122,16 @@ bool installMenuScriptCallbacks() {
             runModMenuAction(menuConfig, runtime, item, value);
         },
         [] {
+            igi::unlockHumanInput();
             if (!igi::resumeFromMenu(runtime)) {
                 igi::log(igi::LogLevel::Error, "internal menu close rejected: unable to resume game");
                 return;
             }
             menuScreenAttached = false;
-            igi::log(igi::LogLevel::Info, "internal menu close: game resumed");
-        });
+            safeToShutdown.store(true, std::memory_order_release);
+            igi::log(igi::LogLevel::Info, "internal menu close: game resumed and human input enabled");
+        },
+        /*deferUntilApply=*/true);
     menuCallbacks = std::make_unique<igi::MenuScriptCallbacks>(*menuBridge, script);
     if (!menuRegistration.start(*menuCallbacks, registry)) {
         menuCallbacks.reset();
@@ -160,10 +149,10 @@ bool runMenuCommand(const char* resource, const char* operation) {
     if (!root) return false;
     auto* manager = IGI::TASK::FIND_CHILD(root, IGI::MENU::GET_TYPE());
     if (!manager) return false;
-    const bool ok = IGI::TASK::RUN_SCRIPT(manager, resource, 0) != nullptr;
-    igi::log(ok ? igi::LogLevel::Info : igi::LogLevel::Error,
-             std::string("internal menu command: ") + operation + (ok ? " requested" : " failed"));
-    return ok;
+    (void)IGI::TASK::RUN_SCRIPT(manager, resource, 0);
+    igi::log(igi::LogLevel::Info,
+             std::string("internal menu command: ") + operation + " requested");
+    return true;
 }
 
 bool writeMenuResourceFile() {
@@ -184,8 +173,8 @@ bool rebuildMenuResources() {
     std::vector<std::uint8_t> close;
     std::string error;
     if (!igi::compileIgi1MenuScreenScript(menuConfig, screen, error) ||
-        !igi::compileIgi1MenuCommandScript("MenuManager_PushScreen(" + std::to_string(menuConfig.screenId) + ");", reopen, error) ||
-        !igi::compileIgi1MenuCommandScript("MenuManager_PopScreen(FALSE);", close, error)) {
+        !igi::compileIgi1MenuCommandScript("MenuManager_RequestScreen(" + std::to_string(menuConfig.screenId) + ", FALSE);", reopen, error) ||
+        !igi::compileIgi1MenuCommandScript("MenuManager_LeaveMenus(900, 9);", close, error)) {
         igi::log(igi::LogLevel::Error, std::string("internal menu resource compilation failed: ") + error);
         return false;
     }
@@ -204,12 +193,21 @@ bool rebuildMenuResources() {
     return true;
 }
 
+bool isTaskIdRangeFree(std::int32_t baseId, std::size_t itemCount) {
+    const auto maxId = baseId + static_cast<std::int32_t>(itemCount);
+    if (baseId < 0 || maxId >= 4096) return false;
+    for (std::int32_t id = baseId; id <= maxId; ++id) {
+        if (IGI::TASK::FIND_BY_ID(id) != nullptr) return false;
+    }
+    return true;
+}
+
 bool selectFreeMenuScreenId() {
-    if (menuConfig.screenId >= 0 && menuConfig.screenId < 4096 &&
-        IGI::TASK::FIND_BY_ID(menuConfig.screenId) == nullptr) return true;
+    if (isTaskIdRangeFree(menuConfig.screenId, menuConfig.items.size())) return true;
     const auto occupied = menuConfig.screenId;
-    for (std::int32_t candidate = 4095; candidate >= 3000; --candidate) {
-        if (IGI::TASK::FIND_BY_ID(candidate) != nullptr) continue;
+    const auto span = static_cast<std::int32_t>(menuConfig.items.size());
+    for (std::int32_t candidate = 4095 - span; candidate >= 3000; --candidate) {
+        if (!isTaskIdRangeFree(candidate, menuConfig.items.size())) continue;
         menuConfig.screenId = candidate;
         if (!rebuildMenuResources()) return false;
         igi::log(igi::LogLevel::Warning,
@@ -278,7 +276,10 @@ void menuFrameWork() {
             igi::log(igi::LogLevel::Error, "internal menu open: unable to pause game");
             return;
         }
-        igi::log(igi::LogLevel::Info, "internal menu open: game paused");
+        igi::lockHumanInput();
+        if (menuBridge) menuBridge->snapshot();
+        IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, "IGI SDK Mod Menu: enabled");
+        igi::log(igi::LogLevel::Info, "internal menu open: game paused and human input disabled");
     }
     igi::log(menuScreenAttached ? igi::LogLevel::Info : igi::LogLevel::Error,
              menuScreenAttached ? "internal menu screen: attached and requested from existing MenuManager" :
@@ -286,12 +287,14 @@ void menuFrameWork() {
 }
 
 bool closeMenuScreen() {
+    if (menuBridge) menuBridge->cancel();
     if (!runMenuCommand("LOCAL:igi_sdk/modmenu-close.qvm", "close")) return false;
     menuScreenAttached = false;
+    igi::unlockHumanInput();
     if (!igi::resumeFromMenu(runtime)) {
         igi::log(igi::LogLevel::Warning, "internal menu close: unable to resume game");
     } else {
-        igi::log(igi::LogLevel::Info, "internal menu close: game resumed");
+        igi::log(igi::LogLevel::Info, "internal menu close: game resumed and human input enabled");
     }
     safeToShutdown.store(true, std::memory_order_release);
     return true;
@@ -306,7 +309,9 @@ bool reopenMenuScreen() {
             igi::log(igi::LogLevel::Error, "internal menu reopen: unable to pause game");
             return false;
         }
-        igi::log(igi::LogLevel::Info, "internal menu reopen: game paused");
+        igi::lockHumanInput();
+        if (menuBridge) menuBridge->snapshot();
+        igi::log(igi::LogLevel::Info, "internal menu reopen: game paused and human input disabled");
         return true;
     }
     menuScreenCreated = false;
@@ -316,8 +321,7 @@ bool reopenMenuScreen() {
 }
 
 bool toggleMenuScreenOnGameThread() {
-    std::int32_t currentScreen = 0;
-    if (!readMenuScreenState(currentScreen) || currentScreen != static_cast<std::int32_t>(IgiMenuScreenState::InGame)) {
+    if (!IGI::GAME::GET()) {
         igi::log(igi::LogLevel::Warning, "internal menu toggle: menu requires an active game");
         return false;
     }
@@ -334,13 +338,6 @@ bool toggleMenuScreenOnGameThread() {
 extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_Internal_Initialize() {
     igi::log(igi::LogLevel::Debug, "internal initialize: begin");
     menuConfig = igi::loadMenuConfig("project-igi-sdk-config.ini");
-#if defined(_WIN32)
-    std::int32_t currentScreen = 0;
-    if (!readMenuScreenState(currentScreen) || currentScreen != static_cast<std::int32_t>(IgiMenuScreenState::InGame)) {
-        igi::log(igi::LogLevel::Warning, "menu requires an active game");
-        return false;
-    }
-#endif
     if (!configureModMenu(menuConfig)) return false;
     igi::log(igi::LogLevel::Debug, menuConfig.enabled ? "internal initialize: config enabled" : "internal initialize: config disabled");
     if (menuConfig.screenId == 900 || menuConfig.screenId == 902 || menuConfig.screenId == 903 ||
@@ -435,8 +432,54 @@ extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_Internal_Toggle() {
 
 extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_Internal_RequestShutdown() {
 #if defined(_WIN32)
-    if (!runtime.initialized() || safeToShutdown.load(std::memory_order_acquire)) return true;
-    runtime.scheduler().enqueueOnce([] { (void)closeMenuScreen(); });
+    if (!runtime.initialized()) {
+        safeToShutdown.store(true, std::memory_order_release);
+        return true;
+    }
+    initialAttachPending.store(false, std::memory_order_release);
+    safeToShutdown.store(false, std::memory_order_release);
+    runtime.scheduler().enqueueOnce([] {
+        if (menuBridge) menuBridge->cancel();
+        if (auto* game = IGI::GAME::GET()) {
+            if (auto* root = static_cast<IGI::Task*>(static_cast<GameRootLayout*>(static_cast<void*>(game))->root)) {
+                if (auto* manager = IGI::TASK::FIND_CHILD(root, IGI::MENU::GET_TYPE())) {
+                    auto* base = reinterpret_cast<std::uint8_t*>(manager);
+                    *reinterpret_cast<std::int32_t*>(base + 0x20) = 900;     // screen = 900 (Pause Menu)
+                    *reinterpret_cast<std::int32_t*>(base + 0x24) = -1;      // popup = -1
+                    *reinterpret_cast<std::int32_t*>(base + 0x28) = 9;       // state = MENU_IDLE
+                    *reinterpret_cast<std::int32_t*>(base + 0x2C) = 9;       // nextState = MENU_IDLE
+                    *reinterpret_cast<void**>(base + 0x30) = nullptr;        // screenTask = nullptr
+                    *reinterpret_cast<void**>(base + 0x34) = nullptr;        // popupTask = nullptr
+                    *reinterpret_cast<void**>(base + 0x38) = nullptr;        // focus = nullptr
+                    *reinterpret_cast<std::int32_t*>(base + 0xBC) = 0;       // itemCount = 0
+                    *reinterpret_cast<std::int32_t*>(base + 0xC0) = 0;       // itemIndex = 0
+                    *reinterpret_cast<std::int32_t*>(base + 0xC4) = 0;       // fadeShown = 0
+                    *reinterpret_cast<std::int32_t*>(base + 0xC8) = 0;       // fadeShownPrev = 0
+                    *reinterpret_cast<std::int32_t*>(base + 0xCC) = 0;       // fade = 0
+                    *reinterpret_cast<std::int32_t*>(base + 0xD0) = 0;       // drawFade = 0
+                    *reinterpret_cast<void**>(0x0057BAE4) = nullptr;         // gMenuLastScreen = nullptr
+                    *reinterpret_cast<void**>(0x0057BAEC) = nullptr;         // gMenuLastFocus = nullptr
+                }
+            }
+        }
+        auto* screenTask = IGI::TASK::FIND_BY_ID(menuConfig.screenId);
+        if (screenTask) {
+            IGI::TASK::DELETE_TASK(screenTask);
+        }
+        igi::unlockHumanInput();
+        (void)igi::resumeFromMenu(runtime);
+        IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, "IGI SDK Mod Menu: disabled");
+        menuRegistration.stop();
+        menuCallbacks.reset();
+        menuBridge.reset();
+        if (!menuResource.release())
+            igi::log(igi::LogLevel::Error, "internal menu resource: release refused because ownership changed");
+        reopenResource.release();
+        closeResource.release();
+        menuScreenCreated = false;
+        menuScreenAttached = false;
+        safeToShutdown.store(true, std::memory_order_release);
+    });
     igi::log(igi::LogLevel::Info, "internal menu close: queued for the display frame thread");
     return true;
 #else

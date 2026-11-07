@@ -34,6 +34,7 @@ struct RainPrim;
 struct ScriptArgs;
 struct ScriptSymbol;
 struct ScriptValue;
+struct StatusMessage;
 struct Soldier;
 struct SoldierSM;
 struct Sound;
@@ -63,6 +64,7 @@ inline constexpr std::uint32_t GAME_IS_PAUSED = 0x00416d50;
 inline constexpr std::uint32_t GAME_SET_PAUSED = 0x00416d60;
 inline constexpr std::uint32_t TASK_RUN_SCRIPT = 0x004f0cf0;
 inline constexpr std::uint32_t TASK_FIND_BY_ID = 0x004f1030;
+inline constexpr std::uint32_t TASK_DELETE = 0x004015f0;
 inline constexpr std::uint32_t GAME_MATERIAL_LOAD_PARAMETERS = 0x00408350;
 inline constexpr std::uint32_t GAME_SET_MISSION = 0x00415890;
 inline constexpr std::uint32_t HUMAN_PLAYER_SET_FLAG_D44 = 0x0040c140;
@@ -349,10 +351,17 @@ inline constexpr std::uint32_t SOUND_GET_SET_POS_EVENT = 0x004e6670;
 inline constexpr std::uint32_t RAIN_OBJ_UPDATE_CELLS = 0x004f7990;
 inline constexpr std::uint32_t LEVEL_CLEAR_TASK_ID = 0x004f10e0;
 inline constexpr std::uint32_t MENU_MANAGER_REFRESH = 0x00417590;
+inline constexpr std::uint32_t HUMAN_LOCK_INPUT = 0x004635b0;
+inline constexpr std::uint32_t HUMAN_UNLOCK_INPUT = 0x004635e0;
+inline constexpr std::uint32_t HUMAN_ENABLE_LOOK = 0x0048a320;
+inline constexpr std::uint32_t HUMAN_DISABLE_LOOK = 0x0048a330;
+inline constexpr std::uint32_t HUMAN_VIEW_CAM = 0x00463760;
+inline constexpr std::uint32_t STATUS_MESSAGE_SHOW = 0x00485970;
 }
 namespace MISC {
 NATIVE_DECL void FRAMES_SET(int fps);
 NATIVE_DECL void LOAD_PARAMETERS();
+NATIVE_DECL StatusMessage * STATUS_MESSAGE_SHOW(void * owner, const char * text, const char * portrait = "STATUSSCREEN:note.spr", const char * sound = "");
 }
 namespace GAME {
 NATIVE_DECL void SET_RAINING(const char * weather);
@@ -423,6 +432,11 @@ NATIVE_DECL char IS_PLAYER(Human * h);
 NATIVE_DECL char IS_DEAD(Human * h);
 NATIVE_DECL char IS_CROUCHING(Human * h);
 NATIVE_DECL char IS_ACTIVE(Human * h);
+NATIVE_DECL void LOCK_INPUT(Human * h);
+NATIVE_DECL void UNLOCK_INPUT(Human * h);
+NATIVE_DECL void ENABLE_LOOK(Human * h);
+NATIVE_DECL void DISABLE_LOOK(Human * h);
+NATIVE_DECL void VIEW_CAM(Human * h, int mode);
 }
 namespace SOLDIER {
 NATIVE_DECL void GET_PARAMS(Human * h, void ** out);
@@ -636,6 +650,7 @@ NATIVE_DECL ScriptValue * BOOL8_VALUE(ScriptValue * out, char * var);
 namespace TASK {
 NATIVE_DECL Task * RUN_SCRIPT(Task * parent, const char * path, char insertHead);
 NATIVE_DECL Task * FIND_BY_ID(int id);
+NATIVE_DECL void DELETE_TASK(Task * task);
 NATIVE_DECL uint16_t GET_MASK(uint16_t type);
 NATIVE_DECL uint16_t GET_ROOT_TYPE();
 NATIVE_DECL int GET_COUNT();

@@ -5,24 +5,19 @@
 
 bool configureBasicMenu(igi::MenuConfig& config) {
     config.items = {
+        {"weather", igi::ModMenuItemKind::List, "Weather", "", {"Off", "Rain", "Snow"}},
         {"fps", igi::ModMenuItemKind::List, "FPS", "", {"30", "60", "120"}},
-        {"music", igi::ModMenuItemKind::List, "Music volume", "", {"Mute", "Low", "Normal"}},
+        {"music", igi::ModMenuItemKind::List, "Music volume", "", {"Normal", "Low", "Mute"}},
         {"ammo", igi::ModMenuItemKind::Action, "Unlimited ammo", "", {}}
     };
     return true;
 }
 
-void basicMenuAction(igi::Runtime& runtime, std::size_t item, std::string_view value) {
-    if (!igi::pauseForMenu(runtime)) return;
-    if (item == 0) IGI::MISC::FRAMES_SET(value == "30" ? 30 : value == "60" ? 60 : 120);
-    if (item == 1) {
-        const float volume = value == "Mute" ? 0.0f : value == "Low" ? 0.35f : 1.0f;
-        IGI::AUDIO::MUSIC_SET_VOLUME(volume, volume);
-    }
-    if (item == 2) IGI::PLAYER::SET_UNLIMITED_AMMO();
+void basicMenuAction(const igi::MenuConfig& config, igi::Runtime& runtime, std::size_t item, std::string_view value) {
+    igi::executeMenuNativeAction(config, runtime, item, value);
 }
 
 bool configureModMenu(igi::MenuConfig& config) { return configureBasicMenu(config); }
-void runModMenuAction(const igi::MenuConfig&, igi::Runtime& runtime, std::size_t item, std::string_view value) {
-    basicMenuAction(runtime, item, value);
+void runModMenuAction(const igi::MenuConfig& config, igi::Runtime& runtime, std::size_t item, std::string_view value) {
+    basicMenuAction(config, runtime, item, value);
 }

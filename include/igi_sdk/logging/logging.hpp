@@ -14,4 +14,5 @@ void setLogLevel(LogLevel minimum) noexcept;
 LogLevel logLevel() noexcept;
 
 void log(LogLevel level, std::string_view message) noexcept;
+void closeLogFile() noexcept;
 }

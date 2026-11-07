@@ -10,8 +10,8 @@ class MenuScriptBridge final {
 public:
     using SelectionHandler = std::function<void(std::size_t, std::string_view)>;
     using CloseHandler = std::function<void()>;
-    explicit MenuScriptBridge(const MenuConfig& config, SelectionHandler onSelection = {}, CloseHandler onClose = {})
-        : values_(config), onSelection_(std::move(onSelection)), onClose_(std::move(onClose)) {}
+    explicit MenuScriptBridge(const MenuConfig& config, SelectionHandler onSelection = {}, CloseHandler onClose = {}, bool deferUntilApply = false)
+        : values_(config), onSelection_(std::move(onSelection)), onClose_(std::move(onClose)), deferUntilApply_(deferUntilApply), screenId_(config.screenId) {}
     bool fillList(int item, const std::function<void(std::string_view, int)>& addItem) const;
     int getList(int item) const noexcept;
     bool setList(int item, int value);
@@ -19,11 +19,16 @@ public:
     int getToggle(int item) const noexcept;
     bool setToggle(int item, int value);
     void close();
+    void apply();
+    void cancel();
+    void snapshot() noexcept { values_.snapshot(); }
 
 private:
     MenuValues values_;
     SelectionHandler onSelection_;
     CloseHandler onClose_;
+    bool deferUntilApply_ = false;
+    int screenId_ = -1;
 };
 
 // IGI 1 x86 ScriptValue layout, as recovered from the game interface.
@@ -57,6 +62,8 @@ public:
     IgiScriptValue* setToggle(IgiScriptValue* output, void* args);
     IgiScriptValue* action(IgiScriptValue* output, void* args);
     IgiScriptValue* close(IgiScriptValue* output, void* args);
+    IgiScriptValue* apply(IgiScriptValue* output, void* args);
+    IgiScriptValue* cancel(IgiScriptValue* output, void* args);
 private:
     MenuScriptBridge& bridge_;
     MenuScriptApi api_;

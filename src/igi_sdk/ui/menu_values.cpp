@@ -4,8 +4,35 @@
 
 namespace igi {
 MenuValues::MenuValues(const MenuConfig& config)
-    : items_(config.items), selected_(items_.size(), 0), toggles_(items_.size(), false) {
-    for (std::size_t i = 0; i < items_.size(); ++i) toggles_[i] = items_[i].defaultToggle;
+    : items_(config.items), selected_(items_.size(), 0), toggles_(items_.size(), false),
+      committedSelected_(items_.size(), 0), committedToggles_(items_.size(), false) {
+    for (std::size_t i = 0; i < items_.size(); ++i) {
+        toggles_[i] = items_[i].defaultToggle;
+        committedToggles_[i] = items_[i].defaultToggle;
+    }
+}
+
+void MenuValues::snapshot() noexcept {
+    committedSelected_ = selected_;
+    committedToggles_ = toggles_;
+}
+
+void MenuValues::revert() noexcept {
+    selected_ = committedSelected_;
+    toggles_ = committedToggles_;
+}
+
+void MenuValues::commit() noexcept {
+    committedSelected_ = selected_;
+    committedToggles_ = toggles_;
+}
+
+bool MenuValues::selectedChanged(std::size_t item) const noexcept {
+    return item < items_.size() && items_[item].kind == ModMenuItemKind::List && selected_[item] != committedSelected_[item];
+}
+
+bool MenuValues::toggleChanged(std::size_t item) const noexcept {
+    return item < items_.size() && items_[item].kind == ModMenuItemKind::Toggle && toggles_[item] != committedToggles_[item];
 }
 
 std::optional<bool> MenuValues::toggle(std::size_t item) const noexcept {
