@@ -1,5 +1,7 @@
 # Project IGI Natives SDK
 
+Version: 0.1
+
 An SDK for single-player mod development for `IGI`. It provides a menu model, logging, and game natives from original game to create simple mod menu using internal and external libaries.
 Right now only Internal mod menu is implemented , external witll use ImGUI for Dx7 will be in future releases more robust and customisable.
 

@@ -1,14 +1,10 @@
 # Changelog
 
-## Unreleased — IGI 1 MVP
+## 0.1 — IGI 1 MVP
 
-- Added the guarded `Game_RunHandler` scheduler hook at `0x00416260`.
-- Preserved original handler execution through an x86 trampoline.
-- Added game-thread scheduling, lifecycle reset, logging, and cadence counting.
-- Added the IGI-RE address/signature catalogue for IGI 1.
-- Added the renderer-independent MenuManager model and input handling.
-- Added host tests and Windows x86 Release verification.
+- Added Windows x86 internal menu demos, configurable hotkeys, logging, and DLL lifecycle management.
+- Added game-thread scheduling through display frame callbacks and an IGI-RE native catalogue.
+- Added Windows build and injection helpers, Wine launch scripts, and Unicorn native verification.
+- Added menu controls for weather, frame rate, weapons, and other native actions.
 
-The supported executable profile is the IGI-RE EU/Chinese IGI 1 build. Runtime
-artifacts will be published through GitHub Releases only after manual testing;
-no current release is declared by this changelog.
+The supported executable profile is the IGI-RE EU/Chinese IGI 1 build.
