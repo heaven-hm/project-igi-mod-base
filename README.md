@@ -167,6 +167,10 @@ console=true
 `PageDown`, `Insert` and `Delete`. The DLL, the injector and the scripts all
 read these keys from this file; nothing hardcodes a hotkey.
 
+The end key safely closes the menu, stops its hooks and stops the resident DLL
+host thread. The DLL stays mapped until `igi.exe` exits to avoid calling
+unloaded code, and the start key is disabled for the remainder of that process.
+
 Each menu DLL owns its items in C++; `[mod_menu.items]` is not read.
 Set `log_file` under `[mod_menu]` to a filename beside `igi.exe`; both Debug and Release builds use it. Directory paths are not accepted.
 

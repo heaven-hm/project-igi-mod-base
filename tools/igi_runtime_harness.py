@@ -937,9 +937,12 @@ def run_menu_helpers_check(args, emu_module) -> int:
     if "IGI::MENU::REFRESH" not in source:
         raise RuntimeError("menu helpers do not refresh the active menu after a live effect")
     cleanup = source.find("prepareMenuForLevelChange()")
-    leave_menus = source.find('MenuManager_LeaveMenus(-1, 13)')
-    if cleanup < 0 or leave_menus < 0 or cleanup > leave_menus:
-        raise RuntimeError("level transition does not detach the injected menu before direct start")
+    mission = source.find("Game_SetMission(")
+    flow_request = source.find("IGI::OTHER::FLOW_SET_REQUEST(4)")
+    delete_game = source.find("IGI::TASK::DELETE_TASK(reinterpret_cast<IGI::Task *>(game))")
+    if (cleanup < 0 or mission < 0 or flow_request < 0 or delete_game < 0 or cleanup > mission or
+            mission > flow_request or flow_request > delete_game):
+        raise RuntimeError("level transition does not use the engine unload/load sequence")
 
     catalogue = load_native_catalogue()
     raining = catalogue.get("GAME::SET_RAINING")
@@ -954,7 +957,7 @@ def run_menu_helpers_check(args, emu_module) -> int:
     print("PASS menu helpers use Game_SetRaining without creating a weather task")
     print("PASS Game_SetRaining toggled gRaining on and off in Unicorn")
     print("PASS live effects use the typed MenuManager_Refresh wrapper")
-    print("PASS level change detaches injected menu state before direct start")
+    print("PASS level change uses the engine Flow request and Game task unload sequence")
     return 0
 
 

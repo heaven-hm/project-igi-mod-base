@@ -110,7 +110,7 @@ def main():
         if not path.exists():
             log(f"FAILURE missing={path}")
             return 1
-    for name in ("dinput.dll", "msvfw32.dll", "D3D8.dll", "D3D9.dll", "D3DImm.dll", "DDraw.dll", "IGI-Natives-SDK-IGI1.dll", "IGIPatch.dll", "freeglut.dll", "glew32.dll", "igi-probe.dll", "libgcc_s_sjlj-1.dll", "libstdc++-6.dll", "libwinpthread-1.dll"):
+    for name in ("dinput.dll", "msvfw32.dll", "D3D8.dll", "D3D9.dll", "D3DImm.dll", "DDraw.dll", "IGI-Natives-SDK-IGI.dll", "IGIPatch.dll", "freeglut.dll", "glew32.dll", "igi-probe.dll", "libgcc_s_sjlj-1.dll", "libstdc++-6.dll", "libwinpthread-1.dll"):
         proxy = GAME / name
         if proxy.exists():
             cleanup()
@@ -119,12 +119,12 @@ def main():
             shutil.move(str(proxy), str(backup / proxy.name))
             log(f"moved local proxy={proxy} recoverable_backup={backup / proxy.name}")
     for command in (["ctest", "--test-dir", TEST_BUILD, "-R", "^igi_demo_natives_unicorn$", "--output-on-failure"],
-                    ["cmake", "--build", BUILD, "--parallel", "--target", "igi_basic_mod_menu", "igi1_injector", "igi1_keypress"]):
+                    ["cmake", "--build", BUILD, "--parallel", "--target", "igi_basic_mod_menu", "igi_injector", "igi_keypress"]):
         result = run(command, 180)
         if not result or result.returncode:
             log("FAILURE emulator or build failed")
             return 1
-    for source, dest in (("igi-basic-mod-internal.dll", "igi-basic-mod-internal.dll"), ("IGI1-Injector.exe", "IGI-Injector.exe"), ("IGI1-Keypress.exe", "IGI1-Keypress.exe")):
+    for source, dest in (("igi-basic-mod-internal.dll", "igi-basic-mod-internal.dll"), ("IGI-Injector.exe", "IGI-Injector.exe"), ("IGI-Keypress.exe", "IGI-Keypress.exe")):
         shutil.copy2(BUILD / source, GAME / dest)
     levels = []
     for attempt in itertools.count(1):
@@ -156,7 +156,7 @@ def main():
                 delta = sdk_delta(offset)
                 if sent and MENU_ATTACHED in delta:
                     if not toggle_sent:
-                        keypath = "Z:" + str(GAME / "IGI1-Keypress.exe").replace("/", "\\\\")
+                        keypath = "Z:" + str(GAME / "IGI-Keypress.exe").replace("/", "\\\\")
                         # Close with the configured end key, then reopen with the
                         # configured start key. Both come from config.ini so the
                         # validation follows whatever the game folder specifies.
@@ -181,7 +181,7 @@ def main():
                 if "internal DLL attached" in delta and not sent:
                     target = pid()
                     if target:
-                        keypath = "Z:" + str(GAME / "IGI1-Keypress.exe").replace("/", "\\")
+                        keypath = "Z:" + str(GAME / "IGI-Keypress.exe").replace("/", "\\")
                         hotkey = run([WINE, keypath, "--pid", target, START_KEY], 15)
                         sent = bool(hotkey and not hotkey.returncode)
                         if not sent:

@@ -220,8 +220,14 @@ DWORD WINAPI igiSdkMainThread(void *rawModule) {
 
     while (g_state.running.load(std::memory_order_acquire)) {
         mainLoopTick(callbacks, keys);
-        if (g_state.endKey && keys.isPressedOnce(g_state.endKey))
-            (void)deactivateMenuRuntime(callbacks);
+        if (g_state.endKey && keys.isPressedOnce(g_state.endKey)) {
+            if (deactivateMenuRuntime(callbacks)) {
+                g_state.running.store(false, std::memory_order_release);
+                igi::log(igi::LogLevel::Info,
+                         "internal host stopped by configured end key; start key is disabled until "
+                         "the game exits");
+            }
+        }
         igi::hotkeys::pollSleep();
     }
 

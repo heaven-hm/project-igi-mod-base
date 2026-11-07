@@ -110,6 +110,7 @@ if ((verify)); then
     [[ -f "$root/$demo" ]] || { printf 'error: demo not found: %s\n' "$demo" >&2; exit 2; }
     [[ -n "$artifact" && -f "$build_dir/$artifact" ]] || { printf 'error: built DLL not found; set IGI_DLL_NAME for target %s\n' "$target" >&2; exit 1; }
     python3 "$root/tools/igi_runtime_harness.py" --path "$demo" --exe "$IGI_EXE" --dll "$build_dir/$artifact"
+    python3 "$root/tools/igi_runtime_harness.py" --verify-menu-helpers --exe "$IGI_EXE" --dll "$build_dir/$artifact"
 fi
 
 if ((deploy)); then

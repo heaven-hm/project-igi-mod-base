@@ -16,7 +16,7 @@ cmake -S . -B build-win32 -DCMAKE_SYSTEM_NAME=Windows \
 cmake --build build-win32
 ```
 
-This produces `IGI-Natives-SDK-IGI1.dll`. After a loader has completed DLL
+This produces `IGI-Natives-SDK-IGI.dll`. After a loader has completed DLL
 loading, call the exported `IGI_SDK_Initialize`; call `IGI_SDK_Shutdown` before
 unloading. The hook only installs for the supported Windows x86 executable
 when its primary signature matches.
