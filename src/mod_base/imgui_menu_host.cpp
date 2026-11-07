@@ -12,8 +12,10 @@
 
 #include <algorithm>
 #include <atomic>
+#include <climits>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <functional>
 #include <memory>
 #include <string>
@@ -135,6 +137,52 @@ void initializeMenuStateBuffers() {
     lastStatusMessage = "Ready";
 }
 
+bool parseInteger(std::string_view value, int &result) {
+    char *end = nullptr;
+    const std::string copied(value);
+    const long parsed = std::strtol(copied.c_str(), &end, 10);
+    if (end == copied.c_str() || *end != '\0' || parsed < INT_MIN || parsed > INT_MAX)
+        return false;
+    result = static_cast<int>(parsed);
+    return true;
+}
+
+void refreshControlValuesFromGame() {
+    for (std::size_t index = 0; index < menuConfig.items.size(); ++index) {
+        const auto &item = menuConfig.items[index];
+        if (!item.currentValue)
+            continue;
+        const auto current = item.currentValue(runtime);
+        if (!current)
+            continue;
+        switch (item.kind) {
+        case igi::ModMenuItemKind::List: {
+            const auto value = std::find(item.values.begin(), item.values.end(), *current);
+            if (value != item.values.end() && index < listSelections.size())
+                listSelections[index] = static_cast<int>(value - item.values.begin());
+            break;
+        }
+        case igi::ModMenuItemKind::Toggle:
+            if (index < toggleValues.size() && (*current == "true" || *current == "false"))
+                toggleValues[index] = *current == "true";
+            break;
+        case igi::ModMenuItemKind::Slider: {
+            int value = 0;
+            if (index < sliderValues.size() && parseInteger(*current, value)) {
+                const int offset =
+                    std::clamp(value, item.sliderMinimum, item.sliderMaximum) - item.sliderMinimum;
+                sliderValues[index] =
+                    item.sliderMinimum +
+                    ((offset + item.sliderStep / 2) / item.sliderStep) * item.sliderStep;
+            }
+            break;
+        }
+        case igi::ModMenuItemKind::Action:
+            break;
+        }
+    }
+}
+
 bool populatePortableMenuModel() {
     menuModel = std::make_unique<igi::MenuManager>(runtime.scheduler());
     if (!menuModel->createMenu("main", menuConfig.title))
@@ -235,6 +283,7 @@ void queueMenuAction(std::size_t itemIndex, std::string value,
                 return;
             }
             runModMenu(menuConfig, runtime, itemIndex, movedValue);
+            refreshControlValuesFromGame();
             const auto &item = menuConfig.items[itemIndex];
             lastStatusMessage =
                 "Applied: " + item.label + (movedValue.empty() ? "" : ": " + movedValue);
@@ -567,6 +616,7 @@ void renderImGuiModWindow() {
 
     bool keepOpen = menuVisible;
     if (ImGui::Begin(menuConfig.title.c_str(), &keepOpen, windowFlags)) {
+        refreshControlValuesFromGame();
         ImGui::Text("IGI Mod Base - ImGui (Direct3D 7)");
         if (menuConfig.imgui.showFps) {
             ImGui::SameLine();

@@ -6,15 +6,20 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 
 namespace igi {
+class Runtime;
+
 enum class ModMenuItemKind { Action, Toggle, List, Slider };
 enum class ImGuiTheme { Dark, Light, Classic };
 
 inline constexpr std::size_t kMaxMenuListChoices = 64;
+using MenuCurrentValueReader = std::function<std::optional<std::string>(Runtime &)>;
 
 struct ModMenuItemConfig {
     std::string id;
@@ -29,6 +34,9 @@ struct ModMenuItemConfig {
     int sliderStep = 1;
     int sliderDefault = 0;
     std::string category;
+    // Optional game-thread reader used by renderers to synchronize display state
+    // with a value changed outside the menu or rejected by game-side logic.
+    MenuCurrentValueReader currentValue;
 };
 
 struct ImGuiMenuConfig {
