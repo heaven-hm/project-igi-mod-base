@@ -14,6 +14,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -218,22 +219,26 @@ bool populatePortableMenuModel() {
     return true;
 }
 
-void queueMenuAction(std::size_t itemIndex, std::string value) {
+void queueMenuAction(std::size_t itemIndex, std::string value,
+                     std::function<void()> rollback = {}) {
     if (itemIndex >= menuConfig.items.size())
         return;
     const auto &item = menuConfig.items[itemIndex];
     lastStatusMessage = "Pending: " + item.label + (value.empty() ? "" : ": " + value);
 
-    runtime.scheduler().enqueueOnce([itemIndex, movedValue = std::move(value)] {
-        if (!IGI::GAME::GET()) {
-            lastStatusMessage = "Rejected: game is unavailable";
-            return;
-        }
-        runModMenu(menuConfig, runtime, itemIndex, movedValue);
-        const auto &item = menuConfig.items[itemIndex];
-        lastStatusMessage =
-            "Applied: " + item.label + (movedValue.empty() ? "" : ": " + movedValue);
-    });
+    runtime.scheduler().enqueueOnce(
+        [itemIndex, movedValue = std::move(value), rollback = std::move(rollback)] {
+            if (!IGI::GAME::GET()) {
+                if (rollback)
+                    rollback();
+                lastStatusMessage = "Rejected: game is unavailable";
+                return;
+            }
+            runModMenu(menuConfig, runtime, itemIndex, movedValue);
+            const auto &item = menuConfig.items[itemIndex];
+            lastStatusMessage =
+                "Applied: " + item.label + (movedValue.empty() ? "" : ": " + movedValue);
+        });
 }
 
 #if defined(_WIN32)
@@ -618,9 +623,13 @@ void renderImGuiModWindow() {
                     for (std::size_t valIdx = 0; valIdx < item.values.size(); ++valIdx) {
                         const bool isSelected = (static_cast<int>(valIdx) == current);
                         if (ImGui::Selectable(item.values[valIdx].c_str(), isSelected)) {
+                            const int previous = current;
                             current = static_cast<int>(valIdx);
                             listSelections[index] = current;
-                            queueMenuAction(index, item.values[valIdx]);
+                            queueMenuAction(index, item.values[valIdx], [index, previous] {
+                                if (index < listSelections.size())
+                                    listSelections[index] = previous;
+                            });
                         }
                         if (isSelected)
                             ImGui::SetItemDefaultFocus();
@@ -644,8 +653,12 @@ void renderImGuiModWindow() {
                     toggleValues.resize(menuConfig.items.size(), false);
                 bool checked = toggleValues[index];
                 if (ImGui::Checkbox(item.label.c_str(), &checked)) {
+                    const bool previous = toggleValues[index];
                     toggleValues[index] = checked;
-                    queueMenuAction(index, checked ? "true" : "false");
+                    queueMenuAction(index, checked ? "true" : "false", [index, previous] {
+                        if (index < toggleValues.size())
+                            toggleValues[index] = previous;
+                    });
                 }
                 break;
             }
@@ -655,12 +668,16 @@ void renderImGuiModWindow() {
                 int value = sliderValues[index];
                 if (ImGui::SliderInt(item.label.c_str(), &value, item.sliderMinimum,
                                      item.sliderMaximum)) {
+                    const int previous = sliderValues[index];
                     const int offset = value - item.sliderMinimum;
                     value = item.sliderMinimum +
                             ((offset + item.sliderStep / 2) / item.sliderStep) * item.sliderStep;
                     value = std::clamp(value, item.sliderMinimum, item.sliderMaximum);
                     sliderValues[index] = value;
-                    queueMenuAction(index, std::to_string(value));
+                    queueMenuAction(index, std::to_string(value), [index, previous] {
+                        if (index < sliderValues.size())
+                            sliderValues[index] = previous;
+                    });
                 }
                 break;
             }
