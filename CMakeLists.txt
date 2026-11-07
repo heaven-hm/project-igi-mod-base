@@ -89,6 +89,7 @@ if(IGI_SDK_BUILD_DEMOS)
     endif()
     add_library(igi_menu_manager_internal SHARED
         demos/internal-menumanager/internal_demo.cpp
+        demos/internal-menumanager/default_menu.cpp
         ${IGI_INTERNAL_MENU_PLATFORM}
     )
     target_link_libraries(igi_menu_manager_internal PRIVATE igi_sdk)
@@ -99,6 +100,14 @@ if(IGI_SDK_BUILD_DEMOS)
     set_target_properties(igi_menu_manager_internal PROPERTIES OUTPUT_NAME "IGI-MenuManager-Internal" PREFIX "")
 
     if(WIN32)
+        add_library(igi_simple_mod_menu SHARED demos/simple-menu/simple_menu.cpp demos/internal-menumanager/internal_demo.cpp demos/internal-menumanager/platform_windows.cpp)
+        target_link_libraries(igi_simple_mod_menu PRIVATE igi_sdk)
+        target_link_options(igi_simple_mod_menu PRIVATE -static)
+        set_target_properties(igi_simple_mod_menu PROPERTIES OUTPUT_NAME "igi-simple-mod-menu" PREFIX "")
+        add_library(igi_basic_mod_menu SHARED demos/basic-menu/basic_menu.cpp demos/internal-menumanager/internal_demo.cpp demos/internal-menumanager/platform_windows.cpp)
+        target_link_libraries(igi_basic_mod_menu PRIVATE igi_sdk)
+        target_link_options(igi_basic_mod_menu PRIVATE -static)
+        set_target_properties(igi_basic_mod_menu PROPERTIES OUTPUT_NAME "igi-basic-mod-menu" PREFIX "")
         add_library(igi_natives_inject_test SHARED demos/status-message/status_message_demo.cpp)
         target_link_libraries(igi_natives_inject_test PRIVATE igi_sdk)
         target_include_directories(igi_natives_inject_test PRIVATE include)

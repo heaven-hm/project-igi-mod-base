@@ -15,6 +15,18 @@ inline constexpr std::uint32_t gameMainLoop = 0x0048F530;
 // gDisplayFrameCallbacks, which Display_RunCallbacks runs once per displayed
 // frame (at src/win/display.c:357, before Display_EndFrame at 364).
 inline constexpr std::uint32_t displayAddFrameCallback = 0x004916C0;
+inline constexpr std::uint32_t displayRemoveFrameCallback = 0x004916E0;
+// Head pointer of the per-frame display callback list. 0x004916C0 pushes this
+// address into the registrar, which prepends an {next, callback} node.
+inline constexpr std::uint32_t displayFrameCallbackHead = 0x00BCAE00;
+// Pool of 32 eight-byte {next, callback} nodes used by the registrar.
+inline constexpr std::uint32_t displayFrameCallbackPool = 0x00C28A40;
+inline constexpr std::uint32_t displayFrameCallbackPoolEnd = 0x00C28B44;
+// Display_RunCallbacks: `call Display_Prepare; call Display_Scene; ...;
+// mov [0x00BCAE00],%eax; push %eax; call Display_WalkCallbacks`. This is the
+// function ScreenDraw invokes once per frame, so its detour is the guaranteed
+// per-frame tick driver.
+inline constexpr std::uint32_t displayRunCallbacks = 0x00491D00;
 inline constexpr std::uint32_t displayNextFrameCallbacks = 0x00491D0F;
 
 // Screen-level frame: Display_NextFrame, child draw events, then Display_EndFrame.

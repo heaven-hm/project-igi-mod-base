@@ -18,7 +18,13 @@ public:
     bool installDisplayEndFrameHook();
     bool installTextDrawHook();
     bool installed() const noexcept { return installed_; }
+    // Verifies IGI1SDK_Tick is present in the game's display frame callback
+    // list and re-registers it when a list reset dropped it. Safe to call from
+    // the SDK worker thread; used as a watchdog.
+    bool ensureFrameTickRegistered() noexcept;
     // Refuses a re-entrant call from the active Display_AddFrameCallback detour.
+    // Detaches the scheduler and disables the detours but deliberately leaves the
+    // module resident so no in-flight game callback can jump into freed memory.
     bool uninstall() noexcept;
 
 private:

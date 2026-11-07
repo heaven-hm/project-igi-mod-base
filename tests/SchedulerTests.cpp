@@ -33,7 +33,7 @@ int scriptItemsAdded = 0;
 int scriptRegistrations = 0;
 int scriptRemovals = 0;
 bool scriptSymbolExists = false;
-igi::ScriptCallback registeredCallbacks[6]{};
+igi::ScriptCallback registeredCallbacks[7]{};
 void* registeredContext = nullptr;
 int fakeResourceObject = 0;
 void* fakeResourceCurrent = nullptr;
@@ -60,8 +60,8 @@ int fakeScriptGetInt(void* args, int index) { return static_cast<int*>(args)[ind
 int throwingScriptGetInt(void*, int) { throw std::runtime_error("script argument failure"); }
 void fakeScriptAddItem(const char*, int id) { assert(id == scriptItemsAdded++); }
 void fakeRegister(const char*, igi::ScriptCallback callback, void* context, int argc) {
-    assert(callback && context && (argc == 1 || argc == 2));
-    registeredCallbacks[scriptRegistrations % 6] = callback;
+    assert(callback && context && (argc == 0 || argc == 1 || argc == 2));
+    registeredCallbacks[scriptRegistrations % 7] = callback;
     registeredContext = context;
     ++scriptRegistrations;
 }
@@ -296,7 +296,7 @@ int main() {
     scriptSymbolExists = true;
     assert(!igi::registerMenuScriptCallbacks(callbacks, registry) && scriptRegistrations == 0);
     scriptSymbolExists = false;
-    assert(igi::registerMenuScriptCallbacks(callbacks, registry) && scriptRegistrations == 6);
+    assert(igi::registerMenuScriptCallbacks(callbacks, registry) && scriptRegistrations == 7);
     assert(registeredCallbacks[0] && registeredContext == &callbacks);
     igi::MenuScriptCallbacks throwingCallbacks(listBridge, {throwingScriptGetInt, fakeScriptAddItem});
     assert(registeredCallbacks[0](&scriptResult, &throwingCallbacks, scriptArgs) == &scriptResult);
@@ -312,7 +312,7 @@ int main() {
     assert(scriptResult.integer == 0);
     scriptSymbolExists = true;
     igi::unregisterMenuScriptCallbacks(callbacks, registry);
-    assert(scriptRemovals == 6);
+    assert(scriptRemovals == 7);
     igi::MenuScriptRegistration registration;
     scriptSymbolExists = false;
     assert(registration.start(callbacks, registry));
@@ -320,7 +320,7 @@ int main() {
     scriptSymbolExists = true;
     registration.stop();
     registration.stop();
-    assert(!registration.active() && scriptRemovals == 12);
+    assert(!registration.active() && scriptRemovals == 14);
     scriptArgs[1] = -1;
     assert(callbacks.set(&scriptResult, scriptArgs)->integer == 0);
     std::ostringstream menuScript;

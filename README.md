@@ -9,7 +9,9 @@ Right now only Internal mod menu is implemented , external witll use ImGUI for D
 - Logging
 - Game natives for weather, ammo, health, money, weapons, frame limit, etc.
 
-Target: the EU/Chinese Windows x86 IGI 1 executable.
+Target: the EU/Chinese Windows x86 IGI 1 executable. Native Windows is
+supported directly. On macOS and Linux, run the same Windows x86 game and DLL
+through Wine using the included Wine scripts.
 Out of scope: multiplayer, trainers, memory editors, process scanners.
 
 ## Requirements
@@ -24,7 +26,7 @@ Everything is built by `tools/build-win32-dll.sh`. It sets the C, C++ and RC
 cross-compilers explicitly and discards any stale build tree that still points
 at a host compiler.
 
-# Build Internal Menu
+### Internal menu
 
 ```sh
 # The mod menu DLL (default target)
@@ -33,6 +35,12 @@ tools/build-win32-dll.sh --release
 # The injector and the keypress helper
 tools/build-win32-dll.sh --release --target igi1_injector
 tools/build-win32-dll.sh --release --target igi1_keypress
+```
+
+Build the simple menu demo:
+
+```sh
+tools/build-win32-dll.sh --debug --target igi_simple_mod_menu
 ```
 
 Outputs land in `build-win32-release/` (`build-win32-debug/` with `--debug`):
@@ -70,14 +78,14 @@ The full symbol table is also available as `IGI::HASH::<Name>` constants.
 
 ## Config
 
-`config.ini` sits beside `igi.exe` and is read on startup.
+`project-igi-sdk-config.ini` sits beside `igi.exe` and is read on startup.
 
 ```ini
 [mod_menu]
 enabled=true
 start_key=F3              ; opens the menu and toggles it closed again
 end_key=F12               ; closes the menu and unloads the SDK
-native_mode=hooked        ; hooked = per-frame tick, direct = attach once
+native_mode=hooked        ; required for internal menus
 screen_id=990
 x=95
 y=185
@@ -100,100 +108,72 @@ weather=list,Rain,IGI_SDK_SetWeather(this.value),off,on
 ammo=action,Enable Unlimited Ammo,IGI_SDK_EnableUnlimitedAmmo()
 ```
 
-## Loading the internal demo
+## Create, build and run a menu
 
-`IGI-MenuManager-Internal.dll` is an in-process module, not a standalone
-program. A loader must map it into the 32-bit `igi.exe` process and call the
-exports from the normal plugin lifecycle:
+Use `demos/simple-menu/simple_menu.cpp` as the menu template. Edit its items
+and typed `IGI::` native actions, then build `igi_simple_mod_menu`.
 
-```cpp
-using Initialize = bool (*)();
-using Toggle     = bool (*)();
-using Shutdown   = void (*)();
+On native Windows, launch `igi.exe` normally and inject the built DLL with
+`IGI1-Injector.exe`. On macOS/Linux, use the Wine workflow below.
 
-// Resolved from IGI-MenuManager-Internal.dll after the game is ready.
-Initialize initialize = /* symbol lookup */;
-Toggle     toggle     = /* symbol lookup */;
-Shutdown   shutdown   = /* symbol lookup */;
-
-initialize();   // stage the menu, install the frame hook, write the menu QVM
-toggle();       // show the menu (start_key does this automatically in game)
-shutdown();     // close the screen and unload
-```
-
-Never call `initialize()` from `DllMain`. The default startup thread waits for
-`start_key`, then initializes, installs the hook and opens the menu.
-
-Exports: `IGI_MenuManager_Internal_Initialize`,
-`IGI_MenuManager_Internal_Toggle`, `IGI_MenuManager_Internal_Reopen`,
-`IGI_MenuManager_Internal_RequestShutdown`,
-`IGI_MenuManager_Internal_CanUnload`, `IGI_MenuManager_Internal_RunFrame`,
-`IGI_MenuManager_Internal_Shutdown`.
-
-### A real mod using natives
-
-The internal demo drives its six `config.ini` options through the typed
-wrappers. The same pattern works for a mod's own feature code:
-
-```cpp
-#include "igi_sdk/IGI.hpp"
-#include "igi_sdk/runtime/runtime.hpp"
-#include "igi_sdk/ui/menu_manager.hpp"
-
-void registerMod(igi::Runtime& runtime) {
-    igi::MenuManager menu(runtime.scheduler());
-    menu.createMenu("main", "My IGI Mod");
-
-    menu.addToggle("main", "Rain", true, [](bool enabled) {
-        // Queued onto the game thread by the scheduler.
-        IGI::GAME::SET_RAINING(enabled ? "rain" : "clear");
-    });
-    menu.addToggle("main", "Frame Limit", true, [](bool enabled) {
-        IGI::MISC::FRAMES_SET(enabled ? 30 : 60);
-    });
-    menu.addAction("main", "Unlimited Ammo", [] {
-        IGI::PLAYER::SET_UNLIMITED_AMMO();
-    });
-    menu.addAction("main", "Log State", [] {
-        // Read-only diagnostics.
-        (void)IGI::GAME::IS_PAUSED();
-        (void)IGI::GAME::GET_EVENT0();
-        (void)IGI::GAME::GET_WORLD();
-    });
-}
-```
-
-Menu callbacks are queued with the scheduler; they never run on the input or
-renderer thread. Read-only natives such as `IS_PAUSED` must be called from the
-game thread, so call them from a scheduled task.
-
-## Injecting
-
-`IGI1-Injector.exe` is a 32-bit console tool:
+On macOS/Linux, set the Wine paths once. Copy the SDK config next to `igi.exe`;
+its `start_key` toggles the menu and its `end_key` closes the menu and unloads
+the DLL.
 
 ```sh
-IGI1-Injector.exe -l                                              # list processes
-IGI1-Injector.exe -n igi.exe -i C:\IGI\IGI-MenuManager-Internal.dll -v
-IGI1-Injector.exe -p 1234 -i C:\IGI\IGI-MenuManager-Internal.dll
+export IGI_GAME_DIR=/path/to/IGI
+export IGI_WINEPREFIX=/path/to/wine-prefix
+export WINE_BIN=/path/to/wine
+cp demos/internal-menumanager/config.ini "$IGI_GAME_DIR/project-igi-sdk-config.ini"
 ```
 
-Under Wine, use the wrapper so Unix paths are translated and the injector is
-found automatically:
+Build and check the exact menu source and DLL:
 
 ```sh
-WINEPREFIX=$HOME/igi-test-prefix ./tools/wine_igi_inject.sh \
-  /path/to/IGI-MenuManager-Internal.dll igi.exe
+tools/build-win32-dll.sh --debug --target igi_simple_mod_menu
+IGI_RE_ROOT=/path/to/IGI-RE python3 tools/igi_runtime_harness.py \
+  --path demos/simple-menu/simple_menu.cpp --exe "$IGI_GAME_DIR/igi.exe" \
+  --dll build-win32-debug/igi-simple-mod-menu.dll
 ```
 
-The wrapper injects into an already-running game; it does not launch it. Use
-the same `WINEPREFIX` you launched the game with.
+Launch, inject and open the menu automatically:
 
-Runtime logs are written to `igi_sdk.log` in the game directory.
+```sh
+python3 tools/run_igi_wine.py level9 build-win32-debug/igi-simple-mod-menu.dll \
+  --attempts 10 --press-menu-key
+```
+
+The launcher sends Escape, injects the DLL, presses the configured start key,
+and stops on its first successful injection. It retries failed launches up to
+`--attempts`. Logs are in `/private/tmp/igi-live-validation/` and
+`$IGI_GAME_DIR/project-igi-sdk.log`.
+
+For an already-running game, inject without launching a new level:
+
+```sh
+WINEPREFIX="$IGI_WINEPREFIX" tools/wine_igi_inject.sh \
+  build-win32-debug/igi-simple-mod-menu.dll igi.exe
+```
 
 ## Verification
 
+Before injecting a mod menu, run the Unicorn x86 emulator with the source and
+the exact DLL you built:
+
 ```sh
-tools/verify_igi_re_hook_source.sh
+IGI_RE_ROOT=/path/to/IGI-RE python3 tools/igi_runtime_harness.py --path demos/simple-menu/simple_menu.cpp --exe /path/to/igi.exe --dll build-win32-debug/igi-simple-mod-menu.dll
+```
+
+The scan maps `IGI::DOMAIN::NAME` calls to their declared native signatures and
+retail addresses, then executes supported calls in synthetic emulator state.
+Pickup uses an initialized player fixture with the weapon creation and sound
+calls stubbed and checked. `DEFER` means a call needs live game state and was
+not executed. Raw address calls are not found by the scanner. A passing scan
+does not prove DLL initialization, menu rendering, actual game effects, or
+that every signature is correct; test those in a running game as well.
+
+```sh
+tools/verify_igi_re_hook_source.sh /path/to/IGI-RE
 tools/verify_igi1_hook.sh /path/to/igi.exe
 ```
 

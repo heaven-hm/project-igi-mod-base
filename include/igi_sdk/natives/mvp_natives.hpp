@@ -57,6 +57,8 @@ inline constexpr std::uint32_t GAME_GET_EVENT2 = 0x004167f0;
 inline constexpr std::uint32_t GAME_GET_EVENT3 = 0x00416810;
 inline constexpr std::uint32_t GAME_GET_WORLD = 0x00416920;
 inline constexpr std::uint32_t GAME_GET = 0x00416d40;
+inline constexpr std::uint32_t GAME_GET_PLAYER = 0x00416a70;
+inline constexpr std::uint32_t WEAPON_GUN_PICKUP = 0x0045ffc0;
 inline constexpr std::uint32_t GAME_IS_PAUSED = 0x00416d50;
 inline constexpr std::uint32_t GAME_SET_PAUSED = 0x00416d60;
 inline constexpr std::uint32_t TASK_RUN_SCRIPT = 0x004f0cf0;
@@ -361,6 +363,7 @@ NATIVE_DECL uint8_t GET_EVENT2();
 NATIVE_DECL uint8_t GET_EVENT3();
 NATIVE_DECL void * GET_WORLD();
 NATIVE_DECL Game * GET();
+NATIVE_DECL Task * GET_PLAYER(int i);
 NATIVE_DECL char IS_PAUSED();
 NATIVE_DECL void SET_PAUSED(char on);
 NATIVE_DECL ScriptValue * SET_MISSION(ScriptValue * out, void * data, void * args);
@@ -382,6 +385,7 @@ NATIVE_DECL void * GET_TASK_LIST3();
 NATIVE_DECL void * GET_TASK_LIST4();
 }
 namespace PLAYER {
+NATIVE_DECL void PICK_UP_WEAPON(Human * h, int * msg);
 NATIVE_DECL void SET_UNLIMITED_AMMO();
 NATIVE_DECL void SET_FLAG_D44(HumanPlayer * h);
 NATIVE_DECL void SET_FLAG_D68(HumanPlayer * h);

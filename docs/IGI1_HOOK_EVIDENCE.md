@@ -1,6 +1,6 @@
 # IGI 1 hook evidence
 
-Target: `/Users/haseeb-mir/Downloads/IGI/IGI.EXE` (PE32 x86)
+Target: supported retail `igi.exe` (PE32 x86)
 
 SHA-256: `dea34892d417715873ea61d7b2ba5556655f1ad65385104348146f9679915a01`
 

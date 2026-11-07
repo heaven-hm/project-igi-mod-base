@@ -39,7 +39,7 @@ struct MenuConfig {
     std::int32_t width = 455;
     std::int32_t height = 300;
     // Debug builds default to a console and trace output; release builds write
-    // to igi_sdk.log at Info unless config.ini asks for more.
+    // to project-igi-sdk.log at Info unless config.ini asks for more.
 #ifndef NDEBUG
     LogLevel minimumLogLevel = LogLevel::Trace;
     bool console = true;

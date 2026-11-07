@@ -17,6 +17,9 @@ public:
     // thread. It deliberately does not install a process hook.
     bool initializeDirectNativeMode();
     bool allowDirectNativeCallbackThread() noexcept;
+    // Re-registers IGI1SDK_Tick into the game's display frame callback list when
+    // a display reset dropped it. Used by the mod-menu watchdog.
+    bool ensureTickRegistered() noexcept { return hooks_.ensureFrameTickRegistered(); }
     void shutdown() noexcept;
     Scheduler& scheduler() noexcept { return scheduler_; }
     std::uint64_t gameHookInvocationCount() const noexcept {

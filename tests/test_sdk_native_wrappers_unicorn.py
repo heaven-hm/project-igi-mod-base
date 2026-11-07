@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-RE_ROOT = Path(os.environ.get("IGI_RE_ROOT", "/Users/haseeb-mir/Documents/Code/IGI-RE"))
+RE_ROOT = Path(os.environ.get("IGI_RE_ROOT", ROOT.parent / "IGI-RE"))
 EXE = os.environ.get("IGI_EXE", "")
 DLL = os.environ.get("IGI_SDK_TEST_DLL", "") or (sys.argv[1] if len(sys.argv) > 1 else "")
 
@@ -22,6 +22,8 @@ if not DLL or not Path(DLL).is_file():
     raise SystemExit("IGI_SDK_TEST_DLL must point to the built x86 SDK ABI fixture DLL")
 
 emu_path = RE_ROOT / "tests" / "emu.py"
+if not emu_path.is_file():
+    raise SystemExit(f"IGI-RE emulator not found: {emu_path}; set IGI_RE_ROOT")
 spec = importlib.util.spec_from_file_location("igi_re_emu_sdk_wrapper_test", emu_path)
 emu_module = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = emu_module

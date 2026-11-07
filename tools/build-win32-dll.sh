@@ -13,21 +13,33 @@ root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 configuration=Debug
 target=igi_menu_manager_internal
 clean=0
+demo=
+verify=0
+deploy=0
 
 while (($#)); do
     case "$1" in
         --debug) configuration=Debug ;;
         --release) configuration=Release ;;
         --target) shift; target=${1:?missing target name} ;;
+        --demo) shift; demo=${1:?missing demo source path} ;;
+        --verify) verify=1 ;;
+        --deploy) deploy=1 ;;
         --clean) clean=1 ;;
         --help)
-            printf 'usage: %s [--debug|--release] [--target cmake-target] [--clean]\n' "$0"
+            printf 'usage: %s [--debug|--release] [--target cmake-target] [--demo source.cpp] [--verify] [--deploy] [--clean]\n' "$0"
             exit 0
             ;;
         *) printf 'unknown argument: %s\n' "$1" >&2; exit 2 ;;
     esac
     shift
 done
+
+if [[ -f "$root/.env" ]]; then
+    set -a
+    . "$root/.env"
+    set +a
+fi
 
 build_dir="$root/build-win32-${configuration,,}"
 
@@ -66,4 +78,40 @@ cmake -S "$root" -B "$build_dir" \
     -DCMAKE_RC_COMPILER="$rc_compiler" \
     -DCMAKE_BUILD_TYPE="$configuration"
 cmake --build "$build_dir" --parallel --target "$target"
+
+case "$target" in
+    igi_menu_manager_internal) artifact=${IGI_DLL_NAME:-IGI-MenuManager-Internal.dll} ;;
+    igi_simple_mod_menu) artifact=${IGI_DLL_NAME:-igi-simple-mod-menu.dll} ;;
+    igi_basic_mod_menu) artifact=${IGI_DLL_NAME:-igi-basic-mod-menu.dll} ;;
+    igi_natives_inject_test) artifact=${IGI_DLL_NAME:-igi-natives-inject-test.dll} ;;
+    *) artifact=${IGI_DLL_NAME:-} ;;
+esac
+
+if ((verify)); then
+    if [[ -z ${IGI_EXE:-} ]]; then
+        printf 'error: --verify requires IGI_EXE=/path/to/igi.exe (or .env)\n' >&2
+        exit 2
+    fi
+    if [[ -z "$demo" ]]; then
+        case "$target" in
+            igi_menu_manager_internal) demo=demos/internal-menumanager/internal_demo.cpp ;;
+            igi_simple_mod_menu) demo=demos/simple-menu/simple_menu.cpp ;;
+            igi_basic_mod_menu) demo=demos/basic-menu/basic_menu.cpp ;;
+            igi_natives_inject_test) demo=demos/status-message/status_message_demo.cpp ;;
+            *) printf 'error: --demo is required for target %s\n' "$target" >&2; exit 2 ;;
+        esac
+    fi
+    [[ -f "$root/$demo" ]] || { printf 'error: demo not found: %s\n' "$demo" >&2; exit 2; }
+    [[ -n "$artifact" && -f "$build_dir/$artifact" ]] || { printf 'error: built DLL not found; set IGI_DLL_NAME for target %s\n' "$target" >&2; exit 1; }
+    python3 "$root/tools/igi_runtime_harness.py" --path "$demo" --exe "$IGI_EXE" --dll "$build_dir/$artifact"
+fi
+
+if ((deploy)); then
+    game_dir=${IGI_GAME:-}
+    if [[ -z "$game_dir" && -n ${IGI_EXE:-} ]]; then game_dir=$(dirname "$IGI_EXE"); fi
+    [[ -n "$game_dir" && -d "$game_dir" ]] || { printf 'error: --deploy requires IGI_GAME=/path/to/game or IGI_EXE=/path/to/igi.exe\n' >&2; exit 2; }
+    [[ -n "$artifact" && -f "$build_dir/$artifact" ]] || { printf 'error: built DLL not found; set IGI_DLL_NAME for target %s\n' "$target" >&2; exit 1; }
+    cp "$build_dir/$artifact" "$game_dir/$artifact"
+    printf 'deployed: %s\n' "$game_dir/$artifact"
+fi
 printf 'built: %s\n' "$build_dir"

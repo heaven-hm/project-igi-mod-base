@@ -1,7 +1,8 @@
 #!/bin/sh
 set -eu
 
-igi_re_root=${1:-/Users/haseeb-mir/Documents/Code/IGI-RE}
+igi_re_root=${1:-${IGI_RE_ROOT:-}}
+[ -n "$igi_re_root" ] || { echo "usage: $0 /path/to/IGI-RE (or set IGI_RE_ROOT)" >&2; exit 2; }
 game="$igi_re_root/src/game/game.c"
 flow="$igi_re_root/src/flow/flow.c"
 flow_header="$igi_re_root/src/flow/flow.h"

@@ -69,7 +69,7 @@ void log(LogLevel level, std::string_view message) noexcept {
 
     if (!logFileInitialized) {
         logFileInitialized = true;
-        logFile = std::fopen("igi_sdk.log", "ab");
+        logFile = std::fopen("project-igi-sdk.log", "ab");
     }
 
     if (logSink != nullptr) {

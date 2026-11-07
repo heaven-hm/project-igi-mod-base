@@ -1,7 +1,8 @@
 #!/bin/sh
 set -eu
 
-binary=${1:-/Users/haseeb-mir/Downloads/IGI/IGI.EXE}
+binary=${1:-${IGI_EXE:-}}
+[ -n "$binary" ] || { echo "usage: $0 /path/to/igi.exe (or set IGI_EXE)" >&2; exit 2; }
 expected_hash=dea34892d417715873ea61d7b2ba5556655f1ad65385104348146f9679915a01
 objdump=${IGI_OBJDUMP:-i686-w64-mingw32-objdump}
 

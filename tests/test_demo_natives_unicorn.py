@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-RE_ROOT = Path(os.environ.get("IGI_RE_ROOT", "/Users/haseeb-mir/Documents/Code/IGI-RE"))
+RE_ROOT = Path(os.environ.get("IGI_RE_ROOT", ROOT.parent / "IGI-RE"))
 EXE = os.environ.get("IGI_EXE", "")
 
 if not EXE:
@@ -40,7 +40,7 @@ except ModuleNotFoundError:
 
 emu_path = RE_ROOT / "tests" / "emu.py"
 if not emu_path.is_file():
-    raise SystemExit(f"IGI-RE emulator not found: {emu_path}")
+    raise SystemExit(f"IGI-RE emulator not found: {emu_path}; set IGI_RE_ROOT")
 spec = importlib.util.spec_from_file_location("igi_re_emu", emu_path)
 emu_module = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = emu_module

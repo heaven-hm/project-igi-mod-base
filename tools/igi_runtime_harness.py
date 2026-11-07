@@ -41,7 +41,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-RE_ROOT = Path(os.environ.get("IGI_RE_ROOT", "/Users/haseeb-mir/Documents/Code/IGI-RE"))
+RE_ROOT = Path(os.environ.get("IGI_RE_ROOT", ROOT.parent / "IGI-RE"))
 NATIVES_HEADER = ROOT / "include" / "igi_sdk" / "natives" / "mvp_natives.hpp"
 NATIVES_SOURCE = ROOT / "src" / "igi_sdk" / "natives" / "mvp_natives.cpp"
 EXE = os.environ.get("IGI_EXE", "")
@@ -81,7 +81,7 @@ def skip(reason: str) -> None:
 def load_emu_module():
     emu_path = RE_ROOT / "tests" / "emu.py"
     if not emu_path.is_file():
-        skip(f"IGI-RE emulator not found: {emu_path}")
+        skip(f"IGI-RE emulator not found: {emu_path}; set IGI_RE_ROOT")
     spec = importlib.util.spec_from_file_location("igi_re_emu", emu_path)
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
@@ -776,6 +776,8 @@ class IGIRuntime:
         instead of faulting on null pointers.
         """
         address = entry["address"]
+        if entry["hash"] == "WEAPON_GUN_PICKUP":
+            return self.run_weapon_pickup(entry)
         if args is None:
             args = self.build_arguments(entry)
         try:
@@ -783,6 +785,24 @@ class IGIRuntime:
             return {"ok": True, "address": address, "result": result, "args": args}
         except Exception as error:  # emulator surfaces faults as exceptions
             return {"ok": False, "address": address, "error": str(error), "args": args}
+
+    def run_weapon_pickup(self, entry: dict):
+        player = self.emu.alloc(0xCF8)
+        self.emu.write(player + 8, struct.pack("<I", player + 12))
+        self.emu.write(player + 16, struct.pack("<I", player + 8))
+        message = self.emu.alloc(8)
+        self.emu.write(message, struct.pack("<II", 12, 30))
+        gun_new, sound = 0x00477C50, 0x004E7200
+        self.emu.fake(gun_new, nargs=5)
+        self.emu.fake(sound, nargs=3)
+        try:
+            result = self.emu.call(entry["address"], player, message)
+            calls = self.emu.call_log()
+            if calls[:6] != [gun_new, player, 0, 12, 30, 1] or len(calls) < 10 or calls[6] != sound:
+                raise RuntimeError(f"unexpected weapon pickup calls: {calls}")
+            return {"ok": True, "address": entry["address"], "result": result, "args": (player, message)}
+        except Exception as error:
+            return {"ok": False, "address": entry["address"], "error": str(error), "args": (player, message)}
 
     def run_shutdown(self):
         return self.call_export("IGI_MenuManager_Internal_Shutdown")

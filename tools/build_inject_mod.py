@@ -33,7 +33,7 @@ def _config_key(name, fallback):
     """Read a hotkey name from the deployed config.ini so the injected key
     matches whatever start_key/end_key the game folder is configured with."""
     try:
-        for line in (GAME / "config.ini").read_text(encoding="utf-8", errors="replace").splitlines():
+        for line in (GAME / "project-igi-sdk-config.ini").read_text(encoding="utf-8", errors="replace").splitlines():
             line = line.strip()
             if not line or line.startswith(";") or line.startswith("#") or line.startswith("["):
                 continue
@@ -49,7 +49,7 @@ def _config_key(name, fallback):
 BUILD = _detect_build_dir()
 TEST_BUILD = Path(os.environ.get("IGI_TEST_BUILD_DIR", str(ROOT / "build-macos-verify")))
 LOGDIR = Path(os.environ.get("IGI_VALIDATION_LOG_DIR", "/private/tmp/igi-live-validation"))
-SDK_LOG = GAME / "igi_sdk.log"
+SDK_LOG = GAME / "project-igi-sdk.log"
 START_KEY = _config_key("start_key", "f5")
 END_KEY = _config_key("end_key", "f12")
 ENV = dict(os.environ, WINEPREFIX=str(PREFIX), IGI_WINEPREFIX=str(PREFIX), WINEDEBUG="-all,+seh", IGI_ESCAPE_BEFORE_INJECT="true", IGI_ESCAPE_SETTLE_SECONDS="3")

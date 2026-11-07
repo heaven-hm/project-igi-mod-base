@@ -66,6 +66,9 @@ NATIVE_DECL void * GET_WORLD() {
 NATIVE_DECL Game * GET() {
     return NATIVE_INVOKE<Game *>(HASH::GAME_GET, "Game *Game_Get(void)");
 }
+NATIVE_DECL Task * GET_PLAYER(int i) {
+    return NATIVE_INVOKE<Task *>(HASH::GAME_GET_PLAYER, "Task *Game_GetPlayer(int i)", i);
+}
 NATIVE_DECL char IS_PAUSED() {
     return NATIVE_INVOKE<char>(HASH::GAME_IS_PAUSED, "char Game_IsPaused(void)");
 }
@@ -125,6 +128,9 @@ NATIVE_DECL void * GET_TASK_LIST4() {
 }
 }
 namespace PLAYER {
+NATIVE_DECL void PICK_UP_WEAPON(Human * h, int * msg) {
+    return NATIVE_INVOKE<Void>(HASH::WEAPON_GUN_PICKUP, "void WeaponGunPickup(Human *h, int *msg)", h, msg);
+}
 NATIVE_DECL void SET_UNLIMITED_AMMO() {
     return NATIVE_INVOKE<Void>(HASH::HUMAN_PLAYER_SET_UNLIMITED_AMMO, "void HumanPlayer_SetUnlimitedAmmo(void)");
 }
@@ -972,6 +978,6 @@ NATIVE_DECL int PROFILE_GET_LANGUAGE() {
     return NATIVE_INVOKE<int>(HASH::PROFILE_GET_LANGUAGE, "int Profile_GetLanguage(void)");
 }
 }
-std::size_t NativeBindingCount() noexcept { return 301; }
+std::size_t NativeBindingCount() noexcept { return 303; }
 } // namespace IGI
 #undef NATIVE_INVOKE

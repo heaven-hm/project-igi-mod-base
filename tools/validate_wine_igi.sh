@@ -34,7 +34,7 @@ game_pid() {
     wine cmd /c 'tasklist /FI "IMAGENAME eq igi.exe" /FO CSV /NH' 2>/dev/null |
         awk -F ',' 'tolower($1) == "\"igi.exe\"" {gsub(/\"/, "", $2); print $2; exit}'
 }
-sdk_log="$game_dir/igi_sdk.log"
+sdk_log="$game_dir/project-igi-sdk.log"
 artifact_dir="${TMPDIR:-/tmp}/igi-live-validation"
 mkdir -p "$artifact_dir"
 keypress_win=""
