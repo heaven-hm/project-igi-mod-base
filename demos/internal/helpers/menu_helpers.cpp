@@ -8,6 +8,8 @@
 #include "ui/menu_resource.hpp"
 #include "ui/menu_script.hpp"
 
+#include <atomic>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -20,18 +22,44 @@ constexpr int kModPrecipitationTaskId = 4095;
 
 IGI::Game *g_precipitationGame = nullptr;
 bool g_precipitationActive = false;
+std::atomic<bool> g_thirdPersonActive{false};
+
+std::uint16_t findRainEffectType() {
+#if defined(_WIN32)
+    auto *typePtr = reinterpret_cast<const std::uint16_t *>(igi::re::HASH::gRainEffectType);
+    return typePtr ? *typePtr : static_cast<std::uint16_t>(0);
+#else
+    return 0;
+#endif
+}
+
+bool hasLevelWeather() {
+    auto *level = reinterpret_cast<IGI::Task *>(IGI::LEVEL::GET());
+    if (IGI::TASK::FIND_BY_ID(kModPrecipitationTaskId))
+        return true;
+
+    const auto rainType = findRainEffectType();
+    if (rainType != 0 && level && IGI::TASK::FIND_CHILD(level, rainType))
+        return true;
+
+    return g_precipitationActive;
+}
 
 bool removePrecipitationTask() {
-    auto *game = IGI::GAME::GET();
-    if (!g_precipitationActive || !game || game != g_precipitationGame) {
-        g_precipitationActive = false;
-        g_precipitationGame = nullptr;
-        return true;
-    }
+    auto *level = reinterpret_cast<IGI::Task *>(IGI::LEVEL::GET());
 
     auto *task = IGI::TASK::FIND_BY_ID(kModPrecipitationTaskId);
     if (task)
         IGI::TASK::DELETE_TASK(task);
+
+    const auto rainType = findRainEffectType();
+    if (rainType != 0 && level) {
+        while (auto *existing = IGI::TASK::FIND_CHILD(level, rainType)) {
+            log(LogLevel::Info, "weather: deleting existing level RainEffect task");
+            IGI::TASK::DELETE_TASK(existing);
+        }
+    }
+
     g_precipitationActive = false;
     g_precipitationGame = nullptr;
     return true;
@@ -69,12 +97,14 @@ bool createPrecipitationTask(std::string_view weather) {
         return false;
     }
 
+#if defined(_WIN32)
     using GetChangedEvent = std::uint8_t(__cdecl *)();
     using Broadcast = void(__cdecl *)(IGI::Task *, std::uint8_t, void *);
     const auto changedEvent =
         reinterpret_cast<GetChangedEvent>(igi::re::HASH::Param_GetChangedEvent)();
     char changed = 1;
     reinterpret_cast<Broadcast>(igi::re::HASH::Task_Broadcast)(task, changedEvent, &changed);
+#endif
 
     g_precipitationGame = game;
     g_precipitationActive = true;
@@ -114,12 +144,15 @@ bool refreshLiveMenu(Runtime &runtime, std::string_view effect) {
 }
 
 bool setWeather(Runtime &runtime, std::string_view weather) {
+    const bool wasActive = hasLevelWeather();
+
     if (weather == "Off" || weather == "off" || weather == "false") {
         const char off[] = {'r', 0, '\0'};
         (void)removePrecipitationTask();
         IGI::GAME::SET_RAINING(off);
         IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, "IGI MOD: Weather set to Off");
-        log(LogLevel::Info, "weather: RainEffect removed and Game_SetRaining disabled");
+        log(LogLevel::Info, wasActive ? "weather: existing level weather replaced with Off"
+                                      : "weather: RainEffect removed and Game_SetRaining disabled");
         (void)refreshLiveMenu(runtime, "weather off");
         return true;
     }
@@ -132,10 +165,17 @@ bool setWeather(Runtime &runtime, std::string_view weather) {
     const char code[] = {'r', 1, '\0'};
     IGI::GAME::SET_RAINING(code);
     const char *label = snow ? "Snow" : "Rain";
-    IGI::MISC::STATUS_MESSAGE_SHOW(nullptr,
-                                   (std::string("IGI MOD: ") + label + " enabled").c_str());
-    log(LogLevel::Info,
-        std::string("weather: ") + label + " created through the retail RainEffect task lifecycle");
+    if (wasActive) {
+        const std::string msg = std::string("IGI MOD: Weather replaced with ") + label;
+        IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, msg.c_str());
+        log(LogLevel::Info, std::string("weather: replaced existing level weather with ") + label +
+                                " (single weather enforced)");
+    } else {
+        const std::string msg = std::string("IGI MOD: ") + label + " enabled";
+        IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, msg.c_str());
+        log(LogLevel::Info, std::string("weather: ") + label +
+                                " created through the retail RainEffect task lifecycle");
+    }
     (void)refreshLiveMenu(runtime, snow ? "snow" : "rain");
     return true;
 }
@@ -203,6 +243,7 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
         auto *player = IGI::GAME::GET_PLAYER(0);
         if (player) {
             const int mode = (value == "Third Person") ? 2 : 1;
+            setThirdPersonView(mode == 2);
             IGI::HUMAN::VIEW_CAM(reinterpret_cast<IGI::Human *>(player), mode);
             log(LogLevel::Info, "camera view set to " + std::string(value));
             (void)refreshLiveMenu(runtime, "camera view");
@@ -303,5 +344,96 @@ bool changeLevel(Runtime &runtime, int levelId) {
     log(LogLevel::Info,
         "level change: game task unloaded; Flow will load level " + std::to_string(levelId));
     return true;
+}
+
+void setThirdPersonView(bool active) {
+    g_thirdPersonActive.store(active, std::memory_order_release);
+}
+
+bool isThirdPersonActive() {
+    if (g_thirdPersonActive.load(std::memory_order_acquire))
+        return true;
+#if defined(_WIN32)
+    auto *game = IGI::GAME::GET();
+    if (!game)
+        return false;
+    auto **camPtr = reinterpret_cast<char **>(reinterpret_cast<char *>(game) + 0x5C);
+    if (!camPtr || !*camPtr)
+        return false;
+    return *reinterpret_cast<const int *>(*camPtr + 0xE8) == 2;
+#else
+    return false;
+#endif
+}
+
+void renderThirdPersonCrosshair() {
+#if defined(_WIN32)
+    if (!isThirdPersonActive())
+        return;
+
+    auto *game = IGI::GAME::GET();
+    if (!game)
+        return;
+
+    if (IGI::GAME::IS_PAUSED && IGI::GAME::IS_PAUSED())
+        return;
+
+    auto *player = IGI::GAME::GET_PLAYER(0);
+    if (!player)
+        return;
+
+    using StatusScreenGetFn = void *(__cdecl *)();
+    const auto statusScreenGet =
+        reinterpret_cast<StatusScreenGetFn>(igi::re::HASH::StatusScreen_Get);
+    if (!statusScreenGet)
+        return;
+
+    auto *status = statusScreenGet();
+    if (!status)
+        return;
+
+    void *cross = reinterpret_cast<char *>(status) + 0x74;
+
+    using DisplayGetModeFn = int *(__cdecl *)();
+    const auto displayGetMode = reinterpret_cast<DisplayGetModeFn>(igi::re::HASH::Display_GetMode);
+    if (!displayGetMode)
+        return;
+
+    auto *mode = displayGetMode();
+    if (!mode)
+        return;
+
+    const int width = mode[1];
+    const int height = mode[2];
+    if (width <= 0 || height <= 0)
+        return;
+
+    using SpriteDimFn = int(__cdecl *)(void *);
+    const auto spriteWidth = reinterpret_cast<SpriteDimFn>(igi::re::HASH::Sprite_Width);
+    const auto spriteHeight = reinterpret_cast<SpriteDimFn>(igi::re::HASH::Sprite_Height);
+    if (!spriteWidth || !spriteHeight)
+        return;
+
+    const int sw = spriteWidth(cross);
+    const int sh = spriteHeight(cross);
+    if (sw <= 0 || sh <= 0)
+        return;
+
+    const float cx = static_cast<float>(width) * 0.5f;
+    const float cy = static_cast<float>(height) * 0.5f;
+    const float hw = static_cast<float>(sw) * 0.5f;
+    const float hh = static_cast<float>(sh) * 0.5f;
+
+    const float x = cx - std::round(hw);
+    const float y = cy - std::round(hh);
+    constexpr float kGray = 128.0f;
+
+    using DrawSpriteZFn =
+        void(__cdecl *)(const void *, float, float, float, float, float, int, int, int, float);
+    const auto drawSpriteZ = reinterpret_cast<DrawSpriteZFn>(igi::re::HASH::Draw_SpriteZ);
+    if (drawSpriteZ) {
+        drawSpriteZ(cross, x, y, kGray, kGray, kGray, 0, 0, 0, 1.0f);
+    }
+#endif
 }
 } // namespace igi

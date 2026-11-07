@@ -15,4 +15,7 @@ bool changeLevel(Runtime &runtime, int levelId);
 bool refreshLiveMenu(Runtime &runtime, std::string_view effect);
 bool setWeather(Runtime &runtime, std::string_view weather);
 bool setFps(Runtime &runtime, std::string_view value);
+void setThirdPersonView(bool active);
+bool isThirdPersonActive();
+void renderThirdPersonCrosshair();
 } // namespace igi

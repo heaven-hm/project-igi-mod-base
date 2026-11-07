@@ -14,6 +14,7 @@
 #include "ui/mod_menu.hpp"
 
 #include <atomic>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
@@ -437,6 +438,7 @@ extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_Internal_Initialize() {
     runtime.scheduler().enqueueEveryFrame([] {
         if (initialAttachPending.load(std::memory_order_acquire))
             menuFrameWork();
+        igi::renderThirdPersonCrosshair();
     });
     igi::log(igi::LogLevel::Info, "internal startup stage: enqueue complete");
 #else
@@ -469,6 +471,7 @@ extern "C" IGI_DEMO_EXPORT std::size_t IGI_MenuManager_Internal_RunFrame() {
     // External callers that already own the game thread can drive the same
     // work the Display_AddFrameCallback tick performs.
     menuFrameWork();
+    igi::renderThirdPersonCrosshair();
 #endif
     if (count <= 5 || (count % 1000) == 0)
         igi::log(igi::LogLevel::Debug, "internal frame: scheduler completed");
