@@ -17,6 +17,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #if defined(_WIN32)
@@ -63,6 +64,7 @@ struct ExternalImGuiMenuState {
     std::atomic<bool> initialAttachPending{false};
     bool menuVisible = false;
     bool pauseWhileOpen = true;
+    std::string activeCategory;
 #if defined(_WIN32)
     IDirect3DDevice7 *boundDevice = nullptr;
     IDirectDraw7 *boundDDraw = nullptr;
@@ -87,6 +89,7 @@ auto &shutdownPending = g_menu.shutdownPending;
 auto &initialAttachPending = g_menu.initialAttachPending;
 auto &menuVisible = g_menu.menuVisible;
 auto &pauseWhileOpen = g_menu.pauseWhileOpen;
+auto &activeCategory = g_menu.activeCategory;
 
 void initializeMenuStateBuffers() {
     listSelections.assign(menuConfig.items.size(), 0);
@@ -100,6 +103,7 @@ void initializeMenuStateBuffers() {
             listSelections[index] = static_cast<int>(item.defaultSelection);
     }
     pauseWhileOpen = menuConfig.imgui.pauseGame;
+    activeCategory.clear();
     lastStatusMessage = "Ready";
 }
 
@@ -108,11 +112,21 @@ bool populatePortableMenuModel() {
     if (!menuModel->createMenu("main", menuConfig.title))
         return false;
 
+    std::unordered_map<std::string, std::string> categoryIds;
     for (std::size_t index = 0; index < menuConfig.items.size(); ++index) {
         const auto &item = menuConfig.items[index];
+        std::string menuId = "main";
+        if (!item.category.empty()) {
+            const auto [entry, inserted] = categoryIds.emplace(
+                item.category, "category-" + std::to_string(categoryIds.size()));
+            menuId = entry->second;
+            if (inserted && (!menuModel->createMenu(menuId, item.category) ||
+                             !menuModel->addSubmenu("main", item.category, menuId)))
+                return false;
+        }
         switch (item.kind) {
         case igi::ModMenuItemKind::List:
-            if (!menuModel->addList("main", item.label, item.values, item.defaultSelection,
+            if (!menuModel->addList(menuId, item.label, item.values, item.defaultSelection,
                                     [index](std::size_t selectedIndex) {
                                         if (index < menuConfig.items.size() &&
                                             selectedIndex < menuConfig.items[index].values.size()) {
@@ -126,7 +140,7 @@ bool populatePortableMenuModel() {
             break;
         case igi::ModMenuItemKind::Toggle:
             if (!menuModel->addToggle(
-                    "main", item.label, item.defaultToggle, [index](bool enabled) {
+                    menuId, item.label, item.defaultToggle, [index](bool enabled) {
                         runModMenu(menuConfig, runtime, index, enabled ? "true" : "false");
                     })) {
                 return false;
@@ -136,7 +150,7 @@ bool populatePortableMenuModel() {
             if (item.sliderMinimum > item.sliderMaximum || item.sliderStep <= 0 ||
                 item.sliderDefault < item.sliderMinimum || item.sliderDefault > item.sliderMaximum)
                 return false;
-            if (!menuModel->addInteger("main", item.label, item.sliderDefault, item.sliderMinimum,
+            if (!menuModel->addInteger(menuId, item.label, item.sliderDefault, item.sliderMinimum,
                                        item.sliderMaximum, item.sliderStep, [index](int value) {
                                            runModMenu(menuConfig, runtime, index,
                                                       std::to_string(value));
@@ -145,7 +159,7 @@ bool populatePortableMenuModel() {
             }
             break;
         case igi::ModMenuItemKind::Action:
-            if (!menuModel->addAction("main", item.label,
+            if (!menuModel->addAction(menuId, item.label,
                                       [index] { runModMenu(menuConfig, runtime, index, ""); })) {
                 return false;
             }
@@ -159,15 +173,17 @@ void queueMenuAction(std::size_t itemIndex, std::string value) {
     if (itemIndex >= menuConfig.items.size())
         return;
     const auto &item = menuConfig.items[itemIndex];
-    if (value.empty())
-        lastStatusMessage = item.label;
-    else
-        lastStatusMessage = item.label + ": " + value;
+    lastStatusMessage = "Pending: " + item.label + (value.empty() ? "" : ": " + value);
 
     runtime.scheduler().enqueueOnce([itemIndex, movedValue = std::move(value)] {
-        if (!IGI::GAME::GET())
+        if (!IGI::GAME::GET()) {
+            lastStatusMessage = "Rejected: game is unavailable";
             return;
+        }
         runModMenu(menuConfig, runtime, itemIndex, movedValue);
+        const auto &item = menuConfig.items[itemIndex];
+        lastStatusMessage =
+            "Applied: " + item.label + (movedValue.empty() ? "" : ": " + movedValue);
     });
 }
 
@@ -514,8 +530,27 @@ void renderImGuiModWindow() {
         }
         ImGui::Separator();
 
+        std::vector<std::string> categories;
+        for (const auto &item : menuConfig.items) {
+            if (std::find(categories.begin(), categories.end(), item.category) == categories.end())
+                categories.push_back(item.category);
+        }
+        if (activeCategory.empty() && !categories.empty())
+            activeCategory = categories.front();
+        if (categories.size() > 1 && ImGui::BeginTabBar("Categories")) {
+            for (const auto &category : categories) {
+                if (ImGui::BeginTabItem(category.empty() ? "Main" : category.c_str())) {
+                    activeCategory = category;
+                    ImGui::EndTabItem();
+                }
+            }
+            ImGui::EndTabBar();
+        }
+
         for (std::size_t index = 0; index < menuConfig.items.size(); ++index) {
             const auto &item = menuConfig.items[index];
+            if (item.category != activeCategory)
+                continue;
             ImGui::PushID(static_cast<int>(index));
 
             switch (item.kind) {

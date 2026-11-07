@@ -25,6 +25,7 @@ struct ModMenuItemConfig {
     int sliderMaximum = 100;
     int sliderStep = 1;
     int sliderDefault = 0;
+    std::string category;
 };
 
 struct ImGuiMenuConfig {
