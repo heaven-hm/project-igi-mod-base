@@ -154,6 +154,8 @@ void queueMenuAction(std::size_t itemIndex, std::string value) {
         lastStatusMessage = item.label + ": " + value;
 
     runtime.scheduler().enqueueOnce([itemIndex, movedValue = std::move(value)] {
+        if (!IGI::GAME::GET())
+            return;
         runModMenu(menuConfig, runtime, itemIndex, movedValue);
     });
 }
@@ -327,8 +329,25 @@ bool ensureImGuiBackend() {
     if (g_menu.imguiInitialized) {
         if (device == g_menu.boundDevice && ddraw == g_menu.boundDDraw && hwnd == g_menu.boundHwnd)
             return true;
+        if (hwnd == g_menu.boundHwnd) {
+            igi::log(
+                igi::LogLevel::Info,
+                "external imgui backend: Direct3D 7 device changed; recreating device objects");
+            ImGui_ImplDX7_InvalidateDeviceObjects();
+            ImGui_ImplDX7_Shutdown();
+            if (!ImGui_ImplDX7_Init(device, ddraw) || !ImGui_ImplDX7_CreateDeviceObjects()) {
+                igi::log(igi::LogLevel::Error,
+                         "external imgui backend: Direct3D 7 device rebind failed");
+                shutdownImGuiBackend();
+                return false;
+            }
+            g_menu.boundDevice = device;
+            g_menu.boundDDraw = ddraw;
+            restoreIgiRenderCacheAndFpu();
+            return true;
+        }
         igi::log(igi::LogLevel::Info,
-                 "external imgui backend: Direct3D 7 device changed; recreating device objects");
+                 "external imgui backend: game window changed; reinitializing backend");
         shutdownImGuiBackend();
     }
 
@@ -377,11 +396,15 @@ bool ensureImGuiBackend() {
 bool closeImGuiMenu() {
     menuVisible = false;
     setKeyboardBlocked(false);
-    if (!igi::resumeFromMenu(runtime)) {
-        igi::log(igi::LogLevel::Warning, "external imgui menu close: unable to resume game");
+    if (IGI::GAME::GET()) {
+        if (!igi::resumeFromMenu(runtime)) {
+            igi::log(igi::LogLevel::Warning, "external imgui menu close: unable to resume game");
+        } else {
+            igi::log(igi::LogLevel::Info,
+                     "external imgui menu close: game resumed and human input enabled");
+        }
     } else {
-        igi::log(igi::LogLevel::Info,
-                 "external imgui menu close: game resumed and human input enabled");
+        igi::log(igi::LogLevel::Info, "external imgui menu close: closed outside active gameplay");
     }
     if (!shutdownPending.load(std::memory_order_acquire))
         safeToShutdown.store(true, std::memory_order_release);
@@ -422,6 +445,10 @@ void menuFrameWork() {
     if (!runtime.initialized())
         return;
     ensureEndFrameCallbackRegistered();
+    if (menuVisible && !IGI::GAME::GET()) {
+        (void)closeImGuiMenu();
+        return;
+    }
     if (!initialAttachPending.load(std::memory_order_acquire) || menuVisible)
         return;
     if (!IGI::GAME::GET() || IGI::GAME::IS_PAUSED())
@@ -430,11 +457,13 @@ void menuFrameWork() {
 }
 
 bool toggleImGuiMenuOnGameThread() {
+    if (menuVisible)
+        return closeImGuiMenu();
     if (!IGI::GAME::GET()) {
         igi::log(igi::LogLevel::Warning, "external imgui menu toggle: requires an active game");
         return false;
     }
-    return menuVisible ? closeImGuiMenu() : openImGuiMenu();
+    return openImGuiMenu();
 }
 
 void renderImGuiModWindow() {
@@ -558,6 +587,10 @@ void renderImGuiModWindow() {
 extern "C" void __cdecl onDisplayEndFrame() noexcept {
     if (!runtime.initialized() || !menuVisible)
         return;
+    if (!IGI::GAME::GET()) {
+        (void)closeImGuiMenu();
+        return;
+    }
     if (!ensureImGuiBackend())
         return;
 
@@ -688,9 +721,10 @@ extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_External_RequestShutdown() {
         igi::log(igi::LogLevel::Info, "external imgui unload: game-thread cleanup started");
         if (menuVisible)
             (void)closeImGuiMenu();
-        else
+        else if (IGI::GAME::GET())
             (void)igi::resumeFromMenu(runtime);
-        IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, "IGI SDK ImGui Mod Menu: disabled");
+        if (IGI::GAME::GET())
+            IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, "IGI SDK ImGui Mod Menu: disabled");
         unregisterEndFrameCallback();
         shutdownImGuiBackend();
         igi::log(igi::LogLevel::Info, "external imgui unload: game-thread cleanup finished");
