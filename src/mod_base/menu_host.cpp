@@ -41,6 +41,17 @@ enum class IgiMenuScreenState : std::int32_t {
 
 enum class MenuTransition { None, Closing, Reopening };
 
+// Retail IGI 1 MenuManager layout recovered from the menu-script entry points:
+// MenuManager_RequestScreen (0x004174a0) and MenuManager_LeaveMenus (0x00417790)
+// both write the "Current menuscreen" parameter at +0x20.  FLOW_GET_SCREEN
+// returns this MenuManager object, not the active MenuScreen task.
+struct RetailMenuManagerLayout {
+    std::byte taskHeaderAndUnknown[0x20];
+    std::int32_t currentScreenId;
+};
+
+static_assert(offsetof(RetailMenuManagerLayout, currentScreenId) == 0x20);
+
 // Consolidated mod-menu state container (BigBase v2 style).
 struct InternalMenuState {
     igi::Runtime runtime;
@@ -182,8 +193,9 @@ bool runMenuCommand(const char *resource, const char *operation) {
 }
 
 bool isConfiguredMenuScreenActive() {
-    auto *screen = IGI::TASK::FIND_BY_ID(menuConfig.screenId);
-    return screen && IGI::OTHER::FLOW_GET_SCREEN() == screen;
+    auto *manager = static_cast<const RetailMenuManagerLayout *>(IGI::OTHER::FLOW_GET_SCREEN());
+    return manager && manager->currentScreenId == menuConfig.screenId &&
+           IGI::TASK::FIND_BY_ID(menuConfig.screenId) != nullptr;
 }
 
 void completeShutdownOnGameThread() {
