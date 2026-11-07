@@ -36,12 +36,40 @@ void menuConfigTest() {
     assert(exitKeyConfig.exitKey == 0x4F);
     FILE* exitKeyFile = std::fopen("exit_key_test.ini", "w");
     assert(exitKeyFile);
-    std::fputs("[mod_menu]\nhotkey=F5\nexit_key=Delete\n", exitKeyFile);
+    std::fputs("[mod_menu]\nhotkey=F5\nexit_key=Delete\n"
+               "[imgui]\nx=120\ny=140\nwidth=520\nheight=440\ntheme=light\n"
+               "alpha=0.85\nfont_scale=1.25\nwindow_rounding=8.0\nframe_rounding=5.0\n"
+               "border_size=2.0\npause_game=false\nshow_fps=false\nshow_status=false\n"
+               "movable=false\nresizable=false\ncollapsible=true\nauto_resize=true\n"
+               "mouse_cursor=false\nkeyboard_nav=false\nsave_layout=true\n"
+               "ini_file=custom-imgui.ini\n",
+               exitKeyFile);
     std::fclose(exitKeyFile);
     const auto exitKeyLoaded = igi::loadMenuConfig("exit_key_test.ini");
     std::remove("exit_key_test.ini");
     assert(exitKeyLoaded.exitKey == 0x53);
     assert(exitKeyLoaded.hotkey == 0x3F);
+    assert(exitKeyLoaded.imgui.x == 120);
+    assert(exitKeyLoaded.imgui.y == 140);
+    assert(exitKeyLoaded.imgui.width == 520);
+    assert(exitKeyLoaded.imgui.height == 440);
+    assert(exitKeyLoaded.imgui.theme == igi::ImGuiTheme::Light);
+    assert(exitKeyLoaded.imgui.alpha > 0.84F && exitKeyLoaded.imgui.alpha < 0.86F);
+    assert(exitKeyLoaded.imgui.fontScale > 1.24F && exitKeyLoaded.imgui.fontScale < 1.26F);
+    assert(exitKeyLoaded.imgui.windowRounding == 8.0F);
+    assert(exitKeyLoaded.imgui.frameRounding == 5.0F);
+    assert(exitKeyLoaded.imgui.borderSize == 2.0F);
+    assert(!exitKeyLoaded.imgui.pauseGame);
+    assert(!exitKeyLoaded.imgui.showFps);
+    assert(!exitKeyLoaded.imgui.showStatus);
+    assert(!exitKeyLoaded.imgui.movable);
+    assert(!exitKeyLoaded.imgui.resizable);
+    assert(exitKeyLoaded.imgui.collapsible);
+    assert(exitKeyLoaded.imgui.autoResize);
+    assert(!exitKeyLoaded.imgui.mouseCursor);
+    assert(!exitKeyLoaded.imgui.keyboardNav);
+    assert(exitKeyLoaded.imgui.saveLayout);
+    assert(exitKeyLoaded.imgui.iniFile == "custom-imgui.ini");
 }
 
 void menuManagerModelTest() {

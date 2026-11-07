@@ -94,6 +94,7 @@ void initializeMenuStateBuffers() {
     for (std::size_t index = 0; index < menuConfig.items.size(); ++index) {
         toggleValues[index] = menuConfig.items[index].defaultToggle;
     }
+    pauseWhileOpen = menuConfig.imgui.pauseGame;
     lastStatusMessage = "Ready";
 }
 
@@ -262,13 +263,28 @@ LRESULT CALLBACK imguiWindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
 }
 
 void applyImGuiTheme() {
-    ImGui::StyleColorsDark();
+    switch (menuConfig.imgui.theme) {
+    case igi::ImGuiTheme::Light:
+        ImGui::StyleColorsLight();
+        break;
+    case igi::ImGuiTheme::Classic:
+        ImGui::StyleColorsClassic();
+        break;
+    case igi::ImGuiTheme::Dark:
+    default:
+        ImGui::StyleColorsDark();
+        break;
+    }
+    ImGuiIO &io = ImGui::GetIO();
+    io.FontGlobalScale = menuConfig.imgui.fontScale;
+
     ImGuiStyle &style = ImGui::GetStyle();
-    style.WindowRounding = 6.0f;
-    style.FrameRounding = 4.0f;
-    style.GrabRounding = 4.0f;
-    style.WindowBorderSize = 1.0f;
-    style.FrameBorderSize = 1.0f;
+    style.Alpha = menuConfig.imgui.alpha;
+    style.WindowRounding = menuConfig.imgui.windowRounding;
+    style.FrameRounding = menuConfig.imgui.frameRounding;
+    style.GrabRounding = menuConfig.imgui.frameRounding;
+    style.WindowBorderSize = menuConfig.imgui.borderSize;
+    style.FrameBorderSize = menuConfig.imgui.borderSize;
     style.ItemSpacing = ImVec2(8.0f, 6.0f);
     style.WindowPadding = ImVec2(12.0f, 12.0f);
 }
@@ -319,8 +335,11 @@ bool ensureImGuiBackend() {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
-    io.IniFilename = nullptr;
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    io.IniFilename = menuConfig.imgui.saveLayout ? menuConfig.imgui.iniFile.c_str() : nullptr;
+    if (menuConfig.imgui.keyboardNav)
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    else
+        io.ConfigFlags &= ~ImGuiConfigFlags_NavEnableKeyboard;
     applyImGuiTheme();
 
     if (!ImGui_ImplWin32_Init(hwnd)) {
@@ -420,17 +439,29 @@ bool toggleImGuiMenuOnGameThread() {
 
 void renderImGuiModWindow() {
     ImGui::SetNextWindowPos(
-        ImVec2(static_cast<float>(menuConfig.x), static_cast<float>(menuConfig.y)),
+        ImVec2(static_cast<float>(menuConfig.imgui.x), static_cast<float>(menuConfig.imgui.y)),
         ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(
-        ImVec2(static_cast<float>(menuConfig.width), static_cast<float>(menuConfig.height)),
-        ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(static_cast<float>(menuConfig.imgui.width),
+                                    static_cast<float>(menuConfig.imgui.height)),
+                             ImGuiCond_FirstUseEver);
+
+    ImGuiWindowFlags windowFlags = ImGuiWindowFlags_None;
+    if (!menuConfig.imgui.collapsible)
+        windowFlags |= ImGuiWindowFlags_NoCollapse;
+    if (!menuConfig.imgui.movable)
+        windowFlags |= ImGuiWindowFlags_NoMove;
+    if (!menuConfig.imgui.resizable)
+        windowFlags |= ImGuiWindowFlags_NoResize;
+    if (menuConfig.imgui.autoResize)
+        windowFlags |= ImGuiWindowFlags_AlwaysAutoResize;
 
     bool keepOpen = menuVisible;
-    if (ImGui::Begin(menuConfig.title.c_str(), &keepOpen, ImGuiWindowFlags_NoCollapse)) {
+    if (ImGui::Begin(menuConfig.title.c_str(), &keepOpen, windowFlags)) {
         ImGui::Text("IGI Mod Base - ImGui (Direct3D 7)");
-        ImGui::SameLine();
-        ImGui::TextDisabled("| %.1f FPS", ImGui::GetIO().Framerate);
+        if (menuConfig.imgui.showFps) {
+            ImGui::SameLine();
+            ImGui::TextDisabled("| %.1f FPS", ImGui::GetIO().Framerate);
+        }
 
         if (ImGui::Checkbox("Pause Game While Open", &pauseWhileOpen)) {
             if (pauseWhileOpen) {
@@ -510,7 +541,9 @@ void renderImGuiModWindow() {
         }
 
         ImGui::Separator();
-        ImGui::TextWrapped("Status: %s", lastStatusMessage.c_str());
+        if (menuConfig.imgui.showStatus) {
+            ImGui::TextWrapped("Status: %s", lastStatusMessage.c_str());
+        }
         if (ImGui::Button("Close Menu", ImVec2(-1.0f, 0.0f))) {
             keepOpen = false;
         }
@@ -537,7 +570,7 @@ extern "C" void __cdecl onDisplayEndFrame() noexcept {
         vp.dwHeight > 0) {
         io.DisplaySize = ImVec2(static_cast<float>(vp.dwWidth), static_cast<float>(vp.dwHeight));
     }
-    io.MouseDrawCursor = menuVisible;
+    io.MouseDrawCursor = menuVisible && menuConfig.imgui.mouseCursor;
     io.MouseDown[0] = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
     io.MouseDown[1] = (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0;
     io.MouseDown[2] = (GetAsyncKeyState(VK_MBUTTON) & 0x8000) != 0;

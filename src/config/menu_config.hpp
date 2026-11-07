@@ -11,6 +11,7 @@
 
 namespace igi {
 enum class ModMenuItemKind { Action, Toggle, List, Slider };
+enum class ImGuiTheme { Dark, Light, Classic };
 
 struct ModMenuItemConfig {
     std::string id;
@@ -19,6 +20,30 @@ struct ModMenuItemConfig {
     std::string nativeAction;
     std::vector<std::string> values;
     bool defaultToggle = false;
+};
+
+struct ImGuiMenuConfig {
+    std::int32_t x = 95;
+    std::int32_t y = 80;
+    std::int32_t width = 460;
+    std::int32_t height = 400;
+    ImGuiTheme theme = ImGuiTheme::Dark;
+    float alpha = 0.95F;
+    float fontScale = 1.0F;
+    float windowRounding = 6.0F;
+    float frameRounding = 4.0F;
+    float borderSize = 1.0F;
+    bool pauseGame = true;
+    bool showFps = true;
+    bool showStatus = true;
+    bool movable = true;
+    bool resizable = true;
+    bool collapsible = false;
+    bool autoResize = false;
+    bool mouseCursor = true;
+    bool keyboardNav = true;
+    bool saveLayout = false;
+    std::string iniFile = "project-igi-imgui.ini";
 };
 
 struct MenuConfig {
@@ -40,6 +65,7 @@ struct MenuConfig {
     std::int32_t y = 185;
     std::int32_t width = 455;
     std::int32_t height = 300;
+    ImGuiMenuConfig imgui;
     // Debug builds default to a console and trace output; release builds write
     // to the configured log file at Info unless the config asks for more.
 #ifndef NDEBUG
@@ -60,6 +86,7 @@ struct MenuConfig {
 MenuConfig loadMenuConfig(const std::filesystem::path &path);
 std::uint8_t parseDirectInputKey(std::string_view name, std::uint8_t fallback = 0x3F) noexcept;
 LogLevel parseLogLevel(std::string_view name, LogLevel fallback = LogLevel::Info) noexcept;
+ImGuiTheme parseImGuiTheme(std::string_view name, ImGuiTheme fallback = ImGuiTheme::Dark) noexcept;
 game::TickHook
 parseTickHook(std::string_view name,
               game::TickHook fallback = game::TickHook::DisplayAddFrameCallback) noexcept;

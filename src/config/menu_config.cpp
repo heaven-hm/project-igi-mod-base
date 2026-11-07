@@ -42,9 +42,70 @@ void setInt(const std::string &value, std::int32_t &target) {
     }
 }
 
-void applyMenuKey(igi::MenuConfig &config, const std::string &key, const std::string &value) {
+void setClampedFloat(const std::string &value, float &target, float minValue, float maxValue) {
+    try {
+        const float parsed = std::stof(value);
+        target = std::clamp(parsed, minValue, maxValue);
+    } catch (...) {
+    }
+}
+
+bool isSafeRelativeFileName(const std::string &value) {
+    return !value.empty() && value != "." && value != ".." &&
+           value.find_first_of("/\\:") == std::string::npos;
+}
+
+void applyImGuiKey(igi::ImGuiMenuConfig &imgui, const std::string &rawKey,
+                   const std::string &value) {
+    const std::string key = lower(rawKey);
+    if (key == "x" || key == "window_x")
+        setInt(value, imgui.x);
+    else if (key == "y" || key == "window_y")
+        setInt(value, imgui.y);
+    else if (key == "width" || key == "window_width")
+        setInt(value, imgui.width);
+    else if (key == "height" || key == "window_height")
+        setInt(value, imgui.height);
+    else if (key == "theme" || key == "style")
+        imgui.theme = igi::parseImGuiTheme(value, imgui.theme);
+    else if (key == "alpha" || key == "opacity")
+        setClampedFloat(value, imgui.alpha, 0.2F, 1.0F);
+    else if (key == "font_scale" || key == "scale")
+        setClampedFloat(value, imgui.fontScale, 0.5F, 2.5F);
+    else if (key == "window_rounding")
+        setClampedFloat(value, imgui.windowRounding, 0.0F, 16.0F);
+    else if (key == "frame_rounding")
+        setClampedFloat(value, imgui.frameRounding, 0.0F, 16.0F);
+    else if (key == "border_size")
+        setClampedFloat(value, imgui.borderSize, 0.0F, 4.0F);
+    else if (key == "pause_game" || key == "pause_while_open")
+        imgui.pauseGame = parseBool(lower(value), imgui.pauseGame);
+    else if (key == "show_fps")
+        imgui.showFps = parseBool(lower(value), imgui.showFps);
+    else if (key == "show_status")
+        imgui.showStatus = parseBool(lower(value), imgui.showStatus);
+    else if (key == "movable")
+        imgui.movable = parseBool(lower(value), imgui.movable);
+    else if (key == "resizable")
+        imgui.resizable = parseBool(lower(value), imgui.resizable);
+    else if (key == "collapsible")
+        imgui.collapsible = parseBool(lower(value), imgui.collapsible);
+    else if (key == "auto_resize")
+        imgui.autoResize = parseBool(lower(value), imgui.autoResize);
+    else if (key == "mouse_cursor")
+        imgui.mouseCursor = parseBool(lower(value), imgui.mouseCursor);
+    else if (key == "keyboard_nav")
+        imgui.keyboardNav = parseBool(lower(value), imgui.keyboardNav);
+    else if (key == "save_layout")
+        imgui.saveLayout = parseBool(lower(value), imgui.saveLayout);
+    else if (key == "ini_file" && isSafeRelativeFileName(value))
+        imgui.iniFile = value;
+}
+
+void applyMenuKey(igi::MenuConfig &config, const std::string &key, const std::string &value,
+                  bool imguiGeometryExplicit) {
     if (key == "enabled")
-        config.enabled = parseBool(value, config.enabled);
+        config.enabled = parseBool(lower(value), config.enabled);
     else if (key == "start_key" || key == "hotkey")
         config.hotkey = igi::parseDirectInputKey(value, config.hotkey);
     else if (key == "end_key" || key == "exit_key" || key == "exit_hotkey")
@@ -57,23 +118,32 @@ void applyMenuKey(igi::MenuConfig &config, const std::string &key, const std::st
             config.directNativeMode = false;
     } else if (key == "screen_id")
         setInt(value, config.screenId);
-    else if (key == "x")
+    else if (key == "x") {
         setInt(value, config.x);
-    else if (key == "y")
+        if (!imguiGeometryExplicit)
+            setInt(value, config.imgui.x);
+    } else if (key == "y") {
         setInt(value, config.y);
-    else if (key == "width")
+        if (!imguiGeometryExplicit)
+            setInt(value, config.imgui.y);
+    } else if (key == "width") {
         setInt(value, config.width);
-    else if (key == "height")
+        if (!imguiGeometryExplicit)
+            setInt(value, config.imgui.width);
+    } else if (key == "height") {
         setInt(value, config.height);
-    else if (key == "hook")
+        if (!imguiGeometryExplicit)
+            setInt(value, config.imgui.height);
+    } else if (key == "hook")
         config.hook = igi::parseTickHook(value, config.hook);
     else if (key == "console")
-        config.console = parseBool(value, config.console);
+        config.console = parseBool(lower(value), config.console);
     else if (key == "log_level")
         config.minimumLogLevel = igi::parseLogLevel(value, config.minimumLogLevel);
-    else if (key == "log_file" && !value.empty() && value != "." && value != ".." &&
-             value.find_first_of("/\\:") == std::string::npos)
+    else if (key == "log_file" && isSafeRelativeFileName(value))
         config.logFile = value;
+    else if (key.starts_with("imgui_"))
+        applyImGuiKey(config.imgui, key.substr(6), value);
 }
 } // namespace
 
@@ -132,6 +202,17 @@ LogLevel parseLogLevel(std::string_view name, LogLevel fallback) noexcept {
     return fallback;
 }
 
+ImGuiTheme parseImGuiTheme(std::string_view name, ImGuiTheme fallback) noexcept {
+    const std::string key = lower(trim(std::string{name}));
+    if (key == "dark")
+        return ImGuiTheme::Dark;
+    if (key == "light")
+        return ImGuiTheme::Light;
+    if (key == "classic")
+        return ImGuiTheme::Classic;
+    return fallback;
+}
+
 game::TickHook parseTickHook(std::string_view name, game::TickHook fallback) noexcept {
     // Normalise so displayAddFrameCallback, Display_AddFrameCallback and
     // display_add_frame_callback all resolve to the same hook.
@@ -170,10 +251,19 @@ MenuConfig loadMenuConfig(const std::filesystem::path &path) {
     if (!file)
         return config;
 
-    // `[mod_menu]` applies always; `[mod_menu.debug]` and `[mod_menu.release]`
-    // only apply to a build with matching NDEBUG, so one file can ship both.
-    enum class Section { None, Base, DebugOnly, ReleaseOnly };
+    // `[mod_menu]` and `[imgui]` apply always; `.debug` and `.release`
+    // sections only apply to a build with matching NDEBUG, so one file can ship both.
+    enum class Section {
+        None,
+        Base,
+        DebugOnly,
+        ReleaseOnly,
+        ImGuiBase,
+        ImGuiDebugOnly,
+        ImGuiReleaseOnly
+    };
     Section section = Section::None;
+    bool imguiGeometryExplicit = false;
     std::string line;
     while (std::getline(file, line)) {
         line = trim(line);
@@ -186,6 +276,12 @@ MenuConfig loadMenuConfig(const std::filesystem::path &path) {
                 section = Section::DebugOnly;
             else if (line == "[mod_menu.release]")
                 section = Section::ReleaseOnly;
+            else if (line == "[imgui]")
+                section = Section::ImGuiBase;
+            else if (line == "[imgui.debug]")
+                section = Section::ImGuiDebugOnly;
+            else if (line == "[imgui.release]")
+                section = Section::ImGuiReleaseOnly;
             else
                 section = Section::None;
             continue;
@@ -197,18 +293,36 @@ MenuConfig loadMenuConfig(const std::filesystem::path &path) {
         const std::string value = trim(line.substr(separator + 1));
         switch (section) {
         case Section::Base:
-            applyMenuKey(config, key, value);
+            applyMenuKey(config, key, value, imguiGeometryExplicit);
             break;
         case Section::DebugOnly:
 #ifndef NDEBUG
             if (key != "log_file")
-                applyMenuKey(config, key, value);
+                applyMenuKey(config, key, value, imguiGeometryExplicit);
 #endif
             break;
         case Section::ReleaseOnly:
 #ifdef NDEBUG
             if (key != "log_file")
-                applyMenuKey(config, key, value);
+                applyMenuKey(config, key, value, imguiGeometryExplicit);
+#endif
+            break;
+        case Section::ImGuiBase:
+            if (key == "x" || key == "y" || key == "width" || key == "height" ||
+                key == "window_x" || key == "window_y" || key == "window_width" ||
+                key == "window_height") {
+                imguiGeometryExplicit = true;
+            }
+            applyImGuiKey(config.imgui, key, value);
+            break;
+        case Section::ImGuiDebugOnly:
+#ifndef NDEBUG
+            applyImGuiKey(config.imgui, key, value);
+#endif
+            break;
+        case Section::ImGuiReleaseOnly:
+#ifdef NDEBUG
+            applyImGuiKey(config.imgui, key, value);
 #endif
             break;
         case Section::None:
