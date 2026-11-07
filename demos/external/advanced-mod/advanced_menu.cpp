@@ -15,29 +15,29 @@ bool configureModMenu(igi::MenuConfig &config) {
 
     for (auto &item : config.items) {
         if (item.id == "weather" || item.id == "level") {
-            item.category = "World";
+            item.category = item.id == "weather" ? "World/Environment" : "World/Levels";
         } else if (item.id == "fps" || item.id == "perf" || item.id == "display") {
-            item.category = "Display";
+            item.category = item.id == "fps" ? "Display/Performance" : "Display/Utilities";
         } else if (item.id == "weapon" || item.id == "pickup" || item.id == "ammo") {
-            item.category = "Weapons";
+            item.category = "Weapons/Loadout";
         } else if (item.id == "view" || item.id == "player_info") {
-            item.category = "Player";
+            item.category = "Player/Camera";
         } else if (item.id == "sfx" || item.id == "music") {
-            item.category = "Audio";
+            item.category = "Audio/Volume";
         } else if (item.id == "flash") {
-            item.category = "Display";
+            item.category = "Display/Utilities";
         }
     }
 
     config.items.push_back({"ammo", igi::ModMenuItemKind::Action, "Unlimited Ammo", "", {}});
-    config.items.back().category = "Weapons";
+    config.items.back().category = "Weapons/Loadout";
     config.items.push_back(
         {"music", igi::ModMenuItemKind::List, "Music Volume", "", {"Normal", "Low", "Mute"}});
-    config.items.back().category = "Audio";
+    config.items.back().category = "Audio/Volume";
     config.items.push_back({"player_info", igi::ModMenuItemKind::Action, "Player State", "", {}});
-    config.items.back().category = "Player";
+    config.items.back().category = "Player/Camera";
     config.items.push_back({"display", igi::ModMenuItemKind::Action, "Refresh Display", "", {}});
-    config.items.back().category = "Display";
+    config.items.back().category = "Display/Utilities";
     return true;
 }
 

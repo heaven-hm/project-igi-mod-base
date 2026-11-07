@@ -91,6 +91,33 @@ auto &menuVisible = g_menu.menuVisible;
 auto &pauseWhileOpen = g_menu.pauseWhileOpen;
 auto &activeCategory = g_menu.activeCategory;
 
+std::string categoryParent(std::string_view category) {
+    const auto separator = category.rfind('/');
+    return separator == std::string_view::npos ? std::string{}
+                                               : std::string(category.substr(0, separator));
+}
+
+std::string categoryLabel(std::string_view category) {
+    const auto separator = category.rfind('/');
+    return std::string(separator == std::string_view::npos ? category
+                                                           : category.substr(separator + 1));
+}
+
+std::string immediateCategoryChild(std::string_view category, std::string_view parent) {
+    std::string_view remainder = category;
+    if (!parent.empty()) {
+        if (!category.starts_with(parent) || category.size() <= parent.size() ||
+            category[parent.size()] != '/')
+            return {};
+        remainder.remove_prefix(parent.size() + 1);
+    }
+    const auto separator = remainder.find('/');
+    const auto child = remainder.substr(0, separator);
+    if (child.empty())
+        return {};
+    return parent.empty() ? std::string(child) : std::string(parent) + "/" + std::string(child);
+}
+
 void initializeMenuStateBuffers() {
     listSelections.assign(menuConfig.items.size(), 0);
     toggleValues.resize(menuConfig.items.size(), false);
@@ -113,15 +140,37 @@ bool populatePortableMenuModel() {
         return false;
 
     std::unordered_map<std::string, std::string> categoryIds;
+    const auto ensureCategoryMenu = [&categoryIds](std::string_view category) -> std::string {
+        std::string currentCategory;
+        std::string parentMenuId = "main";
+        std::size_t segmentStart = 0;
+        while (segmentStart < category.size()) {
+            const auto separator = category.find('/', segmentStart);
+            const auto segment = category.substr(segmentStart, separator - segmentStart);
+            if (segment.empty())
+                return {};
+            if (!currentCategory.empty())
+                currentCategory += '/';
+            currentCategory += segment;
+            const auto [entry, inserted] = categoryIds.emplace(
+                currentCategory, "category-" + std::to_string(categoryIds.size()));
+            if (inserted &&
+                (!menuModel->createMenu(entry->second, std::string(segment)) ||
+                 !menuModel->addSubmenu(parentMenuId, std::string(segment), entry->second)))
+                return {};
+            parentMenuId = entry->second;
+            if (separator == std::string_view::npos)
+                break;
+            segmentStart = separator + 1;
+        }
+        return parentMenuId;
+    };
     for (std::size_t index = 0; index < menuConfig.items.size(); ++index) {
         const auto &item = menuConfig.items[index];
         std::string menuId = "main";
         if (!item.category.empty()) {
-            const auto [entry, inserted] = categoryIds.emplace(
-                item.category, "category-" + std::to_string(categoryIds.size()));
-            menuId = entry->second;
-            if (inserted && (!menuModel->createMenu(menuId, item.category) ||
-                             !menuModel->addSubmenu("main", item.category, menuId)))
+            menuId = ensureCategoryMenu(item.category);
+            if (menuId.empty())
                 return false;
         }
         switch (item.kind) {
@@ -530,22 +579,22 @@ void renderImGuiModWindow() {
         }
         ImGui::Separator();
 
-        std::vector<std::string> categories;
+        std::vector<std::string> childCategories;
         for (const auto &item : menuConfig.items) {
-            if (std::find(categories.begin(), categories.end(), item.category) == categories.end())
-                categories.push_back(item.category);
+            const std::string child = immediateCategoryChild(item.category, activeCategory);
+            if (!child.empty() && std::find(childCategories.begin(), childCategories.end(),
+                                            child) == childCategories.end())
+                childCategories.push_back(child);
         }
-        if (activeCategory.empty() && !categories.empty())
-            activeCategory = categories.front();
-        if (categories.size() > 1 && ImGui::BeginTabBar("Categories")) {
-            for (const auto &category : categories) {
-                if (ImGui::BeginTabItem(category.empty() ? "Main" : category.c_str())) {
-                    activeCategory = category;
-                    ImGui::EndTabItem();
-                }
-            }
-            ImGui::EndTabBar();
+        if (!activeCategory.empty() && ImGui::Button("< Back"))
+            activeCategory = categoryParent(activeCategory);
+        for (const auto &category : childCategories) {
+            ImGui::SameLine();
+            if (ImGui::Button(categoryLabel(category).c_str()))
+                activeCategory = category;
         }
+        if (!childCategories.empty())
+            ImGui::Separator();
 
         for (std::size_t index = 0; index < menuConfig.items.size(); ++index) {
             const auto &item = menuConfig.items[index];
