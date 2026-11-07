@@ -134,7 +134,7 @@ if(IGI_SDK_BUILD_DEMOS)
     add_library(igi_basic_mod_menu SHARED
         src/mod_base/menu_host.cpp
         demos/internal/basic-mod/basic_menu.cpp
-        demos/internal/helpers/menu_helpers.cpp
+        demos/helpers/menu_helpers.cpp
         ${IGI_INTERNAL_MENU_PLATFORM}
     )
     target_link_libraries(igi_basic_mod_menu PRIVATE mod_base)
@@ -147,7 +147,7 @@ if(IGI_SDK_BUILD_DEMOS)
     add_library(igi_basic_mod_menu_external SHARED
         src/mod_base/imgui_menu_host.cpp
         demos/external/basic-mod/basic_menu.cpp
-        demos/internal/helpers/menu_helpers.cpp
+        demos/helpers/menu_helpers.cpp
         ${IGI_INTERNAL_MENU_PLATFORM}
     )
     target_link_libraries(igi_basic_mod_menu_external PRIVATE mod_base)
@@ -161,7 +161,7 @@ if(IGI_SDK_BUILD_DEMOS)
     add_library(igi_simple_mod_menu_external SHARED
         src/mod_base/imgui_menu_host.cpp
         demos/external/simple-mod/simple_menu.cpp
-        demos/internal/helpers/menu_helpers.cpp
+        demos/helpers/menu_helpers.cpp
         ${IGI_INTERNAL_MENU_PLATFORM}
     )
     target_link_libraries(igi_simple_mod_menu_external PRIVATE mod_base)
@@ -176,7 +176,7 @@ if(IGI_SDK_BUILD_DEMOS)
         src/mod_base/imgui_menu_host.cpp
         demos/external/advanced-mod/advanced_menu.cpp
         demos/external/simple-mod/simple_menu.cpp
-        demos/internal/helpers/menu_helpers.cpp
+        demos/helpers/menu_helpers.cpp
         ${IGI_INTERNAL_MENU_PLATFORM}
     )
     target_link_libraries(igi_advanced_mod_menu_external PRIVATE mod_base)
@@ -189,11 +189,11 @@ if(IGI_SDK_BUILD_DEMOS)
     set_target_properties(igi_advanced_mod_menu_external PROPERTIES OUTPUT_NAME "igi-advanced-mod-external" PREFIX "")
 
     if(WIN32)
-        add_library(igi_simple_mod_menu SHARED demos/internal/simple-mod/simple_menu.cpp demos/internal/helpers/menu_helpers.cpp src/mod_base/menu_host.cpp ${IGI_INTERNAL_MENU_PLATFORM})
+        add_library(igi_simple_mod_menu SHARED demos/internal/simple-mod/simple_menu.cpp demos/helpers/menu_helpers.cpp src/mod_base/menu_host.cpp ${IGI_INTERNAL_MENU_PLATFORM})
         target_link_libraries(igi_simple_mod_menu PRIVATE mod_base)
         target_link_options(igi_simple_mod_menu PRIVATE -static)
         set_target_properties(igi_simple_mod_menu PROPERTIES OUTPUT_NAME "igi-simple-mod-internal" PREFIX "")
-        add_library(igi_advanced_mod_menu SHARED demos/internal/advanced-mod/advanced_menu.cpp demos/internal/simple-mod/simple_menu.cpp demos/internal/helpers/menu_helpers.cpp src/mod_base/menu_host.cpp ${IGI_INTERNAL_MENU_PLATFORM})
+        add_library(igi_advanced_mod_menu SHARED demos/internal/advanced-mod/advanced_menu.cpp demos/internal/simple-mod/simple_menu.cpp demos/helpers/menu_helpers.cpp src/mod_base/menu_host.cpp ${IGI_INTERNAL_MENU_PLATFORM})
         target_link_libraries(igi_advanced_mod_menu PRIVATE mod_base)
         target_compile_definitions(igi_advanced_mod_menu PRIVATE IGI_ADVANCED_MENU=1)
         target_link_options(igi_advanced_mod_menu PRIVATE -static)
