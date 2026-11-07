@@ -141,6 +141,7 @@ void simpleMenuAction(const igi::MenuConfig &config, igi::Runtime &runtime, std:
         auto *player = IGI::GAME::GET_PLAYER(0);
         if (player) {
             const int mode = (value == "Third Person") ? 2 : 1;
+            igi::setThirdPersonView(mode == 2);
             IGI::HUMAN::VIEW_CAM(reinterpret_cast<IGI::Human *>(player), mode);
             igi::log(igi::LogLevel::Info, "simple menu: camera view set to " + std::string(value));
             const std::string msg = "IGI SDK: Camera view set to " + std::string(value);
