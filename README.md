@@ -1,9 +1,10 @@
-# Project IGI Natives SDK
+# Project IGI Mod Base
 
 Version: 0.1
 
-An SDK for single-player mod development for `IGI`. It provides a menu model, logging, and game natives from original game to create simple mod menu using internal and external libaries.
-Right now only Internal mod menu is implemented , external witll use ImGUI for Dx7 will be in future releases more robust and customisable.
+Project IGI Mod Base is a C++ foundation for creating single-player mods and in-game mod menus for Project I.G.I. It provides an in-game menu interface, game native bindings, runtime hooking and memory support, logging, and examples to build on.
+
+The internal in-game menu is implemented. An external DirectX 7/ImGui interface is planned; it is not yet a finished GUI.
 
 ## Implemented features are:
 

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(project_igi_natives_sdk VERSION 0.1.0 LANGUAGES C CXX)
+project(project_igi_mod_base VERSION 0.1.0 LANGUAGES C CXX)
 
 # Retail IGI 1 is a PE32 x86 process. A 64-bit DLL cannot be loaded into it,
 # so reject that misleading configuration at generation time.
@@ -17,6 +17,9 @@ endif()
 # system DLLs and the UCRT API sets the loader provides.
 if(WIN32)
     add_link_options(-mcrtdll=msvcrt)
+    if(MINGW)
+        add_link_options($<$<CONFIG:Release>:-Wl,--strip-debug>)
+    endif()
 endif()
 
 set(CMAKE_CXX_STANDARD 20)
