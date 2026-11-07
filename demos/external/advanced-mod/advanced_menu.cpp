@@ -12,11 +12,32 @@ bool configureModMenu(igi::MenuConfig &config) {
     config.title = "Advanced Mod Menu";
     config.y = 55;
     config.height = 390;
+
+    for (auto &item : config.items) {
+        if (item.id == "weather" || item.id == "level") {
+            item.category = "World";
+        } else if (item.id == "fps" || item.id == "perf" || item.id == "display") {
+            item.category = "Display";
+        } else if (item.id == "weapon" || item.id == "pickup" || item.id == "ammo") {
+            item.category = "Weapons";
+        } else if (item.id == "view" || item.id == "player_info") {
+            item.category = "Player";
+        } else if (item.id == "sfx" || item.id == "music") {
+            item.category = "Audio";
+        } else if (item.id == "flash") {
+            item.category = "Display";
+        }
+    }
+
     config.items.push_back({"ammo", igi::ModMenuItemKind::Action, "Unlimited Ammo", "", {}});
+    config.items.back().category = "Weapons";
     config.items.push_back(
         {"music", igi::ModMenuItemKind::List, "Music Volume", "", {"Normal", "Low", "Mute"}});
+    config.items.back().category = "Audio";
     config.items.push_back({"player_info", igi::ModMenuItemKind::Action, "Player State", "", {}});
+    config.items.back().category = "Player";
     config.items.push_back({"display", igi::ModMenuItemKind::Action, "Refresh Display", "", {}});
+    config.items.back().category = "Display";
     return true;
 }
 
