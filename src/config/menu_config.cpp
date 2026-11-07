@@ -148,6 +148,32 @@ void applyMenuKey(igi::MenuConfig &config, const std::string &key, const std::st
 } // namespace
 
 namespace igi {
+bool validateMenuItemConfig(const MenuConfig &config, std::string *reason) {
+    const auto reject = [reason](std::string message) {
+        if (reason)
+            *reason = std::move(message);
+        return false;
+    };
+
+    for (const auto &item : config.items) {
+        if (item.kind != ModMenuItemKind::List)
+            continue;
+        if (item.values.empty())
+            return reject("menu list '" + item.id + "' must have at least one choice");
+        if (item.values.size() > kMaxMenuListChoices) {
+            return reject("menu list '" + item.id + "' has " + std::to_string(item.values.size()) +
+                          " choices; maximum is " + std::to_string(kMaxMenuListChoices));
+        }
+        if (item.defaultSelection >= item.values.size())
+            return reject("menu list '" + item.id + "' has an out-of-range default selection");
+        for (const auto &value : item.values) {
+            if (value.size() >= 40 || value.find('\0') != std::string::npos)
+                return reject("menu list '" + item.id + "' has an invalid choice value");
+        }
+    }
+    return true;
+}
+
 std::uint8_t parseDirectInputKey(std::string_view name, std::uint8_t fallback) noexcept {
     const std::string key = upper(std::string{name});
     if (key == "F3")

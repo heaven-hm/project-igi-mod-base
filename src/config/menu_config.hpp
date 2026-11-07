@@ -3,6 +3,7 @@
 #include "logging/logging.hpp"
 #include "runtime/igi_hooks.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <string>
@@ -12,6 +13,8 @@
 namespace igi {
 enum class ModMenuItemKind { Action, Toggle, List, Slider };
 enum class ImGuiTheme { Dark, Light, Classic };
+
+inline constexpr std::size_t kMaxMenuListChoices = 64;
 
 struct ModMenuItemConfig {
     std::string id;
@@ -90,6 +93,9 @@ struct MenuConfig {
 // Reads the SDK-owned config file. Missing or malformed values keep the safe
 // defaults above; callers can load it on startup without making the game fail.
 MenuConfig loadMenuConfig(const std::filesystem::path &path);
+// Validates list constraints shared by the QVM and ImGui menu frontends.
+// `reason`, when supplied, receives a user-facing description of the first error.
+bool validateMenuItemConfig(const MenuConfig &config, std::string *reason = nullptr);
 std::uint8_t parseDirectInputKey(std::string_view name, std::uint8_t fallback = 0x3F) noexcept;
 LogLevel parseLogLevel(std::string_view name, LogLevel fallback = LogLevel::Info) noexcept;
 ImGuiTheme parseImGuiTheme(std::string_view name, ImGuiTheme fallback = ImGuiTheme::Dark) noexcept;

@@ -27,15 +27,8 @@ void quoted(std::ostream &out, std::string_view value) {
 bool writeMenuScript(std::ostream &out, const MenuConfig &config, bool standaloneManager) {
     if (config.items.empty() || config.width <= 0 || config.height <= 0)
         return false;
-    for (const auto &item : config.items) {
-        if (item.kind != ModMenuItemKind::List)
-            continue;
-        if (item.values.empty() || item.values.size() > 64)
-            return false;
-        for (const auto &value : item.values)
-            if (value.size() >= 40 || value.find('\0') != std::string::npos)
-                return false;
-    }
+    if (!validateMenuItemConfig(config))
+        return false;
     out << "Task_DeclareParameters(\"MenuScreen\", \"Background\", \"String32\", \"Frame x0\", "
            "\"Int32\", \"Frame y0\", \"Int32\", \"Frame x1\", \"Int32\", \"Frame y1\", \"Int32\", "
            "\"On Press Escape\", \"VarString\", \"On Init Data\", \"VarString\", \"On Change "

@@ -695,6 +695,11 @@ extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_External_Initialize() {
     menuConfig = igi::loadMenuConfig("project-igi-mod-config.ini");
     if (!configureModMenu(menuConfig))
         return false;
+    std::string configError;
+    if (!igi::validateMenuItemConfig(menuConfig, &configError)) {
+        igi::log(igi::LogLevel::Error, "external imgui initialize: " + configError);
+        return false;
+    }
     initializeMenuStateBuffers();
 
 #if defined(_WIN32)
