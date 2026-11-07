@@ -297,6 +297,11 @@ int main() {
     assert((filledChoices == std::vector<std::string>{"off", "on"}));
     assert(!menuValues.fill(1, [](std::string_view, int) {}));
     assert(!menuValues.fill(0, {}));
+    auto extendedChoices = modConfig;
+    extendedChoices.items[0].values.resize(igi::kMaxMenuListChoices + 1, "choice");
+    std::string listConfigError;
+    assert(!igi::validateMenuItemConfig(extendedChoices, &listConfigError));
+    assert(listConfigError.find("maximum is 64") != std::string::npos);
     std::string selectedWeather;
     igi::MenuScriptBridge listBridge(modConfig, [&](std::size_t item, std::string_view value) {
         if (item == 0) selectedWeather = value;

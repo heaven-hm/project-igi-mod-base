@@ -3,14 +3,23 @@
 #include "logging/logging.hpp"
 #include "runtime/igi_hooks.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 
 namespace igi {
+class Runtime;
+
 enum class ModMenuItemKind { Action, Toggle, List, Slider };
+enum class ImGuiTheme { Dark, Light, Classic };
+
+inline constexpr std::size_t kMaxMenuListChoices = 64;
+using MenuCurrentValueReader = std::function<std::optional<std::string>(Runtime &)>;
 
 struct ModMenuItemConfig {
     std::string id;
@@ -19,6 +28,39 @@ struct ModMenuItemConfig {
     std::string nativeAction;
     std::vector<std::string> values;
     bool defaultToggle = false;
+    std::size_t defaultSelection = 0;
+    int sliderMinimum = 0;
+    int sliderMaximum = 100;
+    int sliderStep = 1;
+    int sliderDefault = 0;
+    std::string category;
+    // Optional game-thread reader used by renderers to synchronize display state
+    // with a value changed outside the menu or rejected by game-side logic.
+    MenuCurrentValueReader currentValue;
+};
+
+struct ImGuiMenuConfig {
+    std::int32_t x = 95;
+    std::int32_t y = 80;
+    std::int32_t width = 460;
+    std::int32_t height = 400;
+    ImGuiTheme theme = ImGuiTheme::Dark;
+    float alpha = 0.95F;
+    float fontScale = 1.0F;
+    float windowRounding = 6.0F;
+    float frameRounding = 4.0F;
+    float borderSize = 1.0F;
+    bool pauseGame = true;
+    bool showFps = true;
+    bool showStatus = true;
+    bool movable = true;
+    bool resizable = true;
+    bool collapsible = false;
+    bool autoResize = false;
+    bool mouseCursor = true;
+    bool keyboardNav = true;
+    bool saveLayout = false;
+    std::string iniFile = "project-igi-imgui.ini";
 };
 
 struct MenuConfig {
@@ -40,6 +82,7 @@ struct MenuConfig {
     std::int32_t y = 185;
     std::int32_t width = 455;
     std::int32_t height = 300;
+    ImGuiMenuConfig imgui;
     // Debug builds default to a console and trace output; release builds write
     // to the configured log file at Info unless the config asks for more.
 #ifndef NDEBUG
@@ -58,8 +101,12 @@ struct MenuConfig {
 // Reads the SDK-owned config file. Missing or malformed values keep the safe
 // defaults above; callers can load it on startup without making the game fail.
 MenuConfig loadMenuConfig(const std::filesystem::path &path);
+// Validates list constraints shared by the QVM and ImGui menu frontends.
+// `reason`, when supplied, receives a user-facing description of the first error.
+bool validateMenuItemConfig(const MenuConfig &config, std::string *reason = nullptr);
 std::uint8_t parseDirectInputKey(std::string_view name, std::uint8_t fallback = 0x3F) noexcept;
 LogLevel parseLogLevel(std::string_view name, LogLevel fallback = LogLevel::Info) noexcept;
+ImGuiTheme parseImGuiTheme(std::string_view name, ImGuiTheme fallback = ImGuiTheme::Dark) noexcept;
 game::TickHook
 parseTickHook(std::string_view name,
               game::TickHook fallback = game::TickHook::DisplayAddFrameCallback) noexcept;

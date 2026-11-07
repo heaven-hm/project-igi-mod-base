@@ -4,6 +4,8 @@
 
 namespace igi {
 bool lockHumanInput() {
+    if (!IGI::GAME::GET())
+        return false;
     bool locked = false;
     for (int i = 0; i < 4; ++i) {
         if (auto *player = IGI::GAME::GET_PLAYER(i)) {
@@ -19,6 +21,8 @@ bool lockHumanInput() {
 }
 
 bool unlockHumanInput() {
+    if (!IGI::GAME::GET())
+        return false;
     bool unlocked = false;
     for (int i = 0; i < 4; ++i) {
         if (auto *player = IGI::GAME::GET_PLAYER(i)) {
@@ -36,6 +40,8 @@ bool unlockHumanInput() {
 bool pauseForMenu(Runtime &runtime) {
     if (!runtime.allowDirectNativeCallbackThread())
         return false;
+    if (!IGI::GAME::GET())
+        return false;
     lockHumanInput();
     if (IGI::GAME::IS_PAUSED())
         return true;
@@ -45,6 +51,8 @@ bool pauseForMenu(Runtime &runtime) {
 
 bool resumeFromMenu(Runtime &runtime) {
     if (!runtime.allowDirectNativeCallbackThread())
+        return false;
+    if (!IGI::GAME::GET())
         return false;
     unlockHumanInput();
     IGI::GAME::SET_PAUSED(0);

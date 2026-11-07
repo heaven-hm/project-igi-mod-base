@@ -1,7 +1,16 @@
 # Changelog
 
-## 0.2 — Restructure and runtime lifecycle
+## 0.2 — Restructure, Dear ImGui Direct3D 7, and runtime lifecycle
 
+- Integrated Dear ImGui Direct3D 7 renderer backend from
+  [AndenDev/D3D7Imgui](https://github.com/AndenDev/D3D7Imgui) (`imgui_impl_dx7.cpp`,
+  `imgui_impl_dx7.h`, `imgui_impl_win32.cpp`) for legacy DirectX 7 game compatibility.
+- Implemented Dear ImGui external mod menus for Basic, Simple, and Advanced menus
+  (`igi-basic-mod-external.dll`, `igi-simple-mod-external.dll`, `igi-advanced-mod-external.dll`)
+  via `src/mod_base/imgui_menu_host.cpp`.
+- Added comprehensive `[imgui]` configuration options in `project-igi-mod-config.ini`
+  for themes (dark/light/classic), font scaling, alpha opacity, window dimensions,
+  mouse navigation, and persistent layout management.
 - Reorganized the codebase into focused `src/config`, `src/logging`,
   `src/mod_base`, `src/natives`, `src/platform`, `src/runtime`, and `src/ui`
   modules.
@@ -15,6 +24,7 @@
   select mission, request Flow game event, then delete the current `Game` task.
 - Release injected QVM resources before changing levels so the menu can attach
   again in the newly loaded mission.
+- Added lifecycle guards for native calls when exiting to the main menu.
 - Made the configured end key stop the resident host thread after safe cleanup;
   the start key remains disabled until `igi.exe` exits.
 - Added Simple and Advanced menu screenshots, feature lists, and contributor

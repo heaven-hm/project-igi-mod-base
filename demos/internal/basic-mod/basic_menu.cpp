@@ -1,7 +1,7 @@
 #include "basic_menu.hpp"
 #include "ui/mod_menu.hpp"
 #include "natives/mvp_natives.hpp"
-#include "../helpers/menu_helpers.hpp"
+#include "../../helpers/menu_helpers.hpp"
 
 bool configureBasicMenu(igi::MenuConfig &config) {
     config.title = "Basic Mod Menu";

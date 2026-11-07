@@ -110,6 +110,21 @@ target_link_libraries(igi_menu_script PRIVATE mod_base)
 
 option(IGI_SDK_BUILD_DEMOS "Build the internal and external-style demo targets" ON)
 
+if(WIN32)
+    add_library(igi_imgui_dx7 STATIC
+        third_party/imgui/imgui.cpp
+        third_party/imgui/imgui_draw.cpp
+        third_party/imgui/imgui_tables.cpp
+        third_party/imgui/imgui_widgets.cpp
+        third_party/imgui/imgui_impl_win32.cpp
+        third_party/imgui/imgui_impl_dx7.cpp
+    )
+    set_target_properties(igi_imgui_dx7 PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    target_include_directories(igi_imgui_dx7 PUBLIC third_party/imgui)
+    target_compile_definitions(igi_imgui_dx7 PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_link_libraries(igi_imgui_dx7 PUBLIC ddraw dxguid gdi32 imm32 dwmapi)
+endif()
+
 if(IGI_SDK_BUILD_DEMOS)
     set(IGI_INTERNAL_MENU_PLATFORM)
     if(APPLE)
@@ -120,7 +135,7 @@ if(IGI_SDK_BUILD_DEMOS)
     add_library(igi_basic_mod_menu SHARED
         src/mod_base/menu_host.cpp
         demos/internal/basic-mod/basic_menu.cpp
-        demos/internal/helpers/menu_helpers.cpp
+        demos/helpers/menu_helpers.cpp
         ${IGI_INTERNAL_MENU_PLATFORM}
     )
     target_link_libraries(igi_basic_mod_menu PRIVATE mod_base)
@@ -130,12 +145,56 @@ if(IGI_SDK_BUILD_DEMOS)
     endif()
     set_target_properties(igi_basic_mod_menu PROPERTIES OUTPUT_NAME "igi-basic-mod-internal" PREFIX "")
 
+    add_library(igi_basic_mod_menu_external SHARED
+        src/mod_base/imgui_menu_host.cpp
+        demos/external/basic-mod/basic_menu.cpp
+        demos/helpers/menu_helpers.cpp
+        ${IGI_INTERNAL_MENU_PLATFORM}
+    )
+    target_link_libraries(igi_basic_mod_menu_external PRIVATE mod_base)
+    target_include_directories(igi_basic_mod_menu_external PRIVATE src)
     if(WIN32)
-        add_library(igi_simple_mod_menu SHARED demos/internal/simple-mod/simple_menu.cpp demos/internal/helpers/menu_helpers.cpp src/mod_base/menu_host.cpp ${IGI_INTERNAL_MENU_PLATFORM})
+        target_link_libraries(igi_basic_mod_menu_external PRIVATE igi_imgui_dx7)
+        target_link_options(igi_basic_mod_menu_external PRIVATE -static -Wl,--image-base,0x64000000)
+    endif()
+    set_target_properties(igi_basic_mod_menu_external PROPERTIES OUTPUT_NAME "igi-basic-mod-external" PREFIX "")
+
+    add_library(igi_simple_mod_menu_external SHARED
+        src/mod_base/imgui_menu_host.cpp
+        demos/external/simple-mod/simple_menu.cpp
+        demos/helpers/menu_helpers.cpp
+        ${IGI_INTERNAL_MENU_PLATFORM}
+    )
+    target_link_libraries(igi_simple_mod_menu_external PRIVATE mod_base)
+    target_include_directories(igi_simple_mod_menu_external PRIVATE src)
+    if(WIN32)
+        target_link_libraries(igi_simple_mod_menu_external PRIVATE igi_imgui_dx7)
+        target_link_options(igi_simple_mod_menu_external PRIVATE -static -Wl,--image-base,0x64000000)
+    endif()
+    set_target_properties(igi_simple_mod_menu_external PROPERTIES OUTPUT_NAME "igi-simple-mod-external" PREFIX "")
+
+    add_library(igi_advanced_mod_menu_external SHARED
+        src/mod_base/imgui_menu_host.cpp
+        demos/external/advanced-mod/advanced_menu.cpp
+        demos/external/simple-mod/simple_menu.cpp
+        demos/helpers/menu_helpers.cpp
+        ${IGI_INTERNAL_MENU_PLATFORM}
+    )
+    target_link_libraries(igi_advanced_mod_menu_external PRIVATE mod_base)
+    target_include_directories(igi_advanced_mod_menu_external PRIVATE src)
+    target_compile_definitions(igi_advanced_mod_menu_external PRIVATE IGI_ADVANCED_MENU=1)
+    if(WIN32)
+        target_link_libraries(igi_advanced_mod_menu_external PRIVATE igi_imgui_dx7)
+        target_link_options(igi_advanced_mod_menu_external PRIVATE -static -Wl,--image-base,0x64000000)
+    endif()
+    set_target_properties(igi_advanced_mod_menu_external PROPERTIES OUTPUT_NAME "igi-advanced-mod-external" PREFIX "")
+
+    if(WIN32)
+        add_library(igi_simple_mod_menu SHARED demos/internal/simple-mod/simple_menu.cpp demos/helpers/menu_helpers.cpp src/mod_base/menu_host.cpp ${IGI_INTERNAL_MENU_PLATFORM})
         target_link_libraries(igi_simple_mod_menu PRIVATE mod_base)
         target_link_options(igi_simple_mod_menu PRIVATE -static)
         set_target_properties(igi_simple_mod_menu PROPERTIES OUTPUT_NAME "igi-simple-mod-internal" PREFIX "")
-        add_library(igi_advanced_mod_menu SHARED demos/internal/advanced-mod/advanced_menu.cpp demos/internal/simple-mod/simple_menu.cpp demos/internal/helpers/menu_helpers.cpp src/mod_base/menu_host.cpp ${IGI_INTERNAL_MENU_PLATFORM})
+        add_library(igi_advanced_mod_menu SHARED demos/internal/advanced-mod/advanced_menu.cpp demos/internal/simple-mod/simple_menu.cpp demos/helpers/menu_helpers.cpp src/mod_base/menu_host.cpp ${IGI_INTERNAL_MENU_PLATFORM})
         target_link_libraries(igi_advanced_mod_menu PRIVATE mod_base)
         target_compile_definitions(igi_advanced_mod_menu PRIVATE IGI_ADVANCED_MENU=1)
         target_link_options(igi_advanced_mod_menu PRIVATE -static)
@@ -230,6 +289,8 @@ add_test(NAME igi_generated_natives
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_generated_natives.py)
 add_test(NAME igi_demo_native_contract
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_demo_native_contract.py)
+add_test(NAME igi_imgui_dx7_state_backup
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_imgui_dx7_state_backup.py)
 add_test(NAME igi_hook_manager_threading
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_hook_manager_threading.py)
 endif()

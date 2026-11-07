@@ -110,6 +110,9 @@ if ((verify)); then
             igi_advanced_mod_menu) demo=demos/internal/advanced-mod/advanced_menu.cpp ;;
             igi_simple_mod_menu) demo=demos/internal/simple-mod/simple_menu.cpp ;;
             igi_basic_mod_menu) demo=demos/internal/basic-mod/basic_menu.cpp ;;
+            igi_advanced_mod_menu_external) demo=demos/external/advanced-mod/advanced_menu.cpp ;;
+            igi_simple_mod_menu_external) demo=demos/external/simple-mod/simple_menu.cpp ;;
+            igi_basic_mod_menu_external) demo=demos/external/basic-mod/basic_menu.cpp ;;
             igi_natives_inject_test) demo=demos/status-message/status_message_demo.cpp ;;
             *) printf 'error: --demo is required for target %s\n' "$target" >&2; exit 2 ;;
         esac
