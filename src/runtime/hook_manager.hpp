@@ -20,9 +20,9 @@ class HookManager final {
     bool installed() const noexcept {
         return installed_;
     }
-    // Verifies IGISDK_Tick is present in the game's display frame callback
-    // list and re-registers it when a list reset dropped it. Safe to call from
-    // the SDK worker thread; used as a watchdog.
+    // Requests that the verified Display_RunCallbacks thread check and restore
+    // IGISDK_Tick after a display reset. The request is safe from the SDK
+    // worker thread; callback-list access itself is not performed there.
     bool ensureFrameTickRegistered() noexcept;
     // Refuses a re-entrant call from the active Display_AddFrameCallback detour.
     // Detaches the scheduler and disables the detours but deliberately leaves the
