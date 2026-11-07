@@ -31,7 +31,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Configure
+        if: runner.os != 'Windows'
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DIGI_SDK_BUILD_DEMOS=ON
+      - name: Configure Win32
+        if: runner.os == 'Windows'
+        run: cmake -S . -B build -A Win32 -DIGI_SDK_BUILD_DEMOS=ON
       - name: Build
         run: cmake --build build --config Release --parallel
       - name: Test

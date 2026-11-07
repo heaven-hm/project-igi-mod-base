@@ -99,6 +99,7 @@ add_library(mod_base STATIC
     src/runtime/hook_manager.cpp
     src/runtime/macos_hook_backend.cpp
 )
+set_target_properties(mod_base PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(mod_base PUBLIC src)
 target_link_libraries(mod_base PRIVATE igi_qsc_compiler)
 add_dependencies(mod_base igi_re_hash_bindings)
