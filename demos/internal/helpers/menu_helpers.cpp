@@ -2,6 +2,7 @@
 
 #include "logging/logging.hpp"
 #include "mod_base/menu_host.hpp"
+#include "natives/igi_hashes/hashes.hpp"
 #include "natives/igi_native_registry.hpp"
 #include "natives/mvp_natives.hpp"
 #include "ui/menu_resource.hpp"
@@ -12,6 +13,8 @@
 #include <vector>
 
 namespace igi {
+static bool executeMenuCommandFor(IGI::Task *manager, std::string_view commandScript);
+
 namespace {
 constexpr int kModPrecipitationTaskId = 4095;
 
@@ -38,6 +41,11 @@ bool createPrecipitationTask(std::string_view weather) {
     auto *game = IGI::GAME::GET();
     if (!game)
         return false;
+    auto *level = reinterpret_cast<IGI::Task *>(IGI::LEVEL::GET());
+    if (!level) {
+        log(LogLevel::Error, "weather: active Level task unavailable");
+        return false;
+    }
 
     if (!removePrecipitationTask())
         return false;
@@ -49,16 +57,25 @@ bool createPrecipitationTask(std::string_view weather) {
     const bool snow = weather == "Snow" || weather == "snow";
     const std::string script = "Task_New(" + std::to_string(kModPrecipitationTaskId) +
                                ", \"RainEffect\", \"IGIModPrecipitation\", " +
-                               (snow ? "FALSE" : "TRUE") + ", 50.0, 20.0, \"TRUE\\n\", 0.06);";
-    if (!executeMenuCommand(script)) {
+                               (snow ? "FALSE" : "TRUE") + ", 50.0, 20.0, \"TRUE\\n\", 0.3125);";
+    if (!executeMenuCommandFor(level, script)) {
         log(LogLevel::Error, "weather: RainEffect task creation command failed");
         return false;
     }
 
-    if (!IGI::TASK::FIND_BY_ID(kModPrecipitationTaskId)) {
+    auto *task = IGI::TASK::FIND_BY_ID(kModPrecipitationTaskId);
+    if (!task) {
         log(LogLevel::Error, "weather: RainEffect task was not registered");
         return false;
     }
+
+    using GetChangedEvent = std::uint8_t(__cdecl *)();
+    using Broadcast = void(__cdecl *)(IGI::Task *, std::uint8_t, void *);
+    const auto changedEvent =
+        reinterpret_cast<GetChangedEvent>(igi::re::HASH::Param_GetChangedEvent)();
+    char changed = 1;
+    reinterpret_cast<Broadcast>(igi::re::HASH::Task_Broadcast)(task, changedEvent, &changed);
+
     g_precipitationGame = game;
     g_precipitationActive = true;
     return true;
