@@ -17,8 +17,8 @@ class Runtime final {
     // thread. It deliberately does not install a process hook.
     bool initializeDirectNativeMode();
     bool allowDirectNativeCallbackThread() noexcept;
-    // Re-registers IGISDK_Tick into the game's display frame callback list when
-    // a display reset dropped it. Used by the mod-menu watchdog.
+    // Requests a game-thread re-registration of IGISDK_Tick after a display
+    // reset dropped it. Used by the mod-menu watchdog.
     bool ensureTickRegistered() noexcept {
         return hooks_.ensureFrameTickRegistered();
     }

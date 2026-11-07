@@ -121,8 +121,8 @@ void mainLoopTick(const igi::DllMenuCallbacks &callbacks, igi::hotkeys::KeyTrack
                 const bool registered = callbacks.ensureTick ? callbacks.ensureTick() : false;
                 igi::log(registered ? igi::LogLevel::Info : igi::LogLevel::Warning,
                          registered
-                             ? "internal watchdog: display frame tick was absent; re-registered "
-                               "into the callback list"
+                             ? "internal watchdog: display frame tick was absent; requested "
+                               "game-thread callback-list registration"
                              : "internal watchdog: display frame tick absent and registration "
                                "failed; the game may not be rendering frames yet");
             }
