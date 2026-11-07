@@ -1,11 +1,17 @@
-#include "igi_sdk/config/menu_config.hpp"
-#include "igi_sdk/ui/menu_manager.hpp"
-#include "igi_sdk/runtime/scheduler.hpp"
+#include "config/menu_config.hpp"
+#include "ui/menu_manager.hpp"
+#include "runtime/scheduler.hpp"
 
 #include <cassert>
 #include <cstdio>
 #include <chrono>
+#include <fstream>
+#include <sstream>
+#include <string>
 #include <vector>
+#if !defined(_WIN32)
+#include <dlfcn.h>
+#endif
 
 using namespace std::chrono_literals;
 
@@ -14,6 +20,7 @@ void menuManagerSubmenuAndInvalidIdTest();
 void menuManagerSchedulerBoundaryTest();
 void menuManagerInputRepeatTest();
 void menuManagerShutdownTest();
+void externalImGuiMenuParityTest();
 
 void menuConfigTest() {
     assert(igi::parseDirectInputKey("F5") == 0x3F);
@@ -53,6 +60,7 @@ void menuManagerModelTest() {
     menuManagerSchedulerBoundaryTest();
     menuManagerInputRepeatTest();
     menuManagerShutdownTest();
+    externalImGuiMenuParityTest();
 }
 
 void menuManagerInputRepeatTest() {
@@ -174,4 +182,73 @@ void menuManagerSubmenuAndInvalidIdTest() {
     assert(!menuManager.snapshot().visible);
     assert(menuManager.handleInput(igi::MenuInput::ToggleVisibility));
     assert(menuManager.snapshot().visible);
+}
+
+namespace {
+std::string readDemoSource(const std::string& relativePath) {
+    std::ifstream input(std::string(IGI_SDK_SOURCE_DIR) + "/" + relativePath);
+    assert(input.good());
+    std::ostringstream buffer;
+    buffer << input.rdbuf();
+    return buffer.str();
+}
+
+std::string normalizeMenuHelperInclude(std::string source) {
+    const std::string externalInclude = "../../internal/helpers/menu_helpers.hpp";
+    const std::string internalInclude = "../helpers/menu_helpers.hpp";
+    const auto pos = source.find(externalInclude);
+    if (pos != std::string::npos) {
+        source.replace(pos, externalInclude.size(), internalInclude);
+    }
+    return source;
+}
+} // namespace
+
+void externalImGuiMenuParityTest() {
+    const auto internalBasic = readDemoSource("demos/internal/basic-mod/basic_menu.cpp");
+    const auto externalBasic =
+        normalizeMenuHelperInclude(readDemoSource("demos/external/basic-mod/basic_menu.cpp"));
+    assert(internalBasic == externalBasic);
+
+    const auto internalSimple = readDemoSource("demos/internal/simple-mod/simple_menu.cpp");
+    const auto externalSimple =
+        normalizeMenuHelperInclude(readDemoSource("demos/external/simple-mod/simple_menu.cpp"));
+    assert(internalSimple == externalSimple);
+
+    const auto internalAdvanced = readDemoSource("demos/internal/advanced-mod/advanced_menu.cpp");
+    const auto externalAdvanced =
+        normalizeMenuHelperInclude(readDemoSource("demos/external/advanced-mod/advanced_menu.cpp"));
+    assert(internalAdvanced == externalAdvanced);
+
+    const auto imguiHost = readDemoSource("src/mod_base/imgui_menu_host.cpp");
+    assert(imguiHost.find("ImGui_ImplDX7_Init") != std::string::npos);
+    assert(imguiHost.find("ImGui_ImplDX7_RenderDrawData") != std::string::npos);
+    assert(imguiHost.find("ImGui_ImplWin32_Init") != std::string::npos);
+    assert(imguiHost.find("IGI_MenuManager_External_Initialize") != std::string::npos);
+    assert(imguiHost.find("IGI_MenuManager_External_Toggle") != std::string::npos);
+    assert(imguiHost.find("IGI_MenuManager_External_RequestShutdown") != std::string::npos);
+    assert(imguiHost.find("IGI_MenuManager_External_Shutdown") != std::string::npos);
+
+#if defined(__APPLE__)
+    const char* externalMods[] = {
+        "./igi-basic-mod-external.dylib",
+        "./igi-simple-mod-external.dylib",
+        "./igi-advanced-mod-external.dylib",
+    };
+    for (const char* path : externalMods) {
+        void* handle = dlopen(path, RTLD_NOW | RTLD_LOCAL);
+        assert(handle != nullptr);
+        using InitFn = bool (*)();
+        using RunFrameFn = std::size_t (*)();
+        using ShutdownFn = void (*)();
+        auto* initFn = reinterpret_cast<InitFn>(dlsym(handle, "IGI_MenuManager_External_Initialize"));
+        auto* runFrameFn = reinterpret_cast<RunFrameFn>(dlsym(handle, "IGI_MenuManager_External_RunFrame"));
+        auto* shutdownFn = reinterpret_cast<ShutdownFn>(dlsym(handle, "IGI_MenuManager_External_Shutdown"));
+        assert(initFn != nullptr && runFrameFn != nullptr && shutdownFn != nullptr);
+        assert(initFn());
+        assert(runFrameFn() == 0);
+        shutdownFn();
+        assert(dlclose(handle) == 0);
+    }
+#endif
 }

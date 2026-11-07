@@ -1,0 +1,1065 @@
+// Generated IGI-RE source bindings; in-game verification is tracked separately.
+if (!catalogue.add({0x00402820, "FramesSet", "IGI-RE", "entry", "void FramesSet(int fps)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00408350, "GameMaterial_LoadParameters", "IGI-RE", "entry",
+                    "void GameMaterial_LoadParameters(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00485970, "StatusMessageShow", "IGI-RE", "entry",
+                    "StatusMessage *StatusMessageShow(void *owner, const char *text, const char "
+                    "*portrait, const char *sound)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00416110, "Game_SetRaining", "IGI-RE", "entry",
+                    "void Game_SetRaining(const char *weather)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00416010, "Game_SetDisplayMode", "IGI-RE", "entry",
+                    "void Game_SetDisplayMode(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004167d0, "Game_GetEvent0", "IGI-RE", "entry", "uint8_t Game_GetEvent0(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004167e0, "Game_GetEvent1", "IGI-RE", "entry", "uint8_t Game_GetEvent1(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004167f0, "Game_GetEvent2", "IGI-RE", "entry", "uint8_t Game_GetEvent2(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00416810, "Game_GetEvent3", "IGI-RE", "entry", "uint8_t Game_GetEvent3(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00416920, "Game_GetWorld", "IGI-RE", "entry", "void *Game_GetWorld(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00416d40, "Game_Get", "IGI-RE", "entry", "Game *Game_Get(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00416a70, "Game_GetPlayer", "IGI-RE", "entry", "Task *Game_GetPlayer(int i)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0045ffc0, "WeaponGunPickup", "IGI-RE", "entry",
+                    "void WeaponGunPickup(Human *h, int *msg)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00416d50, "Game_IsPaused", "IGI-RE", "entry", "char Game_IsPaused(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00416d60, "Game_SetPaused", "IGI-RE", "entry", "void Game_SetPaused(char on)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00415890, "Game_SetMission", "IGI-RE", "entry",
+                    "ScriptValue *Game_SetMission(ScriptValue *out, void *data, void *args)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00415950, "Game_SetMusicVolume", "IGI-RE", "entry",
+                    "ScriptValue *Game_SetMusicVolume(ScriptValue *out, void *data, void *args)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004159b0, "Game_SetSFXVolume", "IGI-RE", "entry",
+                    "ScriptValue *Game_SetSFXVolume(ScriptValue *out, void *data, void *args)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00416800, "Game_GetEvent4", "IGI-RE", "entry", "uint8_t Game_GetEvent4(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00416820, "Game_GetEvent6", "IGI-RE", "entry", "uint8_t Game_GetEvent6(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00416830, "Game_GetEvent7", "IGI-RE", "entry", "uint8_t Game_GetEvent7(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00416840, "Game_GetEvent9", "IGI-RE", "entry", "uint8_t Game_GetEvent9(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00416850, "Game_GetEvent8", "IGI-RE", "entry", "uint8_t Game_GetEvent8(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00416860, "Game_GetEvent11", "IGI-RE", "entry",
+                    "uint8_t Game_GetEvent11(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00416870, "Game_GetEvent12", "IGI-RE", "entry",
+                    "uint8_t Game_GetEvent12(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00416880, "Game_GetEvent13", "IGI-RE", "entry",
+                    "uint8_t Game_GetEvent13(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00416890, "Game_GetEvent14", "IGI-RE", "entry",
+                    "uint8_t Game_GetEvent14(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004168a0, "Game_GetTaskList0", "IGI-RE", "entry",
+                    "void *Game_GetTaskList0(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004168b0, "Game_GetTaskList1", "IGI-RE", "entry",
+                    "void *Game_GetTaskList1(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004168c0, "Game_GetTaskList2", "IGI-RE", "entry",
+                    "void *Game_GetTaskList2(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004168d0, "Game_GetTaskList3", "IGI-RE", "entry",
+                    "void *Game_GetTaskList3(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004168e0, "Game_GetTaskList4", "IGI-RE", "entry",
+                    "void *Game_GetTaskList4(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00410360, "HumanPlayer_SetUnlimitedAmmo", "IGI-RE", "entry",
+                    "void HumanPlayer_SetUnlimitedAmmo(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0040c140, "HumanPlayer_SetFlagD44", "IGI-RE", "entry",
+                    "void HumanPlayer_SetFlagD44(HumanPlayer *h)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0040c150, "HumanPlayer_SetFlagD68", "IGI-RE", "entry",
+                    "void HumanPlayer_SetFlagD68(HumanPlayer *h)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004137e0, "HumanPlayer_SetWeaponAnim", "IGI-RE", "entry",
+                    "void HumanPlayer_SetWeaponAnim(HumanPlayer *h, int anim)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00413a70, "HumanPlayer_GetType", "IGI-RE", "entry",
+                    "uint16_t HumanPlayer_GetType(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00413a80, "HumanPlayer_GetMoveScale", "IGI-RE", "entry",
+                    "float HumanPlayer_GetMoveScale(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00408420, "HumanPlayer_CheckDeath", "IGI-RE", "entry",
+                    "void HumanPlayer_CheckDeath(HumanPlayer *p)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0040c270, "HumanPlayer_PicklockNoise", "IGI-RE", "entry",
+                    "void HumanPlayer_PicklockNoise(void *obj, HumanPlayer *h)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0040c2d0, "HumanPlayer_ClearFlagD44", "IGI-RE", "entry",
+                    "void HumanPlayer_ClearFlagD44(HumanPlayer *h)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0040c2e0, "HumanPlayer_ClearFlagD68", "IGI-RE", "entry",
+                    "void HumanPlayer_ClearFlagD68(HumanPlayer *h)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0040cd30, "HumanPlayer_StartAction", "IGI-RE", "entry",
+                    "void HumanPlayer_StartAction(HumanPlayer *h, int action)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0040f760, "HumanPlayer_CycleWeapon", "IGI-RE", "entry",
+                    "void HumanPlayer_CycleWeapon(HumanPlayer *h, int force)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00410f70, "HumanPlayer_SendPosition", "IGI-RE", "entry",
+                    "void HumanPlayer_SendPosition(HumanPlayer *h)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00411000, "HumanPlayer_SelectWeaponCategory", "IGI-RE", "entry",
+                    "void HumanPlayer_SelectWeaponCategory(HumanPlayer *h)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00411300, "HumanPlayer_FadeHitFlash", "IGI-RE", "entry",
+                    "void HumanPlayer_FadeHitFlash(HumanPlayer *h)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00411350, "HumanPlayer_FadeFlash", "IGI-RE", "entry",
+                    "void HumanPlayer_FadeFlash(HumanPlayer *h)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004137a0, "HumanPlayer_LoadParameters", "IGI-RE", "entry",
+                    "void HumanPlayer_LoadParameters(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00413a60, "HumanPlayer_RequestWeaponAnim", "IGI-RE", "entry",
+                    "void HumanPlayer_RequestWeaponAnim(HumanPlayer *h, int anim)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0045eae0, "Human_GetCutSceneDeltaTime", "IGI-RE", "entry",
+                    "ScriptValue *Human_GetCutSceneDeltaTime(ScriptValue *ret)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00460be0, "Human_GetType", "IGI-RE", "entry", "uint16_t Human_GetType(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00460bf0, "Human_GetEvent0", "IGI-RE", "entry",
+                    "uint8_t Human_GetEvent0(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00460c10, "Human_GetEvent1", "IGI-RE", "entry",
+                    "uint8_t Human_GetEvent1(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00460c30, "Human_GetGunshotEvent", "IGI-RE", "entry",
+                    "uint8_t Human_GetGunshotEvent(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00460c40, "Human_GetPunchEvent", "IGI-RE", "entry",
+                    "uint8_t Human_GetPunchEvent(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00460c50, "Human_GetParamTable", "IGI-RE", "entry",
+                    "void *Human_GetParamTable(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00460c60, "Human_GetList", "IGI-RE", "entry", "void *Human_GetList(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00460c70, "Human_SetAI", "IGI-RE", "entry",
+                    "void Human_SetAI(Human *h, HumanAI *ai)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00463110, "Human_GetState", "IGI-RE", "entry", "int Human_GetState(Human *h)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00463120, "Human_GetIndex", "IGI-RE", "entry", "int Human_GetIndex(Human *h)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00463130, "Human_GetTeam", "IGI-RE", "entry", "int Human_GetTeam(Human *h)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00463140, "Human_GetMatrix", "IGI-RE", "entry",
+                    "float *Human_GetMatrix(Human *h)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00463150, "Human_IsPlayer", "IGI-RE", "entry",
+                    "char Human_IsPlayer(Human *h)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00463170, "Human_IsDead", "IGI-RE", "entry", "char Human_IsDead(Human *h)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00463180, "Human_IsCrouching", "IGI-RE", "entry",
+                    "char Human_IsCrouching(Human *h)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00463190, "Human_IsActive", "IGI-RE", "entry",
+                    "char Human_IsActive(Human *h)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004635b0, "Human_LockInput", "IGI-RE", "entry",
+                    "void Human_LockInput(Human *h)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004635e0, "Human_UnlockInput", "IGI-RE", "entry",
+                    "void Human_UnlockInput(Human *h)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0048a320, "Human_EnableLook", "IGI-RE", "entry",
+                    "void Human_EnableLook(Human *h)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0048a330, "Human_DisableLook", "IGI-RE", "entry",
+                    "void Human_DisableLook(Human *h)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00463760, "HumanViewCam", "IGI-RE", "entry",
+                    "void HumanViewCam(Human *h, int mode)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0045d030, "Soldier_GetParams", "IGI-RE", "entry",
+                    "void Soldier_GetParams(Human *h, void **out)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0045d5a0, "Soldier_GetType", "IGI-RE", "entry",
+                    "uint16_t Soldier_GetType(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0045d5b0, "Soldier_GetDeathVelocity", "IGI-RE", "entry",
+                    "void Soldier_GetDeathVelocity(double *out, Human *h, int model, int anim)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0045a7f0, "Soldier_Footstep", "IGI-RE", "entry",
+                    "void Soldier_Footstep(Soldier *h)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0045d360, "Soldier_EnsureWeapon", "IGI-RE", "entry",
+                    "void Soldier_EnsureWeapon(Human *h)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0045daa0, "Soldier_TurnToHit", "IGI-RE", "entry",
+                    "char Soldier_TurnToHit(Human *h, double *dir)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0045a930, "Soldier_StandEnter", "IGI-RE", "entry",
+                    "void Soldier_StandEnter(SoldierSM *sm, Soldier *h)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0045a9e0, "Soldier_State1Enter", "IGI-RE", "entry",
+                    "void Soldier_State1Enter(SoldierSM *sm, Soldier *h)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0045aa60, "Soldier_State17Enter", "IGI-RE", "entry",
+                    "void Soldier_State17Enter(SoldierSM *sm, Soldier *h)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0045aad0, "Soldier_State18Enter", "IGI-RE", "entry",
+                    "void Soldier_State18Enter(SoldierSM *sm, Soldier *h)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0045ab00, "Soldier_State18Update", "IGI-RE", "entry",
+                    "void Soldier_State18Update(SoldierSM *sm, Soldier *h)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0045aca0, "Soldier_State2Enter", "IGI-RE", "entry",
+                    "void Soldier_State2Enter(SoldierSM *sm, Soldier *h)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0045ad10, "Soldier_State2Update", "IGI-RE", "entry",
+                    "void Soldier_State2Update(SoldierSM *sm, Soldier *h)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0045af60, "Soldier_State3Enter", "IGI-RE", "entry",
+                    "void Soldier_State3Enter(SoldierSM *sm, Soldier *h)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0045afd0, "Soldier_State4Enter", "IGI-RE", "entry",
+                    "void Soldier_State4Enter(SoldierSM *sm, Soldier *h)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0045b000, "Soldier_State5Enter", "IGI-RE", "entry",
+                    "void Soldier_State5Enter(SoldierSM *sm, Soldier *h)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0045b030, "Soldier_State6Enter", "IGI-RE", "entry",
+                    "void Soldier_State6Enter(SoldierSM *sm, Soldier *h)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00408720, "Weapon_HasAmmo", "IGI-RE", "entry",
+                    "int Weapon_HasAmmo(void *task)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00413b20, "Weapon_GetFireEvent", "IGI-RE", "entry",
+                    "uint8_t Weapon_GetFireEvent(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00413b50, "Weapon_GetTypeEvent", "IGI-RE", "entry",
+                    "uint8_t Weapon_GetTypeEvent(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00413b60, "Weapon_GetUnusedPointsEvent", "IGI-RE", "entry",
+                    "uint8_t Weapon_GetUnusedPointsEvent(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00413c80, "Weapon_GetType", "IGI-RE", "entry",
+                    "WeaponType *Weapon_GetType(void *task)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00477bf0, "Gun_GetType", "IGI-RE", "entry", "uint16_t Gun_GetType(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00477c00, "Gun_GetEvent0", "IGI-RE", "entry", "uint8_t Gun_GetEvent0(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00477c10, "Gun_GetEvent1", "IGI-RE", "entry", "uint8_t Gun_GetEvent1(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00477c20, "Gun_GetEvent2", "IGI-RE", "entry", "uint8_t Gun_GetEvent2(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00477c30, "Gun_GetEvent3", "IGI-RE", "entry", "uint8_t Gun_GetEvent3(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00477c40, "Gun_GetEvent4", "IGI-RE", "entry", "uint8_t Gun_GetEvent4(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0047aab0, "Gun_GetAmmoTextPos", "IGI-RE", "entry",
+                    "void Gun_GetAmmoTextPos(float *x, float *y, Gun *g, Hud *hud)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f1fc0, "Weapon_GetSlotsEvent", "IGI-RE", "entry",
+                    "char Weapon_GetSlotsEvent(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f1fd0, "Weapon_GetStateEvent", "IGI-RE", "entry",
+                    "char Weapon_GetStateEvent(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f1fe0, "Weapon_GetMoveEvent", "IGI-RE", "entry",
+                    "char Weapon_GetMoveEvent(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f1ff0, "Weapon_GetTriggerEvent", "IGI-RE", "entry",
+                    "char Weapon_GetTriggerEvent(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f2000, "Weapon_GetEvent3", "IGI-RE", "entry",
+                    "char Weapon_GetEvent3(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00464770, "HumanView_SetWeaponTarget", "IGI-RE", "entry",
+                    "void HumanView_SetWeaponTarget(HumanView *v, float pitch, float yaw, float "
+                    "pitchSpeed, float yawSpeed)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004647a0, "HumanView_SetWeaponAngles", "IGI-RE", "entry",
+                    "void HumanView_SetWeaponAngles(HumanView *v, float pitch, float yaw)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00465800, "HumanView_GetEye", "IGI-RE", "entry",
+                    "void HumanView_GetEye(double *out, HumanView *v)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00465880, "HumanView_GetMatrix", "IGI-RE", "entry",
+                    "void HumanView_GetMatrix(Matrix *out, HumanView *v)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004658a0, "HumanView_GetForward", "IGI-RE", "entry",
+                    "void HumanView_GetForward(float *out, HumanView *v)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004658d0, "HumanView_SetCamera", "IGI-RE", "entry",
+                    "void HumanView_SetCamera(HumanView *v, const double *pos, const Matrix *rot)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00465920, "HumanView_SetTarget", "IGI-RE", "entry",
+                    "void HumanView_SetTarget(HumanView *v, const int *target, char flag)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004659b0, "HumanView_SetDip", "IGI-RE", "entry",
+                    "void HumanView_SetDip(HumanView *v, float dip)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004659d0, "HumanView_SetZoomed", "IGI-RE", "entry",
+                    "void HumanView_SetZoomed(HumanView *v)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00482580, "HumanCamera_HasKiller", "IGI-RE", "entry",
+                    "int HumanCamera_HasKiller(HumanCamera *c)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00482880, "HumanCamera_FindHuman", "IGI-RE", "entry",
+                    "void HumanCamera_FindHuman(HumanCamera *c)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00483a00, "HumanCamera_IsBlocked", "IGI-RE", "entry",
+                    "char HumanCamera_IsBlocked(HumanCamera *c, Task *h, Vec3d *to, Vec3d *from)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00484d30, "HumanCamera_GetEvent", "IGI-RE", "entry",
+                    "uint8_t HumanCamera_GetEvent(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00484d60, "HumanCamera_SetHuman", "IGI-RE", "entry",
+                    "void HumanCamera_SetHuman(HumanCamera *c, Task *h)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004d9850, "Camera_GetChangedEvent", "IGI-RE", "entry",
+                    "uint8_t Camera_GetChangedEvent(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004d9860, "Camera_GetListeners", "IGI-RE", "entry",
+                    "QTaskList *Camera_GetListeners(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004d9870, "Camera_Set", "IGI-RE", "entry",
+                    "void Camera_Set(Camera *cam, const Vec3d *pos, const Matrix *axes, float fov, "
+                    "float aspect, float priority, int frame, void *owner, int unk58, int unk5C)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0042dce0, "Car_GetDefSize", "IGI-RE", "entry",
+                    "void Car_GetDefSize(void *unused, int *size)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0042ea00, "Car_GetParamTable", "IGI-RE", "entry",
+                    "void Car_GetParamTable(Car *o, void **out)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0042f850, "Car_GetSoundParams", "IGI-RE", "entry",
+                    "void Car_GetSoundParams(Car *c, void **out)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0042f870, "Car_GetControlInfo", "IGI-RE", "entry",
+                    "void Car_GetControlInfo(Car *c, int *arg)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0042fc00, "Car_GetFrame", "IGI-RE", "entry",
+                    "void Car_GetFrame(Car *c, void **out)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0042fc70, "Car_GetLight", "IGI-RE", "entry",
+                    "void Car_GetLight(Car *c, void **out)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0042fdc0, "Car_GetType", "IGI-RE", "entry", "uint16_t Car_GetType(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0042fdd0, "Car_GetMountedGun", "IGI-RE", "entry",
+                    "Task *Car_GetMountedGun(Car *c)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0042fdf0, "Car_GetGunnerPos", "IGI-RE", "entry",
+                    "void Car_GetGunnerPos(Car *c, Vec3d *pos, Matrix *m)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004304b0, "Car_GetTrackFactor", "IGI-RE", "entry",
+                    "long double Car_GetTrackFactor(Car *c, int joint)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00431ac0, "Heli_FindDoor", "IGI-RE", "entry", "Task *Heli_FindDoor(Heli *h)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00431b60, "Heli_GetParamTable", "IGI-RE", "entry",
+                    "void Heli_GetParamTable(Heli *h, void **out)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00432bb0, "Heli_GetSoundParams", "IGI-RE", "entry",
+                    "void Heli_GetSoundParams(Heli *h, void **out)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00432bd0, "Heli_GetStateSize", "IGI-RE", "entry",
+                    "void Heli_GetStateSize(Heli *h, int *out)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00432be0, "Heli_GetControlInfo", "IGI-RE", "entry",
+                    "void Heli_GetControlInfo(Heli *h, int *arg)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00432f80, "Heli_GetConfigSize", "IGI-RE", "entry",
+                    "void Heli_GetConfigSize(Task *t, int *out)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00433000, "Heli_GetSoundInfo", "IGI-RE", "entry",
+                    "void Heli_GetSoundInfo(Heli *h, void **out)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f9200, "Graph_GetParamTable", "IGI-RE", "entry",
+                    "void *Graph_GetParamTable(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f9210, "Graph_GetType", "IGI-RE", "entry", "uint16_t Graph_GetType(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f9220, "Graph_GetLoadEvent", "IGI-RE", "entry",
+                    "uint8_t Graph_GetLoadEvent(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f9230, "Graph_GetSaveEvent", "IGI-RE", "entry",
+                    "uint8_t Graph_GetSaveEvent(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f9240, "Graph_GetNodeLoadEvent", "IGI-RE", "entry",
+                    "uint8_t Graph_GetNodeLoadEvent(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f9250, "Graph_GetUnusedEvent0", "IGI-RE", "entry",
+                    "uint8_t Graph_GetUnusedEvent0(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f9260, "Graph_GetNodeAddEvent", "IGI-RE", "entry",
+                    "uint8_t Graph_GetNodeAddEvent(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f9270, "Graph_GetUnusedEvent1", "IGI-RE", "entry",
+                    "uint8_t Graph_GetUnusedEvent1(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f9280, "Graph_GetAllocEvent", "IGI-RE", "entry",
+                    "uint8_t Graph_GetAllocEvent(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f9290, "Graph_Find", "IGI-RE", "entry", "Graph *Graph_Find(int id)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f92e0, "Graph_GetWorldPos", "IGI-RE", "entry",
+                    "void Graph_GetWorldPos(Vec3d *out, Graph *g)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f93b0, "Graph_SetWorldPos", "IGI-RE", "entry",
+                    "void Graph_SetWorldPos(Graph *g, const Vec3d *pos)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f9460, "Graph_SetNodeSize", "IGI-RE", "entry",
+                    "void Graph_SetNodeSize(uint16_t type, int size)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f94d0, "Graph_GetNodeSize", "IGI-RE", "entry",
+                    "int Graph_GetNodeSize(Graph *g)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f9720, "Graph_GetNode", "IGI-RE", "entry",
+                    "GraphNode *Graph_GetNode(Graph *g, int id)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f9770, "Graph_GetNodePos", "IGI-RE", "entry",
+                    "void Graph_GetNodePos(Vec3d *out, GraphNode *node)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f98a0, "Graph_GetNodeMatrix", "IGI-RE", "entry",
+                    "void Graph_GetNodeMatrix(Matrix *out, GraphNode *node, char rotate)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add(
+        {0x0044dc40, "AIFunction_SetViewLength", "IGI-RE", "entry",
+         "ScriptValue *AIFunction_SetViewLength(ScriptValue *out, void *data, void *args)",
+         NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add(
+        {0x0044dcd0, "AIFunction_SetAlarmViewLength", "IGI-RE", "entry",
+         "ScriptValue *AIFunction_SetAlarmViewLength(ScriptValue *out, void *data, void *args)",
+         NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add(
+        {0x0044dd30, "AIFunction_SetViewAlpha", "IGI-RE", "entry",
+         "ScriptValue *AIFunction_SetViewAlpha(ScriptValue *out, void *data, void *args)",
+         NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add(
+        {0x0044dd90, "AIFunction_SetViewGamma", "IGI-RE", "entry",
+         "ScriptValue *AIFunction_SetViewGamma(ScriptValue *out, void *data, void *args)",
+         NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add(
+        {0x0044ddf0, "AIFunction_SetSecondaryViewLength", "IGI-RE", "entry",
+         "ScriptValue *AIFunction_SetSecondaryViewLength(ScriptValue *out, void *data, void *args)",
+         NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0044de80, "AIFunction_SetSecondaryAlarmViewLength", "IGI-RE", "entry",
+                    "ScriptValue *AIFunction_SetSecondaryAlarmViewLength(ScriptValue *out, void "
+                    "*data, void *args)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add(
+        {0x0044dee0, "AIFunction_SetSecondaryViewAlpha", "IGI-RE", "entry",
+         "ScriptValue *AIFunction_SetSecondaryViewAlpha(ScriptValue *out, void *data, void *args)",
+         NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add(
+        {0x0044df40, "AIFunction_SetSecondaryViewGamma", "IGI-RE", "entry",
+         "ScriptValue *AIFunction_SetSecondaryViewGamma(ScriptValue *out, void *data, void *args)",
+         NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add(
+        {0x0044dfa0, "AIFunction_GetCurrentEventType", "IGI-RE", "entry",
+         "ScriptValue *AIFunction_GetCurrentEventType(ScriptValue *out, void *data, void *args)",
+         NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add(
+        {0x0044e000, "AIFunction_GetRandomValue", "IGI-RE", "entry",
+         "ScriptValue *AIFunction_GetRandomValue(ScriptValue *out, void *data, void *args)",
+         NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add(
+        {0x0044e0c0, "AIFunction_SetEventPriority", "IGI-RE", "entry",
+         "ScriptValue *AIFunction_SetEventPriority(ScriptValue *out, void *data, void *args)",
+         NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add(
+        {0x0044e150, "AIFunction_SetInvulnerability", "IGI-RE", "entry",
+         "ScriptValue *AIFunction_SetInvulnerability(ScriptValue *out, void *data, void *args)",
+         NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add(
+        {0x0044e1b0, "AIFunction_SetInstantDeath", "IGI-RE", "entry",
+         "ScriptValue *AIFunction_SetInstantDeath(ScriptValue *out, void *data, void *args)",
+         NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add(
+        {0x0044e210, "AIFunction_SetDeathAnimation", "IGI-RE", "entry",
+         "ScriptValue *AIFunction_SetDeathAnimation(ScriptValue *out, void *data, void *args)",
+         NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add(
+        {0x0044e270, "AIFunction_SetAlarmTriggerID", "IGI-RE", "entry",
+         "ScriptValue *AIFunction_SetAlarmTriggerID(ScriptValue *out, void *data, void *args)",
+         NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add(
+        {0x0044e2d0, "AIFunction_SetAlarmControlID", "IGI-RE", "entry",
+         "ScriptValue *AIFunction_SetAlarmControlID(ScriptValue *out, void *data, void *args)",
+         NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add(
+        {0x0044e330, "AIFunction_SetAlarmAccess", "IGI-RE", "entry",
+         "ScriptValue *AIFunction_SetAlarmAccess(ScriptValue *out, void *data, void *args)",
+         NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00495e70, "Music_SetVolume", "IGI-RE", "entry",
+                    "void Music_SetVolume(float music, float master)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00495cb0, "Sound_IsReady", "IGI-RE", "entry", "char Sound_IsReady(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00495f30, "Music_SetSfxVolume", "IGI-RE", "entry",
+                    "void Music_SetSfxVolume(float v)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00496450, "Sound_Find", "IGI-RE", "entry",
+                    "Sound *Sound_Find(int key1, int key2)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00496db0, "Sound_GetDuration", "IGI-RE", "entry",
+                    "long double Sound_GetDuration(int key1, int key2)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00496e00, "Sound_SetListener", "IGI-RE", "entry",
+                    "void Sound_SetListener(const float *m, const double *pos, const double *vel)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00497390, "Sound_GetName", "IGI-RE", "entry",
+                    "void Sound_GetName(char *out, const char *name)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00497410, "Sound_HashName", "IGI-RE", "entry",
+                    "int Sound_HashName(char *key)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00497450, "Sound_HashBucket", "IGI-RE", "entry",
+                    "int Sound_HashBucket(char *key)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00497510, "Sound_GetVoiceCount", "IGI-RE", "entry",
+                    "int Sound_GetVoiceCount(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004e6030, "Sound_SetRate", "IGI-RE", "entry", "void Sound_SetRate(int rate)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004e6050, "Sound_GetRate", "IGI-RE", "entry", "int Sound_GetRate(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004e6060, "Sound_SetUnusedByte", "IGI-RE", "entry",
+                    "void Sound_SetUnusedByte(char v)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004e65f0, "Sound_GetListEvent", "IGI-RE", "entry",
+                    "uint8_t Sound_GetListEvent(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004e6610, "Sound_GetInfoEvent", "IGI-RE", "entry",
+                    "uint8_t Sound_GetInfoEvent(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004e6630, "Sound_GetFindEvent", "IGI-RE", "entry",
+                    "uint8_t Sound_GetFindEvent(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004e6650, "Sound_GetNameEvent", "IGI-RE", "entry",
+                    "uint8_t Sound_GetNameEvent(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004e6670, "Sound_GetSetPosEvent", "IGI-RE", "entry",
+                    "uint8_t Sound_GetSetPosEvent(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f65e0, "RainObj_FindCell", "IGI-RE", "entry",
+                    "RainCell *RainObj_FindCell(RainObj *r, const Vec3d *p)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f6fe0, "RainObj_IsCameraOutside", "IGI-RE", "entry",
+                    "int RainObj_IsCameraOutside(RainObj *r)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f7c20, "RainObj_IsCameraCellVisible", "IGI-RE", "entry",
+                    "int RainObj_IsCameraCellVisible(RainObj *r)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f80e0, "RainDynCubeObj_SetCallback", "IGI-RE", "entry",
+                    "void RainDynCubeObj_SetCallback(void *fn)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f80f0, "RainDynCubeObj_IsRainingAt", "IGI-RE", "entry",
+                    "long double RainDynCubeObj_IsRainingAt(const Vec3d *pos)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f8140, "RainDynCubeObj_GetHits", "IGI-RE", "entry",
+                    "void RainDynCubeObj_GetHits(void **hits, int *counts, int *n)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add(
+        {0x004f66a0, "RainObj_AddDrop", "IGI-RE", "entry",
+         "void RainObj_AddDrop(RainObj *r, const Vec3f *pos, const Vec3f *vel, int unused)",
+         NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f6750, "RainObj_SpawnDrop", "IGI-RE", "entry",
+                    "void RainObj_SpawnDrop(RainObj *r, const Vec3f *pos, const Vec3f *dir, float "
+                    "spread, float speed, int unk)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f6b00, "RainObj_PlaceCells", "IGI-RE", "entry",
+                    "void RainObj_PlaceCells(RainObj *r)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f6d70, "RainObj_Simulate", "IGI-RE", "entry",
+                    "void RainObj_Simulate(RainObj *r)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f70b0, "RainObj_MoveDrops", "IGI-RE", "entry",
+                    "void RainObj_MoveDrops(RainObj *r)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f7120, "RainObj_RemoveDrop", "IGI-RE", "entry",
+                    "void RainObj_RemoveDrop(RainObj *r, int i)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f7cc0, "RainObj_WrapCell", "IGI-RE", "entry",
+                    "void RainObj_WrapCell(RainObj *r, RainCell *c, float size)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f7df0, "RainObj_CheckCell", "IGI-RE", "entry",
+                    "void RainObj_CheckCell(RainObj *r, RainCell *c)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f7630, "RainObj_Draw", "IGI-RE", "entry",
+                    "void RainObj_Draw(RainPrim *prim)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f7960, "RainObj_QueueDraw", "IGI-RE", "entry",
+                    "void RainObj_QueueDraw(RainObj *r)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f7990, "RainObj_UpdateCells", "IGI-RE", "entry",
+                    "void RainObj_UpdateCells(RainObj *r)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f0ce0, "Level_SetModels", "IGI-RE", "entry",
+                    "void Level_SetModels(void *models)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f0ed0, "Level_GetStatic", "IGI-RE", "entry", "Task *Level_GetStatic(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f0ee0, "Level_GetDynamic", "IGI-RE", "entry",
+                    "Task *Level_GetDynamic(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f1080, "Level_GetTick", "IGI-RE", "entry", "int Level_GetTick(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f1090, "Level_SetTaskId", "IGI-RE", "entry",
+                    "void Level_SetTaskId(int id, Task *task)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f11f0, "Level_GetDebugInfoEvent", "IGI-RE", "entry",
+                    "char Level_GetDebugInfoEvent(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f1200, "Level_GetNameEvent", "IGI-RE", "entry",
+                    "char Level_GetNameEvent(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f1210, "Level_GetActivateEvent", "IGI-RE", "entry",
+                    "int Level_GetActivateEvent(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f1220, "Level_GetDeactivateEvent", "IGI-RE", "entry",
+                    "int Level_GetDeactivateEvent(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f1230, "Level_GetUnusedNewTaskEvent", "IGI-RE", "entry",
+                    "int Level_GetUnusedNewTaskEvent(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f17c0, "Level_Get", "IGI-RE", "entry", "Level *Level_Get(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00416550, "LevelQuit", "IGI-RE", "entry", "void LevelQuit(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f0780, "Level_NewTask", "IGI-RE", "entry",
+                    "ScriptValue *Level_NewTask(ScriptValue *out, Task *parent, ScriptArgs *args)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f0cb0, "Level_New", "IGI-RE", "entry", "Task *Level_New(Task *parent)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f0d40, "Level_Load", "IGI-RE", "entry",
+                    "void Level_Load(const char *path, int fps)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f0e90, "Level_Clear", "IGI-RE", "entry", "void Level_Clear(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f10e0, "Level_ClearTaskId", "IGI-RE", "entry",
+                    "void Level_ClearTaskId(int id)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add(
+        {0x00417810, "MenuManager_SetLanguage", "IGI-RE", "entry",
+         "ScriptValue *MenuManager_SetLanguage(ScriptValue *out, MenuManager *mm, void *args)",
+         NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add(
+        {0x004179b0, "MenuManager_SetEnabled", "IGI-RE", "entry",
+         "ScriptValue *MenuManager_SetEnabled(ScriptValue *out, MenuManager *mm, void *args)",
+         NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00418070, "MenuManager_GetParams", "IGI-RE", "entry",
+                    "void MenuManager_GetParams(void *task, void **out)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004186e0, "MenuManager_SetFocus", "IGI-RE", "entry",
+                    "void MenuManager_SetFocus(MenuManager *mm, int i)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00418af0, "MenuManager_GetType", "IGI-RE", "entry",
+                    "uint16_t MenuManager_GetType(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00418d80, "MenuManager_FindPic", "IGI-RE", "entry",
+                    "Text *MenuManager_FindPic(MenuManager *mm, const char *name)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00418de0, "MenuManager_FindSprite", "IGI-RE", "entry",
+                    "Sprite *MenuManager_FindSprite(MenuManager *mm, const char *name)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00418e40, "MenuManager_FindFont", "IGI-RE", "entry",
+                    "Sprite *MenuManager_FindFont(MenuManager *mm, const char *name)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00418ea0, "MenuManager_GetString", "IGI-RE", "entry",
+                    "const char *MenuManager_GetString(MenuManager *mm, const char *name)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00418fb0, "MenuManager_GetInput", "IGI-RE", "entry",
+                    "MenuInput *MenuManager_GetInput(MenuManager *mm)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00419030, "MenuManager_GetFade", "IGI-RE", "entry",
+                    "int MenuManager_GetFade(MenuManager *mm)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00419040, "MenuManager_GetBackgroundFX", "IGI-RE", "entry",
+                    "Task *MenuManager_GetBackgroundFX(MenuManager *mm)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0041e410, "ToggleBox_GetParams", "IGI-RE", "entry",
+                    "void ToggleBox_GetParams(void *task, void **out)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0041f020, "ListBox_GetParams", "IGI-RE", "entry",
+                    "void ListBox_GetParams(void *task, void **out)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add(
+        {0x004174a0, "MenuManager_RequestScreen", "IGI-RE", "entry",
+         "ScriptValue *MenuManager_RequestScreen(ScriptValue *out, MenuManager *mm, void *args)",
+         NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00417520, "MenuManager_ApplyLanguage", "IGI-RE", "entry",
+                    "void MenuManager_ApplyLanguage(MenuManager *mm)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00417590, "MenuManager_Refresh", "IGI-RE", "entry",
+                    "void MenuManager_Refresh(MenuManager *mm, int all)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004b8930, "Script_SetSymbolContext", "IGI-RE", "entry",
+                    "void Script_SetSymbolContext(const char *name, void *context)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004b8970, "Script_SetWarningLevel", "IGI-RE", "entry",
+                    "void Script_SetWarningLevel(int level)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004b89f0, "Script_SetMaxArgs", "IGI-RE", "entry",
+                    "void Script_SetMaxArgs(int count)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004b8a00, "Script_SetLineSize", "IGI-RE", "entry",
+                    "void Script_SetLineSize(int size)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004b8a10, "Script_SetBreakEnabled", "IGI-RE", "entry",
+                    "void Script_SetBreakEnabled(int on)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004b8a20, "Script_GetArgInt", "IGI-RE", "entry",
+                    "int Script_GetArgInt(ScriptArgs *args, int i)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004b8a50, "Script_GetArgReal", "IGI-RE", "entry",
+                    "long double Script_GetArgReal(ScriptArgs *args, int i)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004b8a80, "Script_GetArgString", "IGI-RE", "entry",
+                    "char *Script_GetArgString(ScriptArgs *args, int i, char *buf, int size)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004b8ad0, "Script_GetArgLine", "IGI-RE", "entry",
+                    "int Script_GetArgLine(ScriptArgs *args, int i)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004b8b00, "Script_HasArg", "IGI-RE", "entry",
+                    "int Script_HasArg(ScriptArgs *args, int i)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add(
+        {0x004b8c60, "Script_SetWarningLevelCmd", "IGI-RE", "entry",
+         "ScriptValue *Script_SetWarningLevelCmd(ScriptValue *out, void *data, ScriptArgs *args)",
+         NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004bab80, "Script_FindSymbol", "IGI-RE", "entry",
+                    "const char *Script_FindSymbol(const char *name, ScriptSymbol **out)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004baba0, "Script_GetSymbolTable", "IGI-RE", "entry",
+                    "SymbolTable *Script_GetSymbolTable(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0047cda0, "Script_EvalConst", "IGI-RE", "entry",
+                    "int Script_EvalConst(const char *expr)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004b7ea0, "Script_IntValue", "IGI-RE", "entry",
+                    "ScriptValue *Script_IntValue(ScriptValue *out, int *var)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004b7f00, "Script_Bool8Value", "IGI-RE", "entry",
+                    "ScriptValue *Script_Bool8Value(ScriptValue *out, char *var)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f0cf0, "Task_RunScript", "IGI-RE", "entry",
+                    "Task *Task_RunScript(Task *parent, const char *path, char insertHead)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f1030, "Task_FindById", "IGI-RE", "entry", "Task *Task_FindById(int id)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004015f0, "Task_Delete", "IGI-RE", "entry", "void Task_Delete(Task *task)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004014e0, "TaskType_GetMask", "IGI-RE", "entry",
+                    "uint16_t TaskType_GetMask(uint16_t type)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004018f0, "Task_GetRootType", "IGI-RE", "entry",
+                    "uint16_t Task_GetRootType(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00401a60, "Task_GetCount", "IGI-RE", "entry", "int Task_GetCount(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00401a70, "TaskType_Find", "IGI-RE", "entry",
+                    "uint16_t TaskType_Find(const char *name)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00401b90, "TaskType_GetName", "IGI-RE", "entry",
+                    "const char *TaskType_GetName(uint16_t type)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00401be0, "Task_FindChild", "IGI-RE", "entry",
+                    "Task *Task_FindChild(Task *task, uint16_t type)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00401c10, "Task_FindLastChild", "IGI-RE", "entry",
+                    "Task *Task_FindLastChild(Task *task, uint16_t type)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00401c40, "Task_FindNext", "IGI-RE", "entry",
+                    "Task *Task_FindNext(Task *task, uint16_t type)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00401c80, "Task_FindPrev", "IGI-RE", "entry",
+                    "Task *Task_FindPrev(Task *task, uint16_t type)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00401cc0, "Task_FindAncestor", "IGI-RE", "entry",
+                    "Task *Task_FindAncestor(Task *task, uint16_t type)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00401cf0, "TaskType_IsA", "IGI-RE", "entry",
+                    "char TaskType_IsA(uint16_t type, uint16_t base)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00401f30, "Task_SetUnusedRoot", "IGI-RE", "entry",
+                    "void Task_SetUnusedRoot(int value)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00401f60, "Task_SetGlobalFlags", "IGI-RE", "entry",
+                    "void Task_SetGlobalFlags(uint32_t flags)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00401fa0, "TaskType_SetFlags", "IGI-RE", "entry",
+                    "void TaskType_SetFlags(uint16_t type, uint32_t flags)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00407cd0, "TaskType_IsUsed", "IGI-RE", "entry",
+                    "int TaskType_IsUsed(int type)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00413cc0, "Task_FindWeapon", "IGI-RE", "entry",
+                    "void *Task_FindWeapon(void *task, int id)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00403b30, "Config_IsGermany", "IGI-RE", "entry",
+                    "ScriptValue *Config_IsGermany(ScriptValue *out)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00403c70, "Config_GetContentControlPassword", "IGI-RE", "entry",
+                    "ScriptValue *Config_GetContentControlPassword(ScriptValue *out)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00403d90, "Config_IsContentControlPasswordEnabled", "IGI-RE", "entry",
+                    "ScriptValue *Config_IsContentControlPasswordEnabled(ScriptValue *out)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00404590, "Config_GetGraphicOptions", "IGI-RE", "entry",
+                    "GraphicOptions *Config_GetGraphicOptions(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00404a70, "Config_GetSoundOptions", "IGI-RE", "entry",
+                    "SoundOptions *Config_GetSoundOptions(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00405010, "Config_GetActivePlayerProfileIndex", "IGI-RE", "entry",
+                    "ScriptValue *Config_GetActivePlayerProfileIndex(ScriptValue *out)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00405050, "Config_SetActivePlayerProfileIndex", "IGI-RE", "entry",
+                    "ScriptValue *Config_SetActivePlayerProfileIndex(ScriptValue *out, void *data, "
+                    "void *args)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004054f0, "Config_GetNumberOfPlayerProfiles", "IGI-RE", "entry",
+                    "ScriptValue *Config_GetNumberOfPlayerProfiles(ScriptValue *out)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004061b0, "Config_GetDefaultKeys", "IGI-RE", "entry",
+                    "InputRemap *Config_GetDefaultKeys(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00406240, "Config_GetKey", "IGI-RE", "entry",
+                    "void Config_GetKey(int i, int *value, const char **name)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00406270, "Config_GetKeyCount", "IGI-RE", "entry",
+                    "int Config_GetKeyCount(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00406280, "Config_GetAction", "IGI-RE", "entry",
+                    "void Config_GetAction(int i, int *value, const char **name)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004062b0, "Config_GetActionCount", "IGI-RE", "entry",
+                    "int Config_GetActionCount(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00406310, "Config_GetLanguageCount", "IGI-RE", "entry",
+                    "int Config_GetLanguageCount(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00406320, "Config_GetLanguageName", "IGI-RE", "entry",
+                    "const char *Config_GetLanguageName(int language)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00406330, "Config_GetDifficultyName", "IGI-RE", "entry",
+                    "const char *Config_GetDifficultyName(int difficulty)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00401860, "TaskEvent_Set", "IGI-RE", "entry",
+                    "void TaskEvent_Set(uint16_t type, uint8_t index)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00401890, "TaskEvent_Set2", "IGI-RE", "entry",
+                    "void TaskEvent_Set2(uint16_t type, int index)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004027f0, "Flow_GetType", "IGI-RE", "entry", "uint16_t Flow_GetType(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00402870, "Flow_GetFps", "IGI-RE", "entry", "int Flow_GetFps(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00402880, "Flow_Get", "IGI-RE", "entry", "Flow *Flow_Get(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00402890, "Flow_GetScreen", "IGI-RE", "entry", "void *Flow_GetScreen(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004028a0, "Flow_SetRequest", "IGI-RE", "entry",
+                    "void Flow_SetRequest(int event)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004028b0, "Flow_GetFrames", "IGI-RE", "entry", "int Flow_GetFrames(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004028c0, "Flow_GetRenders", "IGI-RE", "entry", "int Flow_GetRenders(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004061c0, "Profile_GetKeys", "IGI-RE", "entry",
+                    "InputRemap *Profile_GetKeys(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004061e0, "Profile_GetKeyCount", "IGI-RE", "entry",
+                    "int Profile_GetKeyCount(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00406200, "Profile_SetKeyCount", "IGI-RE", "entry",
+                    "void Profile_SetKeyCount(int count)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00406220, "Profile_GetActive", "IGI-RE", "entry",
+                    "PlayerProfile *Profile_GetActive(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004062c0, "Profile_GetSfxVolume", "IGI-RE", "entry",
+                    "float Profile_GetSfxVolume(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004062d0, "Profile_GetMusicVolume", "IGI-RE", "entry",
+                    "float Profile_GetMusicVolume(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004062e0, "Profile_GetLanguage", "IGI-RE", "entry",
+                    "int Profile_GetLanguage(void)", NativeVerification::Exposed}))
+    return false;

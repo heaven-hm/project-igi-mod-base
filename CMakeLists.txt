@@ -28,6 +28,27 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
+find_program(CLANG_FORMAT_EXECUTABLE clang-format)
+if(CLANG_FORMAT_EXECUTABLE)
+    add_custom_target(format_cpp
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/format_cpp.py
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "Formatting first-party C++ sources")
+    add_custom_target(format_cpp_check
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/format_cpp.py --check
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "Checking first-party C++ formatting")
+endif()
+
+find_program(CLANG_TIDY_EXECUTABLE clang-tidy HINTS "$ENV{LLVM_HOME}/bin" "/opt/homebrew/opt/llvm/bin")
+if(CLANG_TIDY_EXECUTABLE)
+    add_custom_target(lint_cpp
+        COMMAND ${CMAKE_COMMAND} -E env CLANG_TIDY=${CLANG_TIDY_EXECUTABLE}
+                ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/lint_cpp.py --build-dir ${CMAKE_BINARY_DIR}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "Linting first-party C++ translation units")
+endif()
+
 add_library(igi_qsc_compiler STATIC
     third_party/igi1conv/qsc_lexer.cpp
     third_party/igi1conv/qsc_parser.cpp
@@ -36,9 +57,9 @@ add_library(igi_qsc_compiler STATIC
 set_target_properties(igi_qsc_compiler PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(igi_qsc_compiler PUBLIC third_party/igi1conv)
 
-# IGI-RE native bindings: regenerates include/igi_sdk/natives/igi_re/hashes.hpp
+# IGI-RE native bindings: regenerates src/natives/igi_hashes/hashes.hpp
 # from the local native catalogue whenever the symbol table changes.
-set(IGI_RE_HASH_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/include/igi_sdk/natives/igi_re/hashes.hpp)
+set(IGI_RE_HASH_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/src/natives/igi_hashes/hashes.hpp)
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/data/igi-natives.csv")
 add_custom_command(
     OUTPUT ${IGI_RE_HASH_HEADER}
@@ -50,77 +71,137 @@ add_custom_command(
 )
 add_custom_target(igi_re_hash_bindings DEPENDS ${IGI_RE_HASH_HEADER})
 else()
-    message(STATUS "Local IGI1 data absent; using checked-in native bindings")
+    message(STATUS "Local IGI data absent; using checked-in native bindings")
     add_custom_target(igi_re_hash_bindings)
 endif()
 
-add_library(igi_sdk STATIC
-    src/igi_sdk/config/menu_config.cpp
-    src/igi_sdk/logging/logging.cpp
-    src/igi_sdk/ui/menu_manager.cpp
-    src/igi_sdk/ui/igi1_menu_manager.cpp
-    src/igi_sdk/ui/menu_script.cpp
-    src/igi_sdk/ui/menu_resource.cpp
-    src/igi_sdk/ui/menu_resource_igi1.cpp
-    src/igi_sdk/ui/menu_script_bridge.cpp
-    src/igi_sdk/ui/menu_script_igi1.cpp
-    src/igi_sdk/ui/menu_values.cpp
-    src/igi_sdk/ui/menu_native_actions.cpp
-    src/igi_sdk/natives/native_catalogue.cpp
-    src/igi_sdk/natives/native_caller.cpp
-    src/igi_sdk/natives/mvp_natives.cpp
-    src/igi_sdk/natives/igi1_native_registry.cpp
-    src/igi_sdk/natives/domains/flow/flow.cpp
-    src/igi_sdk/natives/native_runner.cpp
-    src/igi_sdk/runtime/scheduler.cpp
-    src/igi_sdk/runtime/target_profile.cpp
-    src/igi_sdk/runtime/runtime.cpp
-    src/igi_sdk/runtime/hook_manager.cpp
-    src/igi_sdk/runtime/macos_hook_backend.cpp
+add_library(mod_base STATIC
+    src/config/menu_config.cpp
+    src/logging/logging.cpp
+    src/ui/menu_manager.cpp
+    src/ui/igi_menu_manager.cpp
+    src/ui/menu_script.cpp
+    src/ui/menu_resource.cpp
+    src/ui/menu_resource_igi.cpp
+    src/ui/menu_script_bridge.cpp
+    src/ui/menu_script_igi.cpp
+    src/ui/menu_values.cpp
+    src/ui/menu_lifecycle.cpp
+    src/natives/native_catalogue.cpp
+    src/natives/native_caller.cpp
+    src/natives/mvp_natives.cpp
+    src/natives/igi_native_registry.cpp
+    src/natives/domains/flow/flow.cpp
+    src/natives/native_runner.cpp
+    src/runtime/scheduler.cpp
+    src/runtime/target_profile.cpp
+    src/runtime/runtime.cpp
+    src/runtime/hook_manager.cpp
+    src/runtime/macos_hook_backend.cpp
 )
-target_include_directories(igi_sdk PUBLIC include)
-target_link_libraries(igi_sdk PRIVATE igi_qsc_compiler)
-add_dependencies(igi_sdk igi_re_hash_bindings)
-target_compile_definitions(igi_sdk PUBLIC IGI_SDK_IGI1_ONLY=1)
+target_include_directories(mod_base PUBLIC src)
+target_link_libraries(mod_base PRIVATE igi_qsc_compiler)
+add_dependencies(mod_base igi_re_hash_bindings)
+target_compile_definitions(mod_base PUBLIC IGI_SDK_IGI_ONLY=1)
 
 add_executable(igi_menu_script tools/generate_menu_script.cpp)
-target_link_libraries(igi_menu_script PRIVATE igi_sdk)
+target_link_libraries(igi_menu_script PRIVATE mod_base)
 
 option(IGI_SDK_BUILD_DEMOS "Build the internal and external-style demo targets" ON)
 
+if(WIN32)
+    add_library(igi_imgui_dx7 STATIC
+        third_party/imgui/imgui.cpp
+        third_party/imgui/imgui_draw.cpp
+        third_party/imgui/imgui_tables.cpp
+        third_party/imgui/imgui_widgets.cpp
+        third_party/imgui/imgui_impl_win32.cpp
+        third_party/imgui/imgui_impl_dx7.cpp
+    )
+    set_target_properties(igi_imgui_dx7 PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    target_include_directories(igi_imgui_dx7 PUBLIC third_party/imgui)
+    target_compile_definitions(igi_imgui_dx7 PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_link_libraries(igi_imgui_dx7 PUBLIC ddraw dxguid gdi32 imm32 dwmapi)
+endif()
+
 if(IGI_SDK_BUILD_DEMOS)
-    set(IGI_INTERNAL_MENU_PLATFORM demos/internal/runtime/platform_linux.cpp)
+    set(IGI_INTERNAL_MENU_PLATFORM)
     if(APPLE)
-        set(IGI_INTERNAL_MENU_PLATFORM demos/internal/runtime/platform_macos.cpp)
+        set(IGI_INTERNAL_MENU_PLATFORM demos/support/platform_macos.cpp)
     elseif(WIN32)
-        set(IGI_INTERNAL_MENU_PLATFORM src/igi_sdk/platform/windows_dll.cpp)
+        set(IGI_INTERNAL_MENU_PLATFORM src/platform/windows_dll.cpp)
     endif()
     add_library(igi_basic_mod_menu SHARED
-        demos/internal/runtime/internal_demo.cpp
+        src/mod_base/menu_host.cpp
         demos/internal/basic-mod/basic_menu.cpp
+        demos/internal/helpers/menu_helpers.cpp
         ${IGI_INTERNAL_MENU_PLATFORM}
     )
-    target_link_libraries(igi_basic_mod_menu PRIVATE igi_sdk)
-    target_include_directories(igi_basic_mod_menu PRIVATE include)
+    target_link_libraries(igi_basic_mod_menu PRIVATE mod_base)
+    target_include_directories(igi_basic_mod_menu PRIVATE src)
     if(WIN32)
-        target_link_options(igi_basic_mod_menu PRIVATE -static)
+        target_link_options(igi_basic_mod_menu PRIVATE -static -Wl,--image-base,0x64000000)
     endif()
     set_target_properties(igi_basic_mod_menu PROPERTIES OUTPUT_NAME "igi-basic-mod-internal" PREFIX "")
 
+    add_library(igi_basic_mod_menu_external SHARED
+        src/mod_base/imgui_menu_host.cpp
+        demos/external/basic-mod/basic_menu.cpp
+        demos/internal/helpers/menu_helpers.cpp
+        ${IGI_INTERNAL_MENU_PLATFORM}
+    )
+    target_link_libraries(igi_basic_mod_menu_external PRIVATE mod_base)
+    target_include_directories(igi_basic_mod_menu_external PRIVATE src)
     if(WIN32)
-        add_library(igi_simple_mod_menu SHARED demos/internal/simple-mod/simple_menu.cpp demos/internal/runtime/internal_demo.cpp ${IGI_INTERNAL_MENU_PLATFORM})
-        target_link_libraries(igi_simple_mod_menu PRIVATE igi_sdk)
+        target_link_libraries(igi_basic_mod_menu_external PRIVATE igi_imgui_dx7)
+        target_link_options(igi_basic_mod_menu_external PRIVATE -static -Wl,--image-base,0x64000000)
+    endif()
+    set_target_properties(igi_basic_mod_menu_external PROPERTIES OUTPUT_NAME "igi-basic-mod-external" PREFIX "")
+
+    add_library(igi_simple_mod_menu_external SHARED
+        src/mod_base/imgui_menu_host.cpp
+        demos/external/simple-mod/simple_menu.cpp
+        demos/internal/helpers/menu_helpers.cpp
+        ${IGI_INTERNAL_MENU_PLATFORM}
+    )
+    target_link_libraries(igi_simple_mod_menu_external PRIVATE mod_base)
+    target_include_directories(igi_simple_mod_menu_external PRIVATE src)
+    if(WIN32)
+        target_link_libraries(igi_simple_mod_menu_external PRIVATE igi_imgui_dx7)
+        target_link_options(igi_simple_mod_menu_external PRIVATE -static -Wl,--image-base,0x64000000)
+    endif()
+    set_target_properties(igi_simple_mod_menu_external PROPERTIES OUTPUT_NAME "igi-simple-mod-external" PREFIX "")
+
+    add_library(igi_advanced_mod_menu_external SHARED
+        src/mod_base/imgui_menu_host.cpp
+        demos/external/advanced-mod/advanced_menu.cpp
+        demos/external/simple-mod/simple_menu.cpp
+        demos/internal/helpers/menu_helpers.cpp
+        ${IGI_INTERNAL_MENU_PLATFORM}
+    )
+    target_link_libraries(igi_advanced_mod_menu_external PRIVATE mod_base)
+    target_include_directories(igi_advanced_mod_menu_external PRIVATE src)
+    target_compile_definitions(igi_advanced_mod_menu_external PRIVATE IGI_ADVANCED_MENU=1)
+    if(WIN32)
+        target_link_libraries(igi_advanced_mod_menu_external PRIVATE igi_imgui_dx7)
+        target_link_options(igi_advanced_mod_menu_external PRIVATE -static -Wl,--image-base,0x64000000)
+    endif()
+    set_target_properties(igi_advanced_mod_menu_external PROPERTIES OUTPUT_NAME "igi-advanced-mod-external" PREFIX "")
+
+    if(WIN32)
+        add_library(igi_simple_mod_menu SHARED demos/internal/simple-mod/simple_menu.cpp demos/internal/helpers/menu_helpers.cpp src/mod_base/menu_host.cpp ${IGI_INTERNAL_MENU_PLATFORM})
+        target_link_libraries(igi_simple_mod_menu PRIVATE mod_base)
         target_link_options(igi_simple_mod_menu PRIVATE -static)
         set_target_properties(igi_simple_mod_menu PROPERTIES OUTPUT_NAME "igi-simple-mod-internal" PREFIX "")
-        add_library(igi_advanced_mod_menu SHARED demos/internal/advanced-mod/advanced_menu.cpp demos/internal/simple-mod/simple_menu.cpp demos/internal/runtime/internal_demo.cpp ${IGI_INTERNAL_MENU_PLATFORM})
-        target_link_libraries(igi_advanced_mod_menu PRIVATE igi_sdk)
+        add_library(igi_advanced_mod_menu SHARED demos/internal/advanced-mod/advanced_menu.cpp demos/internal/simple-mod/simple_menu.cpp demos/internal/helpers/menu_helpers.cpp src/mod_base/menu_host.cpp ${IGI_INTERNAL_MENU_PLATFORM})
+        target_link_libraries(igi_advanced_mod_menu PRIVATE mod_base)
         target_compile_definitions(igi_advanced_mod_menu PRIVATE IGI_ADVANCED_MENU=1)
         target_link_options(igi_advanced_mod_menu PRIVATE -static)
         set_target_properties(igi_advanced_mod_menu PROPERTIES OUTPUT_NAME "igi-advanced-mod-internal" PREFIX "")
         if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/demos/status-message/status_message_demo.cpp")
         add_library(igi_natives_inject_test SHARED demos/status-message/status_message_demo.cpp)
-        target_link_libraries(igi_natives_inject_test PRIVATE igi_sdk)
-        target_include_directories(igi_natives_inject_test PRIVATE include)
+        target_link_libraries(igi_natives_inject_test PRIVATE mod_base)
+        target_include_directories(igi_natives_inject_test PRIVATE src)
         target_compile_definitions(igi_natives_inject_test PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
         target_link_options(igi_natives_inject_test PRIVATE -static)
         set_target_properties(igi_natives_inject_test PROPERTIES OUTPUT_NAME "igi-natives-inject-test" PREFIX "")
@@ -129,15 +210,15 @@ if(IGI_SDK_BUILD_DEMOS)
 
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/demos/imgui/external_demo.cpp")
     add_executable(igi_menu_manager_external demos/imgui/external_demo.cpp)
-    target_link_libraries(igi_menu_manager_external PRIVATE igi_sdk)
-    target_include_directories(igi_menu_manager_external PRIVATE include)
+    target_link_libraries(igi_menu_manager_external PRIVATE mod_base)
+    target_include_directories(igi_menu_manager_external PRIVATE src)
     target_compile_definitions(igi_menu_manager_external PRIVATE IGI_SDK_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     set_target_properties(igi_menu_manager_external PROPERTIES OUTPUT_NAME "IGI-MenuManager-External")
     endif()
 endif()
 
 if(WIN32)
-    target_compile_definitions(igi_sdk PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_compile_definitions(mod_base PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
     add_library(igi_minhook STATIC
         third_party/minhook/src/buffer.c
         third_party/minhook/src/hook.c
@@ -146,41 +227,41 @@ if(WIN32)
     )
     target_include_directories(igi_minhook PUBLIC third_party/minhook/include)
     target_compile_definitions(igi_minhook PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
-    target_link_libraries(igi_sdk PRIVATE igi_minhook)
-    target_link_libraries(igi_sdk PRIVATE advapi32)
-    add_library(igi_sdk_igi1 SHARED src/igi_sdk/runtime/dll_exports.cpp)
-    target_link_libraries(igi_sdk_igi1 PRIVATE igi_sdk)
-    target_compile_definitions(igi_sdk_igi1 PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
+    target_link_libraries(mod_base PRIVATE igi_minhook)
+    target_link_libraries(mod_base PRIVATE advapi32)
+    add_library(igi_sdk_igi SHARED src/runtime/dll_exports.cpp)
+    target_link_libraries(igi_sdk_igi PRIVATE mod_base)
+    target_compile_definitions(igi_sdk_igi PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
     # Embed the mingw C++ runtime so the injected DLL is self-contained: the
     # game process must not need libstdc++-6/libgcc_s/libwinpthread present.
-    target_link_options(igi_sdk_igi1 PRIVATE -static)
-    set_target_properties(igi_sdk_igi1 PROPERTIES OUTPUT_NAME "IGI-Natives-SDK-IGI1" PREFIX ""
+    target_link_options(igi_sdk_igi PRIVATE -static)
+    set_target_properties(igi_sdk_igi PROPERTIES OUTPUT_NAME "IGI-Natives-SDK-IGI" PREFIX ""
         WINDOWS_EXPORT_ALL_SYMBOLS ON)
     add_executable(igi_sdk_win32_loader tools/win32_loader.cpp)
     set_target_properties(igi_sdk_win32_loader PROPERTIES OUTPUT_NAME "IGI-SDK-Loader")
 
-    add_executable(igi1_injector tools/igi1_injector.cpp)
-    set_target_properties(igi1_injector PROPERTIES OUTPUT_NAME "IGI1-Injector")
-target_link_libraries(igi1_injector PRIVATE -static)
+    add_executable(igi_injector tools/igi_injector.cpp)
+    set_target_properties(igi_injector PROPERTIES OUTPUT_NAME "IGI-Injector")
+target_link_libraries(igi_injector PRIVATE -static)
 
     # Small Windows-side input driver used by the Wine live-game validation.
     # Sending keys from inside the Wine desktop avoids relying on macOS
     # Accessibility permission or on the host application's focus state.
-    add_executable(igi1_keypress tools/igi1_keypress.cpp)
-    target_link_options(igi1_keypress PRIVATE -static)
-    set_target_properties(igi1_keypress PROPERTIES OUTPUT_NAME "IGI1-Keypress")
+    add_executable(igi_keypress tools/igi_keypress.cpp)
+    target_link_options(igi_keypress PRIVATE -static)
+    set_target_properties(igi_keypress PROPERTIES OUTPUT_NAME "IGI-Keypress")
 
 else()
-    add_library(igi_sdk_igi1 SHARED src/igi_sdk/runtime/portable_exports.cpp)
-    target_link_libraries(igi_sdk_igi1 PRIVATE igi_sdk)
-    set_target_properties(igi_sdk_igi1 PROPERTIES OUTPUT_NAME "IGI-Natives-SDK-IGI1")
+    add_library(igi_sdk_igi SHARED src/runtime/portable_exports.cpp)
+    target_link_libraries(igi_sdk_igi PRIVATE mod_base)
+    set_target_properties(igi_sdk_igi PROPERTIES OUTPUT_NAME "IGI-Natives-SDK-IGI")
 endif()
 
 add_executable(igi_sdk_tests
     tests/SchedulerTests.cpp
     tests/MenuManagerTests.cpp
 )
-target_link_libraries(igi_sdk_tests PRIVATE igi_sdk)
+target_link_libraries(igi_sdk_tests PRIVATE mod_base)
 if(WIN32)
     target_link_options(igi_sdk_tests PRIVATE -static)
 endif()
@@ -193,11 +274,11 @@ add_custom_command(
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_demo_native_tests.py
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/demo-natives.tsv
             ${CMAKE_CURRENT_SOURCE_DIR}/data/igi-natives.csv
-            ${CMAKE_CURRENT_SOURCE_DIR}/include/igi_sdk/IGI.hpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/natives/mvp_natives.hpp
 )
 endif()
 add_executable(igi_demo_native_contract_tests tests/generated_demo_natives.cpp)
-target_link_libraries(igi_demo_native_contract_tests PRIVATE igi_sdk)
+target_link_libraries(igi_demo_native_contract_tests PRIVATE mod_base)
 target_compile_definitions(igi_demo_native_contract_tests PRIVATE IGI_SDK_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
 enable_testing()
@@ -232,7 +313,7 @@ set_tests_properties(igi_demo_natives_unicorn PROPERTIES
 
 if(WIN32)
     add_library(igi_sdk_native_abi_fixture SHARED tests/native_abi_fixture.cpp)
-    target_link_libraries(igi_sdk_native_abi_fixture PRIVATE igi_sdk)
+    target_link_libraries(igi_sdk_native_abi_fixture PRIVATE mod_base)
     target_link_options(igi_sdk_native_abi_fixture PRIVATE -static)
     set_target_properties(igi_sdk_native_abi_fixture PROPERTIES
         OUTPUT_NAME "igi-sdk-native-abi-fixture" PREFIX "")

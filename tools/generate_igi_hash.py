@@ -2,7 +2,7 @@
 """Convert the IGI-RE symbol table into HASH namespace constants.
 
 Reads data/igi-natives.csv (address, name, evidence, kind, signature) from the
-IGI-RE project and writes include/igi_sdk/natives/igi_re/hashes.hpp:
+IGI-RE project and writes src/natives/igi_hashes/hashes.hpp:
 
     namespace HASH {
     inline constexpr NativeHash FRAMES_SET = 0x00402820;
@@ -21,7 +21,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 TSV = ROOT / "data/igi-natives.csv"
-OUT = ROOT / "include/igi_sdk/natives/igi_re/hashes.hpp"
+OUT = ROOT / "src/natives/igi_hashes/hashes.hpp"
 
 
 def main() -> int:

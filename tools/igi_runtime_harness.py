@@ -41,9 +41,24 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-RE_ROOT = Path(os.environ.get("IGI_RE_ROOT", ROOT.parent / "IGI-RE"))
-NATIVES_HEADER = ROOT / "include" / "igi_sdk" / "natives" / "mvp_natives.hpp"
-NATIVES_SOURCE = ROOT / "src" / "igi_sdk" / "natives" / "mvp_natives.cpp"
+
+
+def discover_re_root() -> Path:
+    configured = os.environ.get("IGI_RE_ROOT")
+    candidates = [
+        Path(configured).expanduser() if configured else ROOT.parent / "IGI-RE",
+        ROOT.parent / "IGI-RE",
+        Path.home() / "Documents" / "Code" / "IGI-RE",
+    ]
+    for candidate in candidates:
+        if (candidate / "tests" / "emu.py").is_file():
+            return candidate
+    return candidates[0]
+
+
+RE_ROOT = discover_re_root()
+NATIVES_HEADER = ROOT / "src" / "natives" / "mvp_natives.hpp"
+NATIVES_SOURCE = ROOT / "src" / "natives" / "mvp_natives.cpp"
 EXE = os.environ.get("IGI_EXE", "")
 DLL = os.environ.get("IGI_DLL", str(ROOT / "build-win32-release" / "igi-basic-mod-internal.dll"))
 
@@ -51,6 +66,8 @@ DLL = os.environ.get("IGI_DLL", str(ROOT / "build-win32-release" / "igi-basic-mo
 DISPLAY_ADD_FRAME_CALLBACK = 0x004916C0
 FRAME_DISPATCH = 0x00491CA0
 FRAME_LIST_HEAD = 0x00BCAE00
+GAME_RAINING_FLAG = 0x0057B1A0
+MENU_HELPERS = ROOT / "demos" / "internal" / "helpers" / "menu_helpers.cpp"
 
 # Game singletons that a live game initialises during startup. The natives the
 # demo uses read these globals directly, so an uninitialised emulator faults on
@@ -72,6 +89,13 @@ LIVE_GAME_ONLY_NATIVES = frozenset({
     "TASK::RUN_SCRIPT",
     "TASK::DELETE_TASK",
     "MISC::STATUS_MESSAGE_SHOW",
+    "GAME::GET_PLAYER",
+    "HUMAN::GET_TEAM",
+    "HUMAN::IS_DEAD",
+    "HUMAN::VIEW_CAM",
+    "PLAYER::FADE_FLASH",
+    "PLAYER::FADE_HIT_FLASH",
+    "SCRIPT::EVAL_CONST",
 })
 
 
@@ -762,7 +786,7 @@ class IGIRuntime:
             else:
                 memory = self.emu.alloc(64)
             if "char" in kind:
-                self.emu.write(memory, b"igi_sdk\0")
+                self.emu.write(memory, b"mod_base\0")
             elif "Task" in kind or "Graph" in kind:
                 # Task/Graph natives walk linked lists and read member pointers.
                 # Point the first few slots at zeroed nodes so those walks
@@ -790,6 +814,28 @@ class IGIRuntime:
             return {"ok": True, "address": address, "result": result, "args": args}
         except Exception as error:  # emulator surfaces faults as exceptions
             return {"ok": False, "address": address, "error": str(error), "args": args}
+
+    def verify_raining(self, entry: dict) -> dict:
+        def invoke(enabled: int) -> dict:
+            weather = self.emu.alloc(2)
+            self.emu.write(weather, bytes((0, enabled)))
+            result = self.run_native(entry, (weather,))
+            if not result["ok"]:
+                return result
+            observed = self.emu.read(GAME_RAINING_FLAG, 1)[0]
+            if observed != enabled:
+                return {
+                    "ok": False,
+                    "address": entry["address"],
+                    "error": f"gRaining={observed}, expected {enabled}",
+                    "args": (weather,),
+                }
+            return result
+
+        enabled = invoke(1)
+        if not enabled["ok"]:
+            return enabled
+        return invoke(0)
 
     def run_weapon_pickup(self, entry: dict):
         player = self.emu.alloc(0xCF8)
@@ -831,6 +877,9 @@ def run_source_scan(args, emu_module) -> int:
     natives = scan_source_file(path)
     print(f"scan: {path}")
     print(f"scan: {len(natives)} IGI native reference(s) found")
+    if not natives:
+        print("scan result: 0 passed, 0 failed, 0 live-game-only, 0 not catalogued")
+        return 0
 
     runtime = IGIRuntime(args.exe, args.dll, emu_module, lenient=args.lenient)
     runtime.install_frame_hook()
@@ -876,6 +925,39 @@ def run_source_scan(args, emu_module) -> int:
     return 0 if not failed else 1
 
 
+def run_menu_helpers_check(args, emu_module) -> int:
+    source = MENU_HELPERS.read_text(encoding="utf-8")
+    forbidden = ("temp_rain.qvm", "RainEffect", "Task_New(")
+    present = [token for token in forbidden if token in source]
+    if present:
+        raise RuntimeError(f"menu helpers create a weather task: {', '.join(present)}")
+    native_call = source.find("IGI::GAME::SET_RAINING")
+    if native_call < 0:
+        raise RuntimeError("menu helpers do not call IGI::GAME::SET_RAINING")
+    if "IGI::MENU::REFRESH" not in source:
+        raise RuntimeError("menu helpers do not refresh the active menu after a live effect")
+    cleanup = source.find("prepareMenuForLevelChange()")
+    leave_menus = source.find('MenuManager_LeaveMenus(-1, 13)')
+    if cleanup < 0 or leave_menus < 0 or cleanup > leave_menus:
+        raise RuntimeError("level transition does not detach the injected menu before direct start")
+
+    catalogue = load_native_catalogue()
+    raining = catalogue.get("GAME::SET_RAINING")
+    if raining is None:
+        raise RuntimeError("GAME::SET_RAINING is absent from the native catalogue")
+
+    runtime = IGIRuntime(args.exe, args.dll, emu_module, lenient=args.lenient)
+    runtime.install_frame_hook()
+    result = runtime.verify_raining(raining)
+    if not result["ok"]:
+        raise RuntimeError(f"Game_SetRaining emulator check failed: {result['error']}")
+    print("PASS menu helpers use Game_SetRaining without creating a weather task")
+    print("PASS Game_SetRaining toggled gRaining on and off in Unicorn")
+    print("PASS live effects use the typed MenuManager_Refresh wrapper")
+    print("PASS level change detaches injected menu state before direct start")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Advanced IGI 1 x86 runtime harness")
     parser.add_argument("--frames", type=int, default=30, help="frames to dispatch (default 30)")
@@ -887,6 +969,11 @@ def main() -> int:
         type=Path,
         default=None,
         help="scan a C/C++ source file for IGI::DOMAIN::NAME natives and run them",
+    )
+    parser.add_argument(
+        "--verify-menu-helpers",
+        action="store_true",
+        help="validate native-only weather and pre-level-transition cleanup",
     )
     args = parser.parse_args()
 
@@ -910,6 +997,8 @@ def main() -> int:
 
     if args.path is not None:
         return run_source_scan(args, emu_module)
+    if args.verify_menu_helpers:
+        return run_menu_helpers_check(args, emu_module)
 
     runtime = IGIRuntime(args.exe, args.dll, emu_module, lenient=args.lenient)
 

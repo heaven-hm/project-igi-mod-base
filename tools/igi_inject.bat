@@ -25,11 +25,11 @@ if not exist "%DLL%" (
 
 if "%INJECTOR%"=="" (
     for %%C in (
-        "%~dp0IGI1-Injector.exe"
-        "%~dp0..\build-win32-Debug\IGI1-Injector.exe"
-        "%~dp0..\build-win32-Release\IGI1-Injector.exe"
-        "%~dp0..\build-win32-debug\IGI1-Injector.exe"
-        "%~dp0..\build-win32-release\IGI1-Injector.exe"
+        "%~dp0IGI-Injector.exe"
+        "%~dp0..\build-win32-Debug\IGI-Injector.exe"
+        "%~dp0..\build-win32-Release\IGI-Injector.exe"
+        "%~dp0..\build-win32-debug\IGI-Injector.exe"
+        "%~dp0..\build-win32-release\IGI-Injector.exe"
     ) do (
         if exist %%C (
             set "INJECTOR=%%~C"
@@ -41,7 +41,7 @@ if "%INJECTOR%"=="" (
 
 if "%INJECTOR%"=="" (
     echo error: injector not found; build it with: 1>&2
-    echo   cmake --build ^<dir^> --target igi1_injector 1>&2
+    echo   cmake --build ^<dir^> --target igi_injector 1>&2
     exit /b 2
 )
 if not exist "%INJECTOR%" (

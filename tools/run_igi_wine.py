@@ -104,7 +104,7 @@ def main(argv=None):
         ),
     )
     parser.add_argument("--injector", type=Path, help="path to IGI-Injector.exe")
-    parser.add_argument("--keypress", type=Path, help="path to IGI1-Keypress.exe")
+    parser.add_argument("--keypress", type=Path, help="path to IGI-Keypress.exe")
     parser.add_argument(
         "--log-dir",
         type=Path,
@@ -122,7 +122,7 @@ def main(argv=None):
     wine = args.wine.expanduser().resolve()
     prefix = args.prefix.expanduser().resolve()
     injector = (args.injector or game / "IGI-Injector.exe").expanduser().resolve()
-    keypress = (args.keypress or game / "IGI1-Keypress.exe").expanduser().resolve()
+    keypress = (args.keypress or game / "IGI-Keypress.exe").expanduser().resolve()
     need_keys = not args.no_escape or args.press_menu_key or args.key is not None
     for path in (
         wine,

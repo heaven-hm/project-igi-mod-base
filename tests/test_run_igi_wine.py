@@ -29,7 +29,7 @@ class LauncherTest(unittest.TestCase):
     def test_existing_game_is_injected_without_launch_or_escape(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            for name in ("wine", "igi.exe", "IGI-Injector.exe", "IGI1-Keypress.exe", "mod.dll"):
+            for name in ("wine", "igi.exe", "IGI-Injector.exe", "IGI-Keypress.exe", "mod.dll"):
                 (root / name).touch()
             state = {"launches": 0, "injections": 0, "keys": []}
 
@@ -59,7 +59,7 @@ class LauncherTest(unittest.TestCase):
     def test_retry_and_one_success(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            for name in ("wine", "igi.exe", "IGI-Injector.exe", "IGI1-Keypress.exe", "mod.dll"):
+            for name in ("wine", "igi.exe", "IGI-Injector.exe", "IGI-Keypress.exe", "mod.dll"):
                 (root / name).touch()
             (root / "project-igi-mod-config.ini").write_text("[mod_menu]\nstart_key=F7\n")
             state = {"running": False, "launches": [], "injections": 0, "keys": [], "query_timeouts": 0}

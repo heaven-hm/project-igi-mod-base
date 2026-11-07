@@ -1,5 +1,5 @@
-#include "igi_sdk/config/menu_config.hpp"
-#include "igi_sdk/ui/menu_script.hpp"
+#include "config/menu_config.hpp"
+#include "ui/menu_script.hpp"
 
 #include <fstream>
 #include <iostream>
@@ -16,7 +16,7 @@ int main(int argc, char** argv) {
     }
     const auto config = igi::loadMenuConfig(argv[1]);
     std::ofstream output(argv[2], std::ios::binary);
-    if (!output || !igi::writeIgi1MenuScript(output, config)) {
+    if (!output || !igi::writeIgiMenuScript(output, config)) {
         std::cerr << "cannot generate menu script\n";
         return 1;
     }

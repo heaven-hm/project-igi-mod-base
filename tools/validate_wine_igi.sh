@@ -43,10 +43,10 @@ echo "==> x86 emulator probe"
 ctest --test-dir "$build_macos" -R '^igi_demo_natives_unicorn$' --output-on-failure
 
 echo "==> Windows x86 build"
-cmake --build "$build_win32" --parallel --target igi_basic_mod_menu igi1_injector igi1_keypress
+cmake --build "$build_win32" --parallel --target igi_basic_mod_menu igi_injector igi_keypress
 install -m 755 "$build_win32/igi-basic-mod-internal.dll" "$game_dir/igi-basic-mod-internal.dll"
-install -m 755 "$build_win32/IGI1-Injector.exe" "$game_dir/IGI-Injector.exe"
-install -m 755 "$build_win32/IGI1-Keypress.exe" "$game_dir/IGI1-Keypress.exe"
+install -m 755 "$build_win32/IGI-Injector.exe" "$game_dir/IGI-Injector.exe"
+install -m 755 "$build_win32/IGI-Keypress.exe" "$game_dir/IGI-Keypress.exe"
 
 for ((attempt = 1; attempt <= attempts; ++attempt)); do
     echo "==> Wine live attempt $attempt/$attempts"
@@ -95,7 +95,7 @@ for ((attempt = 1; attempt <= attempts; ++attempt)); do
     fi
 
     /usr/sbin/screencapture -x "$artifact_dir/attempt-$attempt-before.png" || true
-    keypress_win=$(wine winepath -w "$game_dir/IGI1-Keypress.exe" | tr -d '\r')
+    keypress_win=$(wine winepath -w "$game_dir/IGI-Keypress.exe" | tr -d '\r')
     [[ -n "$keypress_win" ]] || { echo "attempt $attempt: cannot translate key helper path" >&2; continue; }
     wine "$keypress_win" --pid "$win_pid" escape
     sleep 1

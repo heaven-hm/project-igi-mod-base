@@ -36,15 +36,15 @@ dll_abs=$(cd "$(dirname "$dll")" && pwd)/$(basename "$dll")
 
 if [ -z "$injector" ]; then
     for candidate in \
-        "$(dirname "$0")/IGI1-Injector.exe" \
-        "${TMPDIR:-/tmp}/igi-sdk-win32-debug/IGI1-Injector.exe" \
-        "${TMPDIR:-/tmp}/igi-sdk-win32/IGI1-Injector.exe"
+        "$(dirname "$0")/IGI-Injector.exe" \
+        "${TMPDIR:-/tmp}/igi-sdk-win32-debug/IGI-Injector.exe" \
+        "${TMPDIR:-/tmp}/igi-sdk-win32/IGI-Injector.exe"
     do
         if [ -f "$candidate" ]; then injector=$candidate; break; fi
     done
 fi
 if [ -z "$injector" ] || [ ! -f "$injector" ]; then
-    printf 'error: injector not found; build it with: cmake --build <dir> --target igi1_injector\n' >&2
+    printf 'error: injector not found; build it with: cmake --build <dir> --target igi_injector\n' >&2
     exit 2
 fi
 
