@@ -6,6 +6,8 @@ Project IGI Mod Base is a C++ foundation for creating single-player mods and in-
 
 The internal in-game menu is implemented. An external DirectX 7/ImGui interface is planned; it is not yet a finished GUI.
 
+![Simple mod menu running in Project I.G.I.](assets/simple-mod-menu.png)
+
 ## Implemented features are:
 
 - In-game menu

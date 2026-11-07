@@ -40,6 +40,11 @@ bool writeMenuScript(std::ostream& out, const MenuConfig& config, bool standalon
         << config.x << ", " << config.y << ", " << config.x + config.width << ", " << config.y + config.height
         << ", \"IGI_SDK_Cancel() - MenuManager_LeaveMenus(900, 9)\", \"\", \"\", Task_New(-1, \"MenuFrame\", \"\", \"\", "
         << config.x << ", " << config.y << ", " << config.width << ", " << config.height << ", 1, 4, 4, FALSE";
+    if (!config.title.empty()) {
+        out << ", Task_New(-1, \"MenuText\", \"title\", ";
+        quoted(out, config.title);
+        out << ", \"font3.fnt\", 2, \"\", \"\")";
+    }
     for (const auto& item : config.items) {
         const auto index = &item - config.items.data();
         const auto widgetId = config.screenId >= 0 ? (config.screenId + 1 + static_cast<int>(index)) : -1;

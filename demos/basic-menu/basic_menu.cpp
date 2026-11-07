@@ -4,6 +4,7 @@
 #include "igi_sdk/ui/menu_native_actions.hpp"
 
 bool configureBasicMenu(igi::MenuConfig& config) {
+    config.title = "Basic Mod Menu";
     config.items = {
         {"weather", igi::ModMenuItemKind::List, "Weather", "", {"Off", "Rain", "Snow"}},
         {"fps", igi::ModMenuItemKind::List, "FPS", "", {"30", "60", "120"}},

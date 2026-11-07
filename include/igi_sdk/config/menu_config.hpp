@@ -23,6 +23,7 @@ struct ModMenuItemConfig {
 
 struct MenuConfig {
     bool enabled = true;
+    std::string title = "IGI SDK Mod Menu";
     // Start key opens/initializes the menu. Accepted in config.ini as either
     // `start_key` or the legacy `hotkey`.
     std::uint8_t hotkey = 0x3F; // DIK_F5

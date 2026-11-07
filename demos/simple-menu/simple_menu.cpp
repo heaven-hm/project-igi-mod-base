@@ -16,7 +16,7 @@
 namespace {
 
 struct WeaponEntry {
-    int id = 0;
+    const char* id = nullptr;
     int ammo = 0;
     std::string name;
 };
@@ -28,7 +28,7 @@ bool pickupWeapon() {
     if (g_selectedWeapon >= g_weapons.size()) return false;
     auto* player = IGI::GAME::GET_PLAYER(0);
     if (!player) return false;
-    int args[] = {g_weapons[g_selectedWeapon].id, g_weapons[g_selectedWeapon].ammo};
+    int args[] = {IGI::SCRIPT::EVAL_CONST(g_weapons[g_selectedWeapon].id), g_weapons[g_selectedWeapon].ammo};
     IGI::PLAYER::PICK_UP_WEAPON(reinterpret_cast<IGI::Human*>(player), args);
     return true;
 }
@@ -61,19 +61,16 @@ void logFlowDiagnostics() {
 }  // namespace
 
 bool configureSimpleMenu(igi::MenuConfig& config) {
+    config.title = "Simple Mod Menu";
     g_weapons = {
-        {2, 30, "Glock 17"},
-        {3, 14, "Desert Eagle"},
-        {4, 60, "Colt Anaconda"},
-        {5, 90, "MP5SD"},
-        {6, 120, "UZI"},
-        {7, 120, "M16A2"},
-        {8, 120, "AK-47"},
-        {9, 30, "Dragunov SVD"},
-        {10, 200, "M249 SAW"},
-        {11, 24, "Jackhammer"},
-        {12, 16, "Spas 12"},
-        {14, 4, "LAW 80"},
+        {"WEAPON_ID_GLOCK", 30, "Glock 17"},
+        {"WEAPON_ID_MP5SD", 90, "MP5SD"},
+        {"WEAPON_ID_UZI", 120, "UZI"},
+        {"WEAPON_ID_M16A2", 120, "M16A2"},
+        {"WEAPON_ID_AK47", 120, "AK-47"},
+        {"WEAPON_ID_DRAGUNOV", 30, "Dragunov SVD"},
+        {"WEAPON_ID_MINIMI", 200, "Minimi"},
+        {"WEAPON_ID_SPAS12", 16, "Spas 12"},
     };
     igi::ModMenuItemConfig weaponList{"weapon", igi::ModMenuItemKind::List, "Weapon", "", {}};
     for (const auto& w : g_weapons) {
@@ -153,10 +150,10 @@ void simpleMenuAction(const igi::MenuConfig& config, igi::Runtime& runtime, std:
                 levelNum = 1;
             }
         }
-        runtime.scheduler().enqueueOnce([levelNum] {
-            const bool ok = igi::changeLevel(levelNum);
+        runtime.scheduler().enqueueOnce([&runtime, levelNum] {
+            const bool ok = igi::changeLevel(runtime, levelNum);
             igi::log(ok ? igi::LogLevel::Info : igi::LogLevel::Error,
-                     ok ? "simple menu: level changed to Level " + std::to_string(levelNum)
+                     ok ? "simple menu: level change requested to Level " + std::to_string(levelNum)
                         : "simple menu: level change failed");
         });
     } else if (id == "sfx") { // SFX volume

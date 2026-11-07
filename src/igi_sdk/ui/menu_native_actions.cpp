@@ -10,6 +10,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <chrono>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -124,6 +126,8 @@ bool setWeather(std::string_view weather) {
     }
 
     auto* rainTask = IGI::TASK::RUN_SCRIPT(dynRoot, "LOCAL:igi_sdk/temp_rain.qvm", 0);
+    if (!cmdRes.release())
+        log(LogLevel::Error, "setWeather: temporary resource release failed");
 #if defined(_WIN32) && !defined(_WIN64)
     if (rainTask) {
         using GetChangedEvent = std::uint8_t (__cdecl*)();
@@ -199,7 +203,7 @@ void executeMenuNativeAction(const MenuConfig& config, Runtime& runtime, std::si
         if (value.starts_with("Level ")) {
             try { levelNum = std::stoi(std::string(value.substr(6))); } catch (...) { levelNum = 1; }
         }
-        runtime.scheduler().enqueueOnce([levelNum] { changeLevel(levelNum); });
+        runtime.scheduler().enqueueOnce([&runtime, levelNum] { changeLevel(runtime, levelNum); });
     } else if (id == "display" || action.find("RefreshDisplay") != std::string::npos) {
         IGI::GAME::SET_DISPLAY_MODE();
         log(LogLevel::Info, "display mode refreshed");
@@ -219,9 +223,8 @@ void executeMenuNativeAction(const MenuConfig& config, Runtime& runtime, std::si
     }
 }
 
-bool executeMenuCommand(std::string_view commandScript) {
-    auto* game = IGI::GAME::GET();
-    if (!game) return false;
+static bool executeMenuCommandFor(IGI::Task* manager, std::string_view commandScript) {
+    if (!manager) return false;
     auto* caller = igi1NativeCaller();
     if (!caller) return false;
     const auto resources = igi1MenuResourceApi(*caller);
@@ -240,6 +243,16 @@ bool executeMenuCommand(std::string_view commandScript) {
         return false;
     }
 
+    (void)IGI::TASK::RUN_SCRIPT(manager, "LOCAL:igi_sdk/temp_cmd.qvm", 0);
+    if (!cmdRes.release())
+        log(LogLevel::Error, "executeMenuCommand: temporary resource release failed");
+    log(LogLevel::Info, std::string("executeMenuCommand: executed script: ") + std::string(commandScript));
+    return true;
+}
+
+bool executeMenuCommand(std::string_view commandScript) {
+    auto* game = IGI::GAME::GET();
+    if (!game) return false;
     struct GameRootLayout {
         std::uint8_t prefix[0x44];
         void* root;
@@ -247,17 +260,36 @@ bool executeMenuCommand(std::string_view commandScript) {
     auto* root = static_cast<IGI::Task*>(static_cast<GameRootLayout*>(static_cast<void*>(game))->root);
     if (!root) return false;
     auto* manager = IGI::TASK::FIND_CHILD(root, IGI::MENU::GET_TYPE());
-    if (!manager) return false;
-
-    (void)IGI::TASK::RUN_SCRIPT(manager, "LOCAL:igi_sdk/temp_cmd.qvm", 0);
-    log(LogLevel::Info, std::string("executeMenuCommand: executed script: ") + std::string(commandScript));
-    return true;
+    return executeMenuCommandFor(manager, commandScript);
 }
 
-bool changeLevel(int levelId) {
+bool changeLevel(Runtime& runtime, int levelId) {
     if (levelId < 1 || levelId > 14) return false;
-    log(LogLevel::Info, "changing level to " + std::to_string(levelId) + " via native script");
-    std::string script = "Game_SetMission(" + std::to_string(levelId) + "); MenuManager_LeaveMenus(-1, 13);";
-    return executeMenuCommand(script);
+    if (!IGI::GAME::GET()) return false;
+    auto taskId = std::make_shared<TaskId>(0);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(60);
+    *taskId = runtime.scheduler().enqueueEveryFrame([&runtime, taskId, deadline, levelId] {
+        if (std::chrono::steady_clock::now() > deadline) {
+            log(LogLevel::Error, "level change: timed out waiting for main menu");
+            runtime.scheduler().cancel(*taskId);
+            return;
+        }
+        if (IGI::GAME::GET()) return;
+        auto* screen = static_cast<IGI::Task*>(IGI::OTHER::FLOW_GET_SCREEN());
+        auto* manager = screen ? IGI::TASK::FIND_CHILD(screen, IGI::MENU::GET_TYPE()) : nullptr;
+        if (!manager) return;
+        const std::string script = "Game_SetMission(" + std::to_string(levelId) + "); MenuManager_LeaveMenus(-1, 13);";
+        if (executeMenuCommandFor(manager, script)) {
+            log(LogLevel::Info, "level change: main menu start requested for level " + std::to_string(levelId));
+            runtime.scheduler().cancel(*taskId);
+        }
+    });
+    if (!*taskId) return false;
+    if (!executeMenuCommand("MenuManager_LeaveMenus(-1, 11);")) {
+        runtime.scheduler().cancel(*taskId);
+        return false;
+    }
+    log(LogLevel::Info, "level change: waiting for game teardown before starting level " + std::to_string(levelId));
+    return true;
 }
 }
