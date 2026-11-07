@@ -4,23 +4,38 @@ Version: 0.2
 
 Project IGI Mod Base is a C++ foundation for creating single-player mods and in-game mod menus for Project I.G.I. It provides an in-game menu interface, game native bindings, runtime hooking and memory support, logging, and examples to build on.
 
-The internal in-game menu is implemented. An external DirectX 7/ImGui interface is planned; it is not yet a finished GUI.
+## Branch Architecture
 
-## Version 0.2: Restructure
+- **`develop`**: Dedicated strictly to the **IGI Game Menu UI (Internal Mod Menu)** rendered through Project I.G.I.'s retail QVM script and `MenuManager` lifecycle.
+- **`feature/imgui-mod`**: Dedicated to **Dear ImGui (External Mod Menu)** rendered through a Direct3D 7 overlay hook using [AndenDev/D3D7Imgui](https://github.com/AndenDev/D3D7Imgui).
+
+## Prebuilt Binaries
+
+Ready-to-inject Windows x86 DLLs are provided in [`binaries/`](binaries/):
+
+- [`binaries/igi-advanced-mod-internal.dll`](binaries/igi-advanced-mod-internal.dll): In-game native mod menu (QVM MenuManager).
+- [`binaries/igi-advanced-mod-external.dll`](binaries/igi-advanced-mod-external.dll): Modern Dear ImGui overlay mod menu (Direct3D 7 via `D3D7Imgui`).
+
+## Version 0.2: Restructure and ImGui Integration
 
 - Reorganized the implementation into focused `src/` modules for configuration,
   logging, native bindings, runtime hooks, platform hosting, UI, and the shared
   mod-menu host.
 - Replaced the old SDK include layout with a smaller public mod base and kept
-  menu-specific actions inside `demos/internal/`.
+  menu-specific actions inside `demos/internal/` and `demos/external/`.
 - Added Basic, Simple, and Advanced internal menu targets that share one
   game-thread host and typed native helpers.
+- Added Dear ImGui Direct3D 7 renderer backend integration from
+  [AndenDev/D3D7Imgui](https://github.com/AndenDev/D3D7Imgui) on `feature/imgui-mod`.
 - Added formatting, clang-tidy, CTest, and Unicorn verification to the local
   workflow and GitHub Actions.
+- Fixed visible weather by parenting the retail `RainEffect` task under the active
+  `Level` task and broadcasting `Param_GetChangedEvent`.
 - Fixed level switching to use the game’s Flow request and `Game` cleanup path,
   releasing injected QVM resources before the new level attaches.
 - Made the configured end key safely stop the resident menu host, preventing
   the start key from reopening it until `igi.exe` exits.
+- Added prebuilt release DLLs in `binaries/` with automated build-output copying.
 
 ## Included mod menus
 
@@ -47,12 +62,14 @@ The internal in-game menu is implemented. An external DirectX 7/ImGui interface 
 All controls run through the game-thread menu runtime. The mod menu pauses the
 game while open and restores input when it closes.
 
-### External ImGui Advanced Menu (separate branch)
+### External ImGui Advanced Menu (`feature/imgui-mod` branch)
 
 ![ImGui Advanced Menu running in Project I.G.I.](assets/imgui-advanced-mod-menu.png)
 
-This Direct3D 7/ImGui implementation is being tested on its own branch. It is
-not part of `develop` until that branch is merged.
+This Direct3D 7/Dear ImGui implementation is hosted on the `feature/imgui-mod` branch.
+It hooks the game's Direct3D 7 render pipeline via [AndenDev/D3D7Imgui](https://github.com/AndenDev/D3D7Imgui),
+rendering a modern graphical overlay with interactive controls, theme selection, sliders,
+combo boxes, and buttons alongside the retail game display.
 
 Target: the EU/Chinese Windows x86 IGI 1 executable. Native Windows is
 supported directly. On macOS and Linux, run the same Windows x86 game and DLL
@@ -201,52 +218,215 @@ unloaded code, and the start key is disabled for the remainder of that process.
 Each menu DLL owns its items in C++; `[mod_menu.items]` is not read.
 Set `log_file` under `[mod_menu]` to a filename beside `igi.exe`; both Debug and Release builds use it. Directory paths are not accepted.
 
-## Create, build and run a menu
+## How to Create a Mod Menu
 
-Use `demos/internal/simple-mod/simple_menu.cpp` as the menu template. Edit its items
-and typed `IGI::` native actions, then build `igi_simple_mod_menu`.
+The mod base provides two distinct menu architectures:
+1. **Internal Mod Menu (develop & feature/imgui-mod branches)**: Uses Project I.G.I.'s native retail QVM `MenuManager` engine.
+2. **External ImGui Mod Menu (feature/imgui-mod branch)**: Uses Dear ImGui hooked into Direct3D 7 via [AndenDev/D3D7Imgui](https://github.com/AndenDev/D3D7Imgui).
 
-On native Windows, launch `igi.exe` normally and inject the built DLL with
-`IGI-Injector.exe`. On macOS/Linux, use the Wine workflow below.
+### 1. Creating an Internal Mod Menu (IGI Game Menu UI)
 
-On macOS/Linux, set the Wine paths once. Copy the SDK config next to `igi.exe`;
-its `start_key` toggles the menu and its `end_key` closes the menu and stops
-its hooks. The DLL remains mapped until `igi.exe` exits so the game never jumps
-to unloaded injected code; press the start key again to initialize the menu.
+Internal menus are hosted by `src/mod_base/menu_host.cpp`. Each menu implements two functions:
+
+```cpp
+#include "config/menu_config.hpp"
+#include "mod_base/menu_host.hpp"
+#include "natives/mvp_natives.hpp"
+
+// 1. Define menu title, items, and initial choices
+bool configureModMenu(igi::MenuConfig& config) {
+    config.title = "My Custom Mod Menu";
+    config.items = {
+        {"godmode", igi::ModMenuItemKind::Action, "Unlimited Ammo", "", {}},
+        {"weather", igi::ModMenuItemKind::List, "Weather", "", {"Off", "Rain", "Snow"}},
+        {"fps", igi::ModMenuItemKind::List, "FPS Limit", "", {"30", "60", "120"}}
+    };
+    return true;
+}
+
+// 2. Handle player interaction (invoked when items are clicked or changed)
+void runModMenu(const igi::MenuConfig& config,
+                igi::Runtime& runtime,
+                std::size_t item,
+                std::string_view value) {
+    if (item >= config.items.size()) return;
+    const auto& id = config.items[item].id;
+
+    if (id == "godmode") {
+        IGI::PLAYER::SET_UNLIMITED_AMMO();
+    } else if (id == "weather") {
+        igi::setWeather(runtime, value);
+    } else if (id == "fps") {
+        igi::setFps(runtime, value);
+    }
+}
+```
+
+Link your menu source with `mod_base` and `src/platform/windows_dll.cpp`.
+Existing examples:
+- `demos/internal/basic-mod/basic_menu.cpp`
+- `demos/internal/simple-mod/simple_menu.cpp`
+- `demos/internal/advanced-mod/advanced_menu.cpp`
+
+### 2. Creating an External ImGui Mod Menu (Dear ImGui Direct3D 7)
+
+External menus (on branch `feature/imgui-mod`) use `src/mod_base/imgui_menu_host.cpp` and [AndenDev/D3D7Imgui](https://github.com/AndenDev/D3D7Imgui) to hook `IDirect3DDevice7::EndScene` and render Dear ImGui draw calls directly into the game's backbuffer.
+
+External menus share the exact same configuration and action interface as internal menus (`configureModMenu` and `runModMenu`), making custom logic 100% portable between both UI backends:
+
+```cpp
+#include "config/menu_config.hpp"
+#include "mod_base/menu_host.hpp"
+
+bool configureBasicMenu(igi::MenuConfig &config);
+void basicMenuAction(const igi::MenuConfig &config, igi::Runtime &runtime, std::size_t item, std::string_view value);
+
+bool configureModMenu(igi::MenuConfig &config) {
+    return configureBasicMenu(config);
+}
+
+void runModMenu(const igi::MenuConfig &config, igi::Runtime &runtime, std::size_t item, std::string_view value) {
+    basicMenuAction(config, runtime, item, value);
+}
+```
+
+Link your menu source with `src/mod_base/imgui_menu_host.cpp`, `igi_imgui_dx7`, and `mod_base`.
+Existing examples:
+- `demos/external/basic-mod/basic_menu.cpp`
+- `demos/external/simple-mod/simple_menu.cpp`
+- `demos/external/advanced-mod/advanced_menu.cpp`
+
+---
+
+## How to Build a Mod Menu
+
+All Win32 targets are cross-compiled using `tools/build-win32-dll.sh` (or Visual Studio / MSVC on native Windows). Successful builds automatically copy artifacts to the [`binaries/`](binaries/) directory.
+
+### 1. Building Internal Mod Menus
+
+```sh
+# Basic Internal Menu -> binaries/igi-basic-mod-internal.dll
+tools/build-win32-dll.sh --release --target igi_basic_mod_menu
+
+# Simple Internal Menu -> binaries/igi-simple-mod-internal.dll
+tools/build-win32-dll.sh --release --target igi_simple_mod_menu
+
+# Advanced Internal Menu -> binaries/igi-advanced-mod-internal.dll
+tools/build-win32-dll.sh --release --target igi_advanced_mod_menu
+```
+
+### 2. Building External ImGui Mod Menus (`feature/imgui-mod` branch)
+
+```sh
+# Basic ImGui External Menu -> binaries/igi-basic-mod-external.dll
+tools/build-win32-dll.sh --release --target igi_basic_mod_menu_external
+
+# Simple ImGui External Menu -> binaries/igi-simple-mod-external.dll
+tools/build-win32-dll.sh --release --target igi_simple_mod_menu_external
+
+# Advanced ImGui External Menu -> binaries/igi-advanced-mod-external.dll
+tools/build-win32-dll.sh --release --target igi_advanced_mod_menu_external
+```
+
+### 3. Building Injector & Helpers
+
+```sh
+# Injector CLI -> binaries/IGI-Injector.exe
+tools/build-win32-dll.sh --release --target igi_injector
+
+# Virtual Keypress helper -> binaries/IGI-Keypress.exe
+tools/build-win32-dll.sh --release --target igi_keypress
+```
+
+Use `--debug` instead of `--release` to enable verbose console logging and trace logs.
+
+---
+
+## How to Run and Test a Mod Menu
+
+### 1. Verification in Unicorn x86 Emulator
+
+Before injecting into live game processes, verify DLL native signatures and ABI stability:
+
+```sh
+tools/build-win32-dll.sh --debug --target igi_advanced_mod_menu
+python3 tools/igi_runtime_harness.py \
+  --path demos/internal/advanced-mod/advanced_menu.cpp \
+  --exe /path/to/igi.exe \
+  --dll build-win32-debug/igi-advanced-mod-internal.dll
+```
+
+### 2. Running Live under Wine / Proton (macOS / Linux)
+
+Set environment variables once:
 
 ```sh
 export IGI_GAME_DIR=/path/to/IGI
-export IGI_WINEPREFIX=/path/to/wine-prefix
-export WINE_BIN=/path/to/wine
+export IGI_WINEPREFIX=~/.wine
+export WINE_BIN=wine
 cp config/project-igi-mod-config.ini "$IGI_GAME_DIR/project-igi-mod-config.ini"
 ```
 
-Build and check the exact menu source and DLL:
+Launch the game and auto-inject:
 
 ```sh
-tools/build-win32-dll.sh --debug --target igi_simple_mod_menu
-IGI_RE_ROOT=/path/to/IGI-RE python3 tools/igi_runtime_harness.py \
-  --path demos/internal/simple-mod/simple_menu.cpp --exe "$IGI_GAME_DIR/igi.exe" \
-  --dll build-win32-debug/igi-simple-mod-internal.dll
+# Internal Menu
+python3 tools/run_igi_wine.py level1 binaries/igi-advanced-mod-internal.dll --attempts 10 --press-menu-key
+
+# External ImGui Menu
+python3 tools/run_igi_wine.py level1 binaries/igi-advanced-mod-external.dll --attempts 10 --press-menu-key
 ```
 
-Launch, inject and open the menu automatically:
+### 3. Running Natively on Windows
 
-```sh
-python3 tools/run_igi_wine.py level9 build-win32-debug/igi-simple-mod-internal.dll \
-  --attempts 10 --press-menu-key
+1. Copy `config/project-igi-mod-config.ini` into your game directory next to `igi.exe`.
+2. Start `igi.exe`.
+3. Proceed to the injection steps below.
+
+---
+
+## How to Inject a Mod Menu
+
+### 1. Injecting Internal Mod Menus
+
+Use `IGI-Injector.exe` to inject the DLL into the running `igi.exe` process:
+
+```cmd
+:: Find PID with tasklist:
+tasklist /FI "IMAGENAME eq igi.exe"
+
+:: Inject internal mod menu:
+binaries\IGI-Injector.exe <PID> binaries\igi-advanced-mod-internal.dll
 ```
 
-The launcher sends Escape, injects the DLL, presses the configured start key,
-and stops on its first successful injection. It retries failed launches up to
-`--attempts`. Logs are in `/private/tmp/igi-live-validation/` and
-`$IGI_GAME_DIR/project-igi-mod.log` (or the filename set by `log_file`).
+**In-Game Controls:**
+- Press **F5** (default `start_key`) to display and navigate the in-game native menu.
+- The game pauses automatically while the menu is active.
+- Press **F12** (default `end_key`) to safely unhook and detach the menu host.
 
-For an already-running game, inject without launching a new level:
+### 2. Injecting External ImGui Mod Menus
+
+```cmd
+:: Inject external ImGui mod menu:
+binaries\IGI-Injector.exe <PID> binaries\igi-advanced-mod-external.dll
+```
+
+**In-Game Controls:**
+- Press **F5** (default `start_key`) to toggle the Dear ImGui window overlay on/off.
+- The overlay features an interactive mouse cursor, draggable window, tabs, combo boxes, and sliders.
+- Customize theme, alpha, scale, and window settings in `[imgui]` section of `project-igi-mod-config.ini`.
+- Press **F12** (default `end_key`) to shut down the ImGui renderer and restore original D3D7 states.
+
+### 3. Wine CLI Injection Helper
+
+For an already running game under Wine without restarting:
 
 ```sh
-WINEPREFIX="$IGI_WINEPREFIX" tools/wine_igi_inject.sh \
-  build-win32-debug/igi-simple-mod-internal.dll igi.exe
+# Internal menu
+WINEPREFIX="$IGI_WINEPREFIX" tools/wine_igi_inject.sh binaries/igi-advanced-mod-internal.dll igi.exe
+
+# External ImGui menu
+WINEPREFIX="$IGI_WINEPREFIX" tools/wine_igi_inject.sh binaries/igi-advanced-mod-external.dll igi.exe
 ```
 
 ## Verification
