@@ -8,6 +8,11 @@ common single-player mod actions. Every helper must use the existing typed
 helper must reject unavailable game state instead of fabricating task pointers,
 message layouts, AI contexts, or raw offsets.
 
+Helper implementation belongs only in `demos/helpers/menu_helpers.cpp`; its
+paired header is declarations and usage comments only. Demo menu files may
+call helpers but may not define helper behavior or invoke gameplay natives
+directly.
+
 ## Public helper groups
 
 ### Player and weapon helpers
@@ -34,6 +39,10 @@ must not guess that ABI.
   before calling the existing `IGI::AUDIO` wrappers.
 - Add player-input and player-look toggles through the typed `IGI::HUMAN`
   wrappers, only when a live player exists on the game thread.
+- Re-validate `isThirdPersonActive` and `renderThirdPersonCrosshair` against
+  their IGI-RE call paths before retaining them. If either uses an unverified
+  layout or call shape, remove the unsafe behavior rather than claiming it
+  works.
 
 ### AI helpers
 
@@ -63,6 +72,16 @@ control while retaining a clear expansion path.
   is not added.
 - Helpers provide a concise log entry and, where appropriate, reuse the retail
   status-message/menu-refresh path.
+- Every public helper declaration has a five-line usage comment: purpose,
+  required game state, retail wrapper/call chain, failure result, and a short
+  invocation example.
+
+## Helper documentation
+
+`demos/helpers/README.md` is the mod-author reference. It lists every public
+helper by group, its preconditions, and a compilable example of calling it from
+`runModMenu`. It must distinguish injection/liveness validation from proof that
+a live-only game effect occurred.
 
 ## Verification seams
 
@@ -84,6 +103,8 @@ control while retaining a clear expansion path.
 3. Validate wrapper/catalog evidence in IGI-RE and run the harness.
 4. Add documented AI-context helpers only after their evidence review.
 5. Build, inject, review, and submit one focused PR from this branch.
+6. Verify the third-person helpers against IGI-RE and document every public
+   helper in the demos README before review.
 
 ## Non-goals
 
