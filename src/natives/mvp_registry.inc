@@ -528,6 +528,11 @@ if (!catalogue.add(
          NativeVerification::Exposed}))
     return false;
 if (!catalogue.add(
+        {0x0044dbc0, "AIFunction_RemoveAlarmActions", "IGI-RE", "entry",
+         "ScriptValue *AIFunction_RemoveAlarmActions(ScriptValue *out, void *data, void *args)",
+         NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add(
         {0x0044dcd0, "AIFunction_SetAlarmViewLength", "IGI-RE", "entry",
          "ScriptValue *AIFunction_SetAlarmViewLength(ScriptValue *out, void *data, void *args)",
          NativeVerification::Exposed}))
@@ -605,6 +610,15 @@ if (!catalogue.add(
 if (!catalogue.add(
         {0x0044e330, "AIFunction_SetAlarmAccess", "IGI-RE", "entry",
          "ScriptValue *AIFunction_SetAlarmAccess(ScriptValue *out, void *data, void *args)",
+         NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0044e390, "AIFunction_SetGunnerID", "IGI-RE", "entry",
+                    "ScriptValue *AIFunction_SetGunnerID(ScriptValue *out, void *data, void *args)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add(
+        {0x0044eaf0, "AIFunction_SetAnimationInterval", "IGI-RE", "entry",
+         "ScriptValue *AIFunction_SetAnimationInterval(ScriptValue *out, void *data, void *args)",
          NativeVerification::Exposed}))
     return false;
 if (!catalogue.add({0x00495e70, "Music_SetVolume", "IGI-RE", "entry",

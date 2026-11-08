@@ -42,7 +42,7 @@ The old third-person crosshair API is deliberately absent. It had a helper-owned
 
 ### AiHelpers
 
-`NpcHelpers::ensureWeapon` invokes the retail soldier weapon-creation path for a supplied non-player human. Heaven resolves the first real NPC before it calls this method and rejects the action if the level has none. `AiHelpers` forwards the verified retail AI script natives: view/alarm range and alpha/gamma setters, event priority, invulnerability, instant death, death animation, alarm trigger/control/access, current event type, and random value. Each method takes an `AiScriptContext` supplied by a real IGI script callback (`out`, `data`, and `args`); it is not valid to fabricate this context from a menu button.
+`NpcHelpers::ensureWeapon` invokes the retail soldier weapon-creation path for a supplied non-player human. Heaven resolves the first real NPC before it calls this method and rejects the action if the level has none. `AiHelpers` forwards the verified retail AI script natives: alarm-action removal, view/alarm range and alpha/gamma setters, event priority, invulnerability, instant death, death animation, alarm trigger/control/access, gunner ID, animation interval, current event type, and random value. Each method takes an `AiScriptContext` supplied by a real IGI script callback (`out`, `data`, and `args`); it is not valid to fabricate this context from a menu button.
 
 ### AudioHelpers and menu adapter
 

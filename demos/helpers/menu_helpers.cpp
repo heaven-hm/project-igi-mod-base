@@ -923,6 +923,7 @@ bool VehicleHelpers::heliSoundInfo(IGI::Heli *h, void **out) const {
         IGI::AI::native(c.out, c.data, c.args);                                                    \
         return true;                                                                               \
     }
+AI_HELPER(removeAlarmActions, REMOVE_ALARM_ACTIONS)
 AI_HELPER(setViewLength, SET_VIEW_LENGTH)
 AI_HELPER(setAlarmViewLength, SET_ALARM_VIEW_LENGTH)
 AI_HELPER(setViewAlpha, SET_VIEW_ALPHA)
@@ -938,6 +939,8 @@ AI_HELPER(setDeathAnimation, SET_DEATH_ANIMATION)
 AI_HELPER(setAlarmTriggerId, SET_ALARM_TRIGGER_ID)
 AI_HELPER(setAlarmControlId, SET_ALARM_CONTROL_ID)
 AI_HELPER(setAlarmAccess, SET_ALARM_ACCESS)
+AI_HELPER(setGunnerId, SET_GUNNER_ID)
+AI_HELPER(setAnimationInterval, SET_ANIMATION_INTERVAL)
 AI_HELPER(currentEventType, GET_CURRENT_EVENT_TYPE)
 AI_HELPER(randomValue, GET_RANDOM_VALUE)
 #undef AI_HELPER

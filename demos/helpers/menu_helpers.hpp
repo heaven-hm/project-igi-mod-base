@@ -142,6 +142,7 @@ class NpcHelpers {
 class AiHelpers {
   public:
     explicit AiHelpers(Runtime &runtime) : runtime_(runtime) {}
+    bool removeAlarmActions(const AiScriptContext &c) const;
     bool setViewLength(const AiScriptContext &c) const;
     bool setAlarmViewLength(const AiScriptContext &c) const;
     bool setViewAlpha(const AiScriptContext &c) const;
@@ -157,6 +158,8 @@ class AiHelpers {
     bool setAlarmTriggerId(const AiScriptContext &c) const;
     bool setAlarmControlId(const AiScriptContext &c) const;
     bool setAlarmAccess(const AiScriptContext &c) const;
+    bool setGunnerId(const AiScriptContext &c) const;
+    bool setAnimationInterval(const AiScriptContext &c) const;
     bool currentEventType(const AiScriptContext &c) const;
     bool randomValue(const AiScriptContext &c) const;
 

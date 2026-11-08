@@ -668,6 +668,12 @@ NATIVE_DECL void GET_NODE_MATRIX(Matrix *out, GraphNode *node, char rotate) {
 }
 } // namespace GRAPH
 namespace AI {
+NATIVE_DECL ScriptValue *REMOVE_ALARM_ACTIONS(ScriptValue *out, void *data, void *args) {
+    return NATIVE_INVOKE<ScriptValue *>(
+        HASH::AI_FUNCTION_REMOVE_ALARM_ACTIONS,
+        "ScriptValue *AIFunction_RemoveAlarmActions(ScriptValue *out, void *data, void *args)", out,
+        data, args);
+}
 NATIVE_DECL ScriptValue *SET_VIEW_LENGTH(ScriptValue *out, void *data, void *args) {
     return NATIVE_INVOKE<ScriptValue *>(
         HASH::AI_FUNCTION_SET_VIEW_LENGTH,
@@ -770,6 +776,18 @@ NATIVE_DECL ScriptValue *SET_ALARM_ACCESS(ScriptValue *out, void *data, void *ar
         HASH::AI_FUNCTION_SET_ALARM_ACCESS,
         "ScriptValue *AIFunction_SetAlarmAccess(ScriptValue *out, void *data, void *args)", out,
         data, args);
+}
+NATIVE_DECL ScriptValue *SET_GUNNER_ID(ScriptValue *out, void *data, void *args) {
+    return NATIVE_INVOKE<ScriptValue *>(
+        HASH::AI_FUNCTION_SET_GUNNER_ID,
+        "ScriptValue *AIFunction_SetGunnerID(ScriptValue *out, void *data, void *args)", out, data,
+        args);
+}
+NATIVE_DECL ScriptValue *SET_ANIMATION_INTERVAL(ScriptValue *out, void *data, void *args) {
+    return NATIVE_INVOKE<ScriptValue *>(
+        HASH::AI_FUNCTION_SET_ANIMATION_INTERVAL,
+        "ScriptValue *AIFunction_SetAnimationInterval(ScriptValue *out, void *data, void *args)",
+        out, data, args);
 }
 } // namespace AI
 namespace AUDIO {

@@ -127,6 +127,9 @@ inline constexpr std::uint32_t HUMAN_VIEW_GET_MATRIX = 0x00465880;
 inline constexpr std::uint32_t CAR_GET_CONTROL_INFO = 0x0042f870;
 inline constexpr std::uint32_t GRAPH_GET_SAVE_EVENT = 0x004f9230;
 inline constexpr std::uint32_t AI_FUNCTION_SET_VIEW_GAMMA = 0x0044dd90;
+inline constexpr std::uint32_t AI_FUNCTION_REMOVE_ALARM_ACTIONS = 0x0044dbc0;
+inline constexpr std::uint32_t AI_FUNCTION_SET_GUNNER_ID = 0x0044e390;
+inline constexpr std::uint32_t AI_FUNCTION_SET_ANIMATION_INTERVAL = 0x0044eaf0;
 inline constexpr std::uint32_t SOUND_GET_DURATION = 0x00496db0;
 inline constexpr std::uint32_t RAIN_DYN_CUBE_OBJ_SET_CALLBACK = 0x004f80e0;
 inline constexpr std::uint32_t LEVEL_GET_TICK = 0x004f1080;
@@ -544,6 +547,7 @@ NATIVE_DECL void GET_NODE_POS(Vec3d *out, GraphNode *node);
 NATIVE_DECL void GET_NODE_MATRIX(Matrix *out, GraphNode *node, char rotate);
 } // namespace GRAPH
 namespace AI {
+NATIVE_DECL ScriptValue *REMOVE_ALARM_ACTIONS(ScriptValue *out, void *data, void *args);
 NATIVE_DECL ScriptValue *SET_VIEW_LENGTH(ScriptValue *out, void *data, void *args);
 NATIVE_DECL ScriptValue *SET_ALARM_VIEW_LENGTH(ScriptValue *out, void *data, void *args);
 NATIVE_DECL ScriptValue *SET_VIEW_ALPHA(ScriptValue *out, void *data, void *args);
@@ -561,6 +565,8 @@ NATIVE_DECL ScriptValue *SET_DEATH_ANIMATION(ScriptValue *out, void *data, void 
 NATIVE_DECL ScriptValue *SET_ALARM_TRIGGER_ID(ScriptValue *out, void *data, void *args);
 NATIVE_DECL ScriptValue *SET_ALARM_CONTROL_ID(ScriptValue *out, void *data, void *args);
 NATIVE_DECL ScriptValue *SET_ALARM_ACCESS(ScriptValue *out, void *data, void *args);
+NATIVE_DECL ScriptValue *SET_GUNNER_ID(ScriptValue *out, void *data, void *args);
+NATIVE_DECL ScriptValue *SET_ANIMATION_INTERVAL(ScriptValue *out, void *data, void *args);
 } // namespace AI
 namespace AUDIO {
 NATIVE_DECL void MUSIC_SET_VOLUME(float music, float master);
