@@ -67,7 +67,7 @@ DISPLAY_ADD_FRAME_CALLBACK = 0x004916C0
 FRAME_DISPATCH = 0x00491CA0
 FRAME_LIST_HEAD = 0x00BCAE00
 GAME_RAINING_FLAG = 0x0057B1A0
-MENU_HELPERS = ROOT / "demos" / "internal" / "helpers" / "menu_helpers.cpp"
+MENU_HELPERS = ROOT / "demos" / "helpers" / "menu_helpers.cpp"
 MENU_HOST = ROOT / "src" / "mod_base" / "menu_host.cpp"
 
 # Game singletons that a live game initialises during startup. The natives the
