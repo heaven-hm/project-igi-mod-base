@@ -60,7 +60,7 @@ The old third-person crosshair API is deliberately absent. It had a helper-owned
 
 ## Menu scale
 
-Heaven ships 43 controls across seven categories (Weapons, Player, Camera, World, Vehicles, AI / NPC, Audio). The retail QVM `MenuFrame` can only draw a handful of rows, so `igi::menuNeedsCommandList(config)` switches the generated screen to one scrollable `ListBox` over `igi::buildMenuCommands(config)`: every action becomes one runnable entry and every list value becomes its own entry. `IGI_SDK_FillList(-1)` / `IGI_SDK_GetList(-1)` / `IGI_SDK_SetList(-1, this.nActiveID)` serve that list, and `IGI_SDK_Apply()` runs the selected entry. A control set that fits keeps the direct per-control layout. `tests/HeavenLayoutTests.cpp` fails if the shipping set drops below 30 controls, loses a category, or stops generating a complete compilable resource.
+Heaven ships 50 controls across seven categories (Weapons, Player, Camera, World, Vehicles, AI / NPC, Audio). The retail QVM `MenuFrame` can only draw a handful of rows, so `igi::menuNeedsCommandList(config)` switches the generated screen to one scrollable `ListBox` over `igi::buildMenuCommands(config)`: every action becomes one runnable entry and every list value becomes its own entry. `IGI_SDK_FillList(-1)` / `IGI_SDK_GetList(-1)` / `IGI_SDK_SetList(-1, this.nActiveID)` serve that list, and `IGI_SDK_Apply()` runs the selected entry. A control set that fits keeps the direct per-control layout. `tests/HeavenLayoutTests.cpp` fails if the shipping set drops below 30 controls, loses a category, or stops generating a complete compilable resource.
 
 ## Safe unload
 

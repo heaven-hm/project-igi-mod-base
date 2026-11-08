@@ -12,7 +12,7 @@ HELPERS = (ROOT / "demos/helpers/menu_helpers.cpp").read_text(encoding="utf-8")
 # Every control is declared once in the definition table:
 #   {"id", igi::ModMenuItemKind::Kind, "Label", "Category", "Action", values},
 defs = re.findall(
-    r'\{"([a-z_]+)",\s*igi::ModMenuItemKind::(\w+),\s*"([^"]+)",\s*"([^"]+)",\s*"([^"]*)"',
+    r'\{"([a-z0-9_]+)",\s*igi::ModMenuItemKind::(\w+),\s*"([^"]+)",\s*"([^"]+)",\s*"([^"]*)"',
     HEAVEN,
 )
 assert defs, "Heaven menu has no configured items"
@@ -62,11 +62,11 @@ assert '"void Vehicle_ResetControls(Vehicle *v)"' in HELPERS, (
 dispatcher_start = HELPERS.index("void executeMenuNativeAction(")
 dispatcher_end = HELPERS.index("static bool executeMenuCommandFor(IGI::Task *manager", dispatcher_start)
 DISPATCHER = HELPERS[dispatcher_start:dispatcher_end]
-dispatched = set(re.findall(r'id == "([a-z_]+)"', DISPATCHER))
+dispatched = set(re.findall(r'id == "([a-z0-9_]+)"', DISPATCHER))
 
-# weapon_pickup is intentionally resolved by the Heaven adapter so it can bind
-# the selected retail weapon symbol and ammo value together.
-special_routes = {"weapon_pickup"}
+# The weapon controls are resolved by the Heaven adapter, because only the demo
+# owns the retail weapon symbol table and its ammo counts.
+special_routes = {"weapon_pickup", "weapon_all"}
 for item_id in ids:
     if item_id in special_routes:
         assert f'config.items[item].id == "{item_id}"' in HEAVEN

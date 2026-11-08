@@ -88,6 +88,7 @@ class WeaponHelpers {
     bool cycle(int force) const;
     bool selectCategory() const;
     bool reportFlashReset() const;
+    bool reportEvents() const;
     std::optional<int> hasAmmo(void *weaponTask) const;
     IGI::WeaponType *type(void *weaponTask) const;
     std::optional<unsigned> fireEvent() const;
@@ -157,6 +158,8 @@ class VehicleHelpers {
     bool reportCarInfo(IGI::Car *car) const;
     bool reportHeliInfo(IGI::Heli *heli) const;
     bool resetVehicleControls(IGI::Task *vehicle) const;
+    bool explodeAllCars() const;
+    bool resetAllCars() const;
     bool driveCar(IGI::Car *car, float throttle, bool brake = false) const;
     bool resetControls(void *vehicle) const;
     IGI::Task *heliDoor(IGI::Heli *heli) const;

@@ -1,7 +1,10 @@
 #include "config/menu_config.hpp"
 #include "helpers/menu_helpers.hpp"
+#include "logging/logging.hpp"
 
 #include <array>
+#include <cstddef>
+#include <string>
 #include <string_view>
 
 namespace {
@@ -82,6 +85,18 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
          "Weapons",
          "RestoreVisualFeedback",
          {}},
+        {"weapon_all",
+         igi::ModMenuItemKind::Action,
+         "Equip All Weapons",
+         "Weapons",
+         "PickUpAllWeapons",
+         {}},
+        {"weapon_events",
+         igi::ModMenuItemKind::Action,
+         "Weapon Events",
+         "Weapons",
+         "WeaponEvents",
+         {}},
 
         // Player
         {"player_reset_damage",
@@ -108,6 +123,24 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
          "Player",
          "LogGameState",
          {}},
+        {"player_send_position",
+         igi::ModMenuItemKind::Action,
+         "Send Player Position",
+         "Player",
+         "PlayerSendPosition",
+         {}},
+        {"player_flag_d44",
+         igi::ModMenuItemKind::List,
+         "Player Flag D44",
+         "Player",
+         "HumanPlayerSetFlagD44",
+         {"Enabled", "Disabled"}},
+        {"player_flag_d68",
+         igi::ModMenuItemKind::List,
+         "Player Flag D68",
+         "Player",
+         "HumanPlayerSetFlagD68",
+         {"Enabled", "Disabled"}},
 
         // Camera
         {"view",
@@ -198,6 +231,18 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
          "Selected Heli Info",
          "Vehicles",
          "HeliInfo",
+         {}},
+        {"vehicle_explode_all",
+         igi::ModMenuItemKind::Action,
+         "Explode All Cars",
+         "Vehicles",
+         "CarExplodeAll",
+         {}},
+        {"vehicle_reset_all",
+         igi::ModMenuItemKind::Action,
+         "Reset All Cars",
+         "Vehicles",
+         "CarResetAll",
          {}},
 
         // AI / NPC
@@ -305,6 +350,18 @@ bool configureModMenu(igi::MenuConfig &config) {
 
 void runModMenu(const igi::MenuConfig &config, igi::Runtime &runtime, std::size_t item,
                 std::string_view value) {
+    if (item < config.items.size() && config.items[item].id == "weapon_all") {
+        auto weapons = igi::WeaponHelpers(runtime);
+        std::size_t granted = 0;
+        for (const auto &weapon : kWeapons) {
+            if (weapons.pickup(weapon.id, weapon.ammo))
+                ++granted;
+        }
+        igi::log(granted > 0 ? igi::LogLevel::Info : igi::LogLevel::Warning,
+                 "equip all weapons: granted " + std::to_string(granted) + " of " +
+                     std::to_string(kWeapons.size()) + " retail weapons");
+        return;
+    }
     if (item < config.items.size() && config.items[item].id == "weapon_pickup") {
         for (const auto &weapon : kWeapons) {
             if (weapon.label == value) {

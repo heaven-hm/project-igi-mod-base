@@ -846,6 +846,37 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
             log(LogLevel::Info, "weapon category selection requested");
         else
             log(LogLevel::Warning, "weapon category selection rejected: player unavailable");
+    } else if (id == "weapon_events") {
+        if (WeaponHelpers(runtime).reportEvents())
+            log(LogLevel::Info, "weapon events reported from the retail weapon event getters");
+        else
+            log(LogLevel::Warning, "weapon events rejected: selected weapon path unavailable");
+    } else if (id == "player_send_position") {
+        if (PlayerHelpers(runtime).sendPosition())
+            log(LogLevel::Info, "player position sent through the retail player native");
+        else
+            log(LogLevel::Warning, "send position rejected: player unavailable");
+    } else if (id == "player_flag_d44" || id == "player_flag_d68") {
+        const bool enabled = value == "Enabled";
+        const bool applied = id == "player_flag_d44"
+                                 ? (enabled ? PlayerHelpers(runtime).setFlagD44()
+                                            : PlayerHelpers(runtime).clearFlagD44())
+                                 : (enabled ? PlayerHelpers(runtime).setFlagD68()
+                                            : PlayerHelpers(runtime).clearFlagD68());
+        if (applied)
+            log(LogLevel::Info, "player controller flag updated through the retail flag native");
+        else
+            log(LogLevel::Warning, "player controller flag rejected: player unavailable");
+    } else if (id == "vehicle_explode_all") {
+        if (VehicleHelpers(runtime).explodeAllCars())
+            log(LogLevel::Info, "vehicle explode all: every live car was exploded");
+        else
+            log(LogLevel::Warning, "vehicle explode all rejected: no live car was available");
+    } else if (id == "vehicle_reset_all") {
+        if (VehicleHelpers(runtime).resetAllCars())
+            log(LogLevel::Info, "vehicle reset all: every live car was restored");
+        else
+            log(LogLevel::Warning, "vehicle reset all rejected: no live car was available");
     } else if (id == "weapon_flash") {
         if (WeaponHelpers(runtime).reportFlashReset())
             log(LogLevel::Info, "player hit flash cleared");
@@ -1421,6 +1452,43 @@ bool VehicleHelpers::reportHeliInfo(IGI::Heli *heli) const {
     return true;
 }
 
+bool VehicleHelpers::explodeAllCars() const {
+    if (!requireLiveGameThread(runtime_))
+        return false;
+    if (!isCallableNative(IGI::HASH::CAR_EXPLODE, "void Car_Explode(Car *c)"))
+        return false;
+    // Collect first: exploding a car mutates the task list that FIND_NEXT walks.
+    EntityHelpers entities(runtime_);
+    std::vector<IGI::Car *> cars;
+    for (auto *car = entities.firstCar(); car; car = entities.nextCar(car))
+        cars.push_back(car);
+    for (auto *car : cars)
+        IGI::VEHICLE::CAR_EXPLODE(car);
+    log(LogLevel::Info,
+        "vehicle explode all: triggered " + std::to_string(cars.size()) + " live car explosions");
+    IGI::MISC::STATUS_MESSAGE_SHOW(
+        nullptr, ("IGI MOD: exploded " + std::to_string(cars.size()) + " cars").c_str());
+    return !cars.empty();
+}
+
+bool VehicleHelpers::resetAllCars() const {
+    if (!requireLiveGameThread(runtime_))
+        return false;
+    if (!isCallableNative(IGI::HASH::CAR_CONTROL, "void Car_Control(Car *o, CarControlArg *arg)"))
+        return false;
+    EntityHelpers entities(runtime_);
+    std::vector<IGI::Car *> cars;
+    for (auto *car = entities.firstCar(); car; car = entities.nextCar(car))
+        cars.push_back(car);
+    float input[4] = {0.0F, -1.0F, -2.0F, -1.0F};
+    IGI::CarControlArg reset{0, input};
+    for (auto *car : cars)
+        IGI::VEHICLE::CAR_CONTROL(car, &reset);
+    log(LogLevel::Info, "vehicle reset all: restored " + std::to_string(cars.size()) +
+                            " live cars through retail controls");
+    return !cars.empty();
+}
+
 bool VehicleHelpers::resetVehicleControls(IGI::Task *vehicle) const {
     if (!requireLiveGameThread(runtime_) || !vehicle)
         return false;
@@ -1592,6 +1660,25 @@ bool WeaponHelpers::cycle(int force) const {
 }
 bool WeaponHelpers::reportFlashReset() const {
     return restorePlayerVisualFeedback(runtime_);
+}
+// Publishes the retail weapon event identifiers the game dispatches with, which
+// is what distinguishes the weapon task/event paths at runtime.
+bool WeaponHelpers::reportEvents() const {
+    if (!requireLiveGameThread(runtime_))
+        return false;
+    const auto fire = fireEvent();
+    const auto type = typeEvent();
+    const auto trigger = triggerEvent();
+    const auto state = stateEvent();
+    const auto move = moveEvent();
+    if (!fire || !type || !trigger || !state || !move)
+        return false;
+    std::ostringstream status;
+    status << "Weapon events: fire " << *fire << " type " << *type << " trigger "
+           << (*trigger ? 1 : 0) << " state " << (*state ? 1 : 0) << " move " << (*move ? 1 : 0);
+    log(LogLevel::Info, status.str());
+    IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, status.str().c_str());
+    return true;
 }
 bool WeaponHelpers::selectCategory() const {
     auto *p = localPlayer(runtime_);
