@@ -1,12 +1,37 @@
 #include "config/menu_config.hpp"
 #include "helpers/menu_helpers.hpp"
 
+#include <array>
 #include <string_view>
+
+namespace {
+struct WeaponEntry {
+    std::string_view label;
+    std::string_view id;
+    int ammo;
+};
+
+constexpr std::array kWeapons = {
+    WeaponEntry{"Glock 17", "WEAPON_ID_GLOCK", 30},
+    WeaponEntry{"MP5SD", "WEAPON_ID_MP5SD", 90},
+    WeaponEntry{"Uzi", "WEAPON_ID_UZI", 120},
+    WeaponEntry{"M16A2", "WEAPON_ID_M16A2", 120},
+    WeaponEntry{"AK-47", "WEAPON_ID_AK47", 120},
+    WeaponEntry{"Dragunov SVD", "WEAPON_ID_DRAGUNOV", 30},
+    WeaponEntry{"Minimi", "WEAPON_ID_MINIMI", 200},
+    WeaponEntry{"SPAS-12", "WEAPON_ID_SPAS12", 16},
+};
+} // namespace
 
 bool configureModMenu(igi::MenuConfig &config) {
     config.title = "Heaven's Mod";
     config.items = {
         {"ammo", igi::ModMenuItemKind::Action, "Unlimited Ammo", "", {}},
+        {"weapon_pickup",
+         igi::ModMenuItemKind::List,
+         "Equip Weapon",
+         "",
+         {"Glock 17", "MP5SD", "Uzi", "M16A2", "AK-47", "Dragunov SVD", "Minimi", "SPAS-12"}},
         {"weapon_cycle", igi::ModMenuItemKind::Action, "Cycle Weapon", "", {}},
         {"view", igi::ModMenuItemKind::List, "Camera Mode", "", {"First Person", "Third Person"}},
         {"input", igi::ModMenuItemKind::List, "Player Input", "", {"Enabled", "Disabled"}},
@@ -28,22 +53,32 @@ bool configureModMenu(igi::MenuConfig &config) {
     };
     config.items[0].category = "Weapons";
     config.items[1].category = "Weapons";
-    config.items[2].category = "Camera";
-    config.items[3].category = "Player";
+    config.items[2].category = "Weapons";
+    config.items[3].category = "Camera";
     config.items[4].category = "Player";
-    config.items[5].category = "World";
+    config.items[5].category = "Player";
     config.items[6].category = "World";
     config.items[7].category = "World";
     config.items[8].category = "World";
     config.items[9].category = "World";
     config.items[10].category = "World";
-    config.items[11].category = "Vehicles";
+    config.items[11].category = "World";
     config.items[12].category = "Vehicles";
-    config.items[13].category = "AI / NPC";
+    config.items[13].category = "Vehicles";
+    config.items[14].category = "AI / NPC";
     return true;
 }
 
 void runModMenu(const igi::MenuConfig &config, igi::Runtime &runtime, std::size_t item,
                 std::string_view value) {
+    if (item < config.items.size() && config.items[item].id == "weapon_pickup") {
+        for (const auto &weapon : kWeapons) {
+            if (weapon.label == value) {
+                (void)igi::WeaponHelpers(runtime).pickup(weapon.id, weapon.ammo);
+                return;
+            }
+        }
+        return;
+    }
     igi::executeMenuNativeAction(config, runtime, item, value);
 }
