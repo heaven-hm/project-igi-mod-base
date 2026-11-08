@@ -58,6 +58,8 @@ required_native_paths = {
     "vehicle_explode": "VehicleHelpers(runtime).explodeCar",
     "npc_ensure_weapon": "NpcHelpers(runtime).ensureWeapon",
     "player_reset_damage": "PlayerHelpers(runtime).resetDamage",
+    "player_snap_ground": "PlayerHelpers(runtime).snapToGround",
+    "player_collision": "PlayerHelpers(runtime).setCollisionEnabled",
     "npc_reset_damage": "NpcHelpers(runtime).resetDamage",
     "restart_mission": "WorldHelpers(runtime).restartMission",
 }

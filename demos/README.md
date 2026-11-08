@@ -22,6 +22,8 @@ All public helpers live in `demos/helpers/menu_helpers.hpp`, with their only imp
 
 `resetDamage` calls retail `Human_ResetDamage` on the live local player. It clears the current damage total and restores the configured multipliers for all damage zones; Heaven exposes it as a recovery action only while a live player exists.
 
+`snapToGround` uses the game’s ground-probe and position flow for the local player. `setCollisionEnabled` changes the local player’s collision state through the corresponding game native; Heaven provides both options as immediate gameplay controls.
+
 ### WeaponHelpers
 
 `pickup(weaponId, ammo)` resolves a retail `WEAPON_ID_*` symbol and gives it to the local player; `enableUnlimitedAmmo()` calls the retail unlimited-ammo behavior; `cycle(force)`, `selectCategory()`, `setAnimation(animation)`, and `requestAnimation(animation)` invoke the player’s verified weapon controls. Pass `1` to `cycle` for a direct forced next-weapon selection; pass `0` only from the game input update path, where it processes the next/previous key edges. Use IDs from retail data rather than guessed constants.

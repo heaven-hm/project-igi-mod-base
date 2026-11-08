@@ -392,6 +392,10 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
         WeaponHelpers(runtime).cycle(1);
     } else if (id == "player_reset_damage") {
         PlayerHelpers(runtime).resetDamage();
+    } else if (id == "player_snap_ground") {
+        PlayerHelpers(runtime).snapToGround();
+    } else if (id == "player_collision") {
+        PlayerHelpers(runtime).setCollisionEnabled(value == "Enabled");
     } else if (id == "input") {
         PlayerHelpers(runtime).setInputEnabled(value == "Enabled");
     } else if (id == "look") {
@@ -792,6 +796,14 @@ bool PlayerHelpers::resetDamage() const {
         return false;
     IGI::HUMAN::RESET_DAMAGE(reinterpret_cast<IGI::Human *>(p));
     return true;
+}
+bool PlayerHelpers::snapToGround() const {
+    auto *p = localPlayer(runtime_);
+    return EntityHelpers(runtime_).snapHumanToGround(reinterpret_cast<IGI::Human *>(p));
+}
+bool PlayerHelpers::setCollisionEnabled(bool enabled) const {
+    auto *p = localPlayer(runtime_);
+    return EntityHelpers(runtime_).setHumanCollision(reinterpret_cast<IGI::Human *>(p), enabled);
 }
 bool PlayerHelpers::startAction(int action) const {
     auto *p = localPlayer(runtime_);

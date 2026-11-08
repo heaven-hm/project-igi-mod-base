@@ -53,6 +53,8 @@ class PlayerHelpers {
     bool checkDeath() const;
     bool sendPosition() const;
     bool resetDamage() const;
+    bool snapToGround() const;
+    bool setCollisionEnabled(bool enabled) const;
     bool restoreVisualFeedback() const;
     bool setFlagD44() const;
     bool clearFlagD44() const;

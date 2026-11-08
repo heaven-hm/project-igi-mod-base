@@ -53,6 +53,12 @@ bool configureModMenu(igi::MenuConfig &config) {
          "",
          {"Level 1", "Level 2", "Level 3", "Level 4", "Level 5", "Level 6", "Level 7", "Level 8",
           "Level 9", "Level 10", "Level 11", "Level 12", "Level 13", "Level 14"}},
+        {"player_snap_ground", igi::ModMenuItemKind::Action, "Snap Player To Ground", "", {}},
+        {"player_collision",
+         igi::ModMenuItemKind::List,
+         "Player Collision",
+         "",
+         {"Enabled", "Disabled"}},
     };
     config.items[0].category = "Weapons";
     config.items[1].category = "Weapons";
@@ -69,6 +75,8 @@ bool configureModMenu(igi::MenuConfig &config) {
     config.items[12].category = "AI / NPC";
     config.items[13].category = "AI / NPC";
     config.items[14].category = "World";
+    config.items[15].category = "Player";
+    config.items[16].category = "Player";
     return true;
 }
 
