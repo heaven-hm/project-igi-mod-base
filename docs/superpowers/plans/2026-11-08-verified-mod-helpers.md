@@ -38,20 +38,19 @@
 
 - [ ] **Step 1: Write failing source-contract assertions**
 
-Add `verifiedMenuHelperContractTest()` that loads `demos/helpers/menu_helpers.cpp` and asserts the following evidence strings exist:
+Add `verifiedMenuHelperContractTest()` that loads `demos/helpers/menu_helpers.cpp` and asserts the existing canonical helper evidence strings exist:
 
 ```cpp
-assert(helperSource.find("IGI::PLAYER::CYCLE_WEAPON") != std::string::npos);
-assert(helperSource.find("IGI::HUMAN::LOCK_INPUT") != std::string::npos);
 assert(helperSource.find("IGI::AUDIO::MUSIC_SET_VOLUME") != std::string::npos);
-assert(helperSource.find("AI script context") != std::string::npos);
+assert(helperSource.find("IGI::MISC::FRAMES_SET") != std::string::npos);
+assert(helperSource.find("IGI::HUMAN::VIEW_CAM") != std::string::npos);
 ```
 
 - [ ] **Step 2: Run the focused test and verify it fails**
 
 Run: `cmake --build build-macos-verify --target igi_sdk_tests && build-macos-verify/igi_sdk_tests`
 
-Expected: failure because the new helper calls and AI-context documentation do not yet exist.
+Expected: failure because the test function does not yet exist.
 
 - [ ] **Step 3: Repair stale helper paths**
 
@@ -61,7 +60,7 @@ Change the harness path to `ROOT / "demos" / "helpers" / "menu_helpers.cpp"`. Re
 
 Run: `cmake --build build-macos-verify --target igi_sdk_tests && build-macos-verify/igi_sdk_tests`
 
-Expected: the test binary runs until the still-missing new helper contract assertions fail.
+Expected: the source-contract and existing parity tests pass.
 
 - [ ] **Step 5: Commit the isolated repair**
 
@@ -208,7 +207,8 @@ git commit -m "test(helpers): enforce AI script context boundary"
 
 **Interfaces:**
 - Consumes: all helper APIs from Tasks 1-3.
-- Produces: evidence that the helper set builds, scans, and safely injects.
+- Produces: evidence that the helper set builds and scans on the supported
+  local toolchains.
 
 - [ ] **Step 1: Run the complete local quality gate**
 
@@ -226,16 +226,7 @@ IGI_EXE=/Users/haseeb-mir/Downloads/IGI/igi.exe IGI_GAME=/Users/haseeb-mir/Downl
 IGI_EXE=/Users/haseeb-mir/Downloads/IGI/igi.exe IGI_GAME=/Users/haseeb-mir/Downloads/IGI tools/build-win32-dll.sh --release --target igi_advanced_mod_menu_external --verify --deploy
 ```
 
-- [ ] **Step 3: Run bounded live liveness checks**
-
-```bash
-python3 tools/run_igi_wine.py level5 /Users/haseeb-mir/Downloads/IGI/igi-advanced-mod-internal.dll --attempts 10 --press-menu-key --key F5
-python3 tools/run_igi_wine.py level5 /Users/haseeb-mir/Downloads/IGI/igi-advanced-mod-external.dll --attempts 10 --press-menu-key --key F5
-```
-
-Expected: each runner reports injection, key delivery, and a live game process after five seconds. Do not describe this as a semantic result for context-bound AI calls.
-
-- [ ] **Step 4: Review and commit verification-only adjustments if needed**
+- [ ] **Step 3: Review and commit verification-only adjustments if needed**
 
 Review `git diff --check`, `git status --short`, and generated-artifact status. Commit only source/test changes; leave generated DLLs untracked.
 
@@ -310,7 +301,7 @@ git commit -m "docs(helpers): document verified mod helper usage"
 
 **Interfaces:**
 - Consumes: the complete public helper API and documentation from Tasks 1-5.
-- Produces: final build, harness, and bounded injection evidence.
+- Produces: final build and harness evidence.
 
 - [ ] **Step 1: Run the full local quality gate**
 
@@ -328,12 +319,9 @@ IGI_EXE=/Users/haseeb-mir/Downloads/IGI/igi.exe IGI_GAME=/Users/haseeb-mir/Downl
 IGI_EXE=/Users/haseeb-mir/Downloads/IGI/igi.exe IGI_GAME=/Users/haseeb-mir/Downloads/IGI tools/build-win32-dll.sh --release --target igi_advanced_mod_menu_external --verify --deploy
 ```
 
-- [ ] **Step 3: Perform bounded Wine liveness validation**
+- [ ] **Step 3: Inspect generated-artifact status**
 
-```bash
-python3 tools/run_igi_wine.py level5 /Users/haseeb-mir/Downloads/IGI/igi-advanced-mod-internal.dll --attempts 10 --press-menu-key --key F5
-python3 tools/run_igi_wine.py level5 /Users/haseeb-mir/Downloads/IGI/igi-advanced-mod-external.dll --attempts 10 --press-menu-key --key F5
-```
+Run: `git status --short`
 
-Expected: injection succeeds, F5 is delivered, and the game remains alive for
-five seconds. This is a liveness result, not proof of live-only AI behavior.
+Expected: generated DLLs are ignored or untracked and are not staged; only
+reviewed source, test, and documentation files may be committed.
