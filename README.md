@@ -172,13 +172,13 @@ Existing examples:
 
 ## How to Build a Mod Menu
 
-All Win32 targets are cross-compiled using `tools/build-win32-dll.sh` (or Visual Studio / MSVC on native Windows). Successful builds automatically copy artifacts to the [`binaries/`](binaries/) directory.
+All Win32 targets are cross-compiled using `tools/build-win32-dll.sh` (or Visual Studio / MSVC on native Windows). Build artifacts remain in the ignored `build-win32-*` directory; publish binaries only when creating a GitHub Release.
 
 ### 1. Building Internal Mod Menus
 
 ```sh
 
-# Advanced Internal Menu -> binaries/igi-advanced-mod-internal.dll
+# Advanced Internal Menu -> build-win32-release/igi-advanced-mod-internal.dll
 tools/build-win32-dll.sh --release --target igi_advanced_mod_menu
 ```
 
@@ -186,17 +186,17 @@ tools/build-win32-dll.sh --release --target igi_advanced_mod_menu
 
 ```sh
 
-# Advanced ImGui External Menu -> binaries/igi-advanced-mod-external.dll
+# Advanced ImGui External Menu -> build-win32-release/igi-advanced-mod-external.dll
 tools/build-win32-dll.sh --release --target igi_advanced_mod_menu_external
 ```
 
 ### 3. Building Injector & Helpers
 
 ```sh
-# Injector CLI -> binaries/IGI-Injector.exe
+# Injector CLI -> build-win32-release/IGI-Injector.exe
 tools/build-win32-dll.sh --release --target igi_injector
 
-# Virtual Keypress helper -> binaries/IGI-Keypress.exe
+# Virtual Keypress helper -> build-win32-release/IGI-Keypress.exe
 tools/build-win32-dll.sh --release --target igi_keypress
 ```
 
@@ -233,10 +233,10 @@ Launch the game and auto-inject:
 
 ```sh
 # Internal Menu
-python3 tools/run_igi_wine.py level1 binaries/igi-advanced-mod-internal.dll --attempts 10 --press-menu-key
+python3 tools/run_igi_wine.py level1 build-win32-release/igi-advanced-mod-internal.dll --attempts 10 --press-menu-key
 
 # External ImGui Menu
-python3 tools/run_igi_wine.py level1 binaries/igi-advanced-mod-external.dll --attempts 10 --press-menu-key
+python3 tools/run_igi_wine.py level1 build-win32-release/igi-advanced-mod-external.dll --attempts 10 --press-menu-key
 ```
 
 ### 3. Running Natively on Windows

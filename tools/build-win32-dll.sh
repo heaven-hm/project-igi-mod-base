@@ -94,12 +94,6 @@ case "$target" in
     *) artifact=${IGI_DLL_NAME:-} ;;
 esac
 
-if [[ -n "$artifact" && -f "$build_dir/$artifact" ]]; then
-    mkdir -p "$root/binaries"
-    cp "$build_dir/$artifact" "$root/binaries/$artifact"
-    printf 'copied artifact to binaries: %s\n' "$root/binaries/$artifact"
-fi
-
 if ((verify)); then
     if [[ -z ${IGI_EXE:-} ]]; then
         printf 'error: --verify requires IGI_EXE=/path/to/igi.exe (or .env)\n' >&2
