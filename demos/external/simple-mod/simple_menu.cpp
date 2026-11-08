@@ -24,44 +24,6 @@ struct WeaponEntry {
 std::vector<WeaponEntry> g_weapons;
 std::size_t g_selectedWeapon = 0;
 
-bool pickupWeapon(igi::Runtime &runtime) {
-    if (g_selectedWeapon >= g_weapons.size())
-        return false;
-    auto *player = IGI::GAME::GET_PLAYER(0);
-    if (!player)
-        return false;
-    int args[] = {IGI::SCRIPT::EVAL_CONST(g_weapons[g_selectedWeapon].id),
-                  g_weapons[g_selectedWeapon].ammo};
-    IGI::PLAYER::PICK_UP_WEAPON(reinterpret_cast<IGI::Human *>(player), args);
-    (void)igi::refreshLiveMenu(runtime, "weapon pickup");
-    return true;
-}
-
-void clearFlashes() {
-    auto *player = IGI::GAME::GET_PLAYER(0);
-    if (!player)
-        return;
-    auto *hp = reinterpret_cast<IGI::HumanPlayer *>(player);
-    IGI::PLAYER::FADE_HIT_FLASH(hp);
-    IGI::PLAYER::FADE_FLASH(hp);
-}
-
-void setSfxVolume(std::string_view value) {
-    const float vol = (value == "Mute") ? 0.0f : (value == "Low") ? 0.35f : 1.0f;
-    IGI::AUDIO::SET_SFX_VOLUME(vol);
-}
-
-void logFlowDiagnostics() {
-    const int fps = IGI::OTHER::FLOW_GET_FPS();
-    const int frames = IGI::OTHER::FLOW_GET_FRAMES();
-    const int renders = IGI::OTHER::FLOW_GET_RENDERS();
-    std::ostringstream ss;
-    ss << "simple menu diagnostics: Flow FPS=" << fps << " TotalFrames=" << frames
-       << " TotalRenders=" << renders;
-    igi::log(igi::LogLevel::Info, ss.str());
-    IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, ss.str().c_str());
-}
-
 } // namespace
 
 bool configureSimpleMenu(igi::MenuConfig &config) {
@@ -102,8 +64,6 @@ void simpleMenuAction(const igi::MenuConfig &config, igi::Runtime &runtime, std:
                       std::string_view value) {
     if (item >= config.items.size())
         return;
-    if (!igi::requireLiveGameThread(runtime))
-        return;
     const auto &id = config.items[item].id;
 
     if (id == "weapon") { // Weapon selection list
@@ -113,7 +73,8 @@ void simpleMenuAction(const igi::MenuConfig &config, igi::Runtime &runtime, std:
                 break;
             }
         }
-        const bool ok = pickupWeapon(runtime);
+        const bool ok = igi::pickupPlayerWeapon(runtime, g_weapons[g_selectedWeapon].id,
+                                                g_weapons[g_selectedWeapon].ammo);
         igi::log(ok ? igi::LogLevel::Info : igi::LogLevel::Error,
                  ok ? "simple menu: weapon selected and picked up: " + std::string(value)
                     : "simple menu: weapon pickup failed");
@@ -129,7 +90,8 @@ void simpleMenuAction(const igi::MenuConfig &config, igi::Runtime &runtime, std:
     } else if (id == "fps") { // FPS: 30, 60, 120
         igi::setFps(runtime, value);
     } else if (id == "pickup") { // Pick up weapon
-        const bool ok = pickupWeapon(runtime);
+        const bool ok = igi::pickupPlayerWeapon(runtime, g_weapons[g_selectedWeapon].id,
+                                                g_weapons[g_selectedWeapon].ammo);
         igi::log(ok ? igi::LogLevel::Info : igi::LogLevel::Error,
                  ok ? "simple menu: weapon pickup requested via IGI::PLAYER::PICK_UP_WEAPON"
                     : "simple menu: weapon pickup failed");
@@ -138,11 +100,7 @@ void simpleMenuAction(const igi::MenuConfig &config, igi::Runtime &runtime, std:
             IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, msg.c_str());
         }
     } else if (id == "view") { // Camera View: First Person, Third Person
-        auto *player = IGI::GAME::GET_PLAYER(0);
-        if (player) {
-            const int mode = (value == "Third Person") ? 2 : 1;
-            igi::setThirdPersonView(mode == 2);
-            IGI::HUMAN::VIEW_CAM(reinterpret_cast<IGI::Human *>(player), mode);
+        if (igi::setPlayerThirdPersonView(runtime, value == "Third Person")) {
             igi::log(igi::LogLevel::Info, "simple menu: camera view set to " + std::string(value));
             const std::string msg = "IGI SDK: Camera view set to " + std::string(value);
             IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, msg.c_str());
@@ -163,16 +121,15 @@ void simpleMenuAction(const igi::MenuConfig &config, igi::Runtime &runtime, std:
                         : "simple menu: level change failed");
         });
     } else if (id == "sfx") { // SFX volume
-        setSfxVolume(value);
+        igi::setSfxVolume(runtime, (value == "Mute") ? 0.0F : (value == "Low") ? 0.35F : 1.0F);
         igi::log(igi::LogLevel::Info, "simple menu: SFX volume set via IGI::AUDIO::SET_SFX_VOLUME");
-        (void)igi::refreshLiveMenu(runtime, "SFX volume");
     } else if (id == "flash") { // Clear screen flash
-        clearFlashes();
+        igi::restorePlayerVisualFeedback(runtime);
         igi::log(
             igi::LogLevel::Info,
             "simple menu: screen flashes cleared via IGI::PLAYER::FADE_HIT_FLASH / FADE_FLASH");
     } else if (id == "perf") { // Engine performance
-        logFlowDiagnostics();
+        igi::logFlowDiagnostics(runtime);
     }
 }
 

@@ -288,4 +288,23 @@ void verifiedMenuHelperContractTest() {
     assert(helperSource.find("IGI::AUDIO::MUSIC_SET_VOLUME") != std::string::npos);
     assert(helperSource.find("IGI::MISC::FRAMES_SET") != std::string::npos);
     assert(helperSource.find("IGI::HUMAN::VIEW_CAM") != std::string::npos);
+    assert(helperSource.find("bool cyclePlayerWeapon(Runtime &runtime, int force)") !=
+           std::string::npos);
+    assert(helperSource.find("bool requestPlayerWeaponAnimation(Runtime &runtime, int animationId)") !=
+           std::string::npos);
+    assert(helperSource.find("bool restorePlayerVisualFeedback(Runtime &runtime)") !=
+           std::string::npos);
+    assert(helperSource.find("bool setPlayerInputEnabled(Runtime &runtime, bool enabled)") !=
+           std::string::npos);
+    assert(helperSource.find("bool setPlayerLookEnabled(Runtime &runtime, bool enabled)") !=
+           std::string::npos);
+    assert(helperSource.find("bool setMusicVolume(Runtime &runtime, float volume)") !=
+           std::string::npos);
+    assert(helperSource.find("bool setSfxVolume(Runtime &runtime, float volume)") !=
+           std::string::npos);
+    assert(helperSource.find("IGI::PLAYER::CYCLE_WEAPON") != std::string::npos);
+    assert(helperSource.find("IGI::PLAYER::REQUEST_WEAPON_ANIM") != std::string::npos);
+    assert(helperSource.find("IGI::HUMAN::LOCK_INPUT") != std::string::npos);
+    assert(helperSource.find("IGI::HUMAN::ENABLE_LOOK") != std::string::npos);
+    assert(helperSource.find("IGI::AUDIO::SET_SFX_VOLUME") != std::string::npos);
 }

@@ -47,17 +47,7 @@ void runModMenu(const igi::MenuConfig &config, igi::Runtime &runtime, std::size_
         return;
     const auto &id = config.items[item].id;
     if (id == "player_info") {
-        if (!igi::requireLiveGameThread(runtime))
-            return;
-        auto *player = reinterpret_cast<IGI::Human *>(IGI::GAME::GET_PLAYER(0));
-        if (!player) {
-            igi::log(igi::LogLevel::Warning, "advanced menu: player unavailable");
-            return;
-        }
-        const std::string state = "Player: team " + std::to_string(IGI::HUMAN::GET_TEAM(player)) +
-                                  ", " + (IGI::HUMAN::IS_DEAD(player) ? "dead" : "alive");
-        igi::log(igi::LogLevel::Info, state);
-        IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, state.c_str());
+        (void)igi::logPlayerState(runtime);
     } else if (id == "ammo" || id == "music" || id == "display") {
         igi::executeMenuNativeAction(config, runtime, item, value);
     } else {

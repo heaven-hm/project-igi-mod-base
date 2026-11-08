@@ -8,14 +8,20 @@
 #include "ui/menu_resource.hpp"
 #include "ui/menu_script.hpp"
 
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <sstream>
 #include <vector>
 
 namespace igi {
 static bool executeMenuCommandFor(IGI::Task *manager, std::string_view commandScript);
+static bool requireLiveGameThread(Runtime &runtime);
+static bool refreshLiveMenu(Runtime &runtime, std::string_view effect);
+static bool executeMenuCommand(std::string_view commandScript);
+static void setThirdPersonView(bool active);
 
 namespace {
 constexpr int kModPrecipitationTaskId = 4095;
@@ -112,14 +118,14 @@ bool createPrecipitationTask(std::string_view weather) {
 }
 } // namespace
 
-bool requireLiveGameThread(Runtime &runtime) {
+static bool requireLiveGameThread(Runtime &runtime) {
     if (runtime.allowDirectNativeCallbackThread())
         return true;
     log(LogLevel::Error, "live menu action rejected: runtime/game thread unavailable");
     return false;
 }
 
-bool refreshLiveMenu(Runtime &runtime, std::string_view effect) {
+static bool refreshLiveMenu(Runtime &runtime, std::string_view effect) {
     if (!requireLiveGameThread(runtime))
         return false;
     auto *game = IGI::GAME::GET();
@@ -144,6 +150,8 @@ bool refreshLiveMenu(Runtime &runtime, std::string_view effect) {
 }
 
 bool setWeather(Runtime &runtime, std::string_view weather) {
+    if (!requireLiveGameThread(runtime))
+        return false;
     const bool wasActive = hasLevelWeather();
 
     if (weather == "Off" || weather == "off" || weather == "false") {
@@ -181,6 +189,8 @@ bool setWeather(Runtime &runtime, std::string_view weather) {
 }
 
 bool setFps(Runtime &runtime, std::string_view value) {
+    if (!requireLiveGameThread(runtime))
+        return false;
     int fps = 30;
     try {
         fps = std::stoi(std::string(value));
@@ -194,6 +204,155 @@ bool setFps(Runtime &runtime, std::string_view value) {
     IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, statusMsg.c_str());
     log(LogLevel::Info, "FPS set to " + std::to_string(fps) + " via IGI::MISC::FRAMES_SET");
     (void)refreshLiveMenu(runtime, "frame rate");
+    return true;
+}
+
+bool enableUnlimitedAmmo(Runtime &runtime) {
+    if (!requireLiveGameThread(runtime))
+        return false;
+    IGI::PLAYER::SET_UNLIMITED_AMMO();
+    log(LogLevel::Info, "unlimited ammo enabled via IGI::PLAYER::SET_UNLIMITED_AMMO");
+    (void)refreshLiveMenu(runtime, "unlimited ammo");
+    return true;
+}
+
+bool pickupPlayerWeapon(Runtime &runtime, std::string_view weaponId, int ammo) {
+    if (!requireLiveGameThread(runtime) || weaponId.empty())
+        return false;
+    auto *player = IGI::GAME::GET_PLAYER(0);
+    if (!player)
+        return false;
+    int args[] = {IGI::SCRIPT::EVAL_CONST(std::string(weaponId).c_str()), ammo};
+    if (args[0] == 0)
+        return false;
+    IGI::PLAYER::PICK_UP_WEAPON(reinterpret_cast<IGI::Human *>(player), args);
+    log(LogLevel::Info, "weapon pickup requested via IGI::PLAYER::PICK_UP_WEAPON");
+    (void)refreshLiveMenu(runtime, "weapon pickup");
+    return true;
+}
+
+bool cyclePlayerWeapon(Runtime &runtime, int force) {
+    if (!requireLiveGameThread(runtime))
+        return false;
+    auto *player = IGI::GAME::GET_PLAYER(0);
+    if (!player)
+        return false;
+    IGI::PLAYER::CYCLE_WEAPON(reinterpret_cast<IGI::HumanPlayer *>(player), force);
+    log(LogLevel::Info, "weapon cycle requested via IGI::PLAYER::CYCLE_WEAPON");
+    return true;
+}
+
+bool requestPlayerWeaponAnimation(Runtime &runtime, int animationId) {
+    if (!requireLiveGameThread(runtime))
+        return false;
+    auto *player = IGI::GAME::GET_PLAYER(0);
+    if (!player)
+        return false;
+    IGI::PLAYER::REQUEST_WEAPON_ANIM(reinterpret_cast<IGI::HumanPlayer *>(player), animationId);
+    log(LogLevel::Info, "weapon animation requested via IGI::PLAYER::REQUEST_WEAPON_ANIM id=" +
+                            std::to_string(animationId));
+    return true;
+}
+
+bool restorePlayerVisualFeedback(Runtime &runtime) {
+    if (!requireLiveGameThread(runtime))
+        return false;
+    auto *player = IGI::GAME::GET_PLAYER(0);
+    if (!player)
+        return false;
+    auto *humanPlayer = reinterpret_cast<IGI::HumanPlayer *>(player);
+    IGI::PLAYER::FADE_HIT_FLASH(humanPlayer);
+    IGI::PLAYER::FADE_FLASH(humanPlayer);
+    log(LogLevel::Info, "player visual feedback reset through retail fade natives");
+    return true;
+}
+
+bool setPlayerInputEnabled(Runtime &runtime, bool enabled) {
+    if (!requireLiveGameThread(runtime))
+        return false;
+    auto *player = IGI::GAME::GET_PLAYER(0);
+    if (!player)
+        return false;
+    auto *human = reinterpret_cast<IGI::Human *>(player);
+    if (enabled)
+        IGI::HUMAN::UNLOCK_INPUT(human);
+    else
+        IGI::HUMAN::LOCK_INPUT(human);
+    log(LogLevel::Info, std::string("player input ") + (enabled ? "enabled" : "disabled"));
+    return true;
+}
+
+bool setPlayerLookEnabled(Runtime &runtime, bool enabled) {
+    if (!requireLiveGameThread(runtime))
+        return false;
+    auto *player = IGI::GAME::GET_PLAYER(0);
+    if (!player)
+        return false;
+    auto *human = reinterpret_cast<IGI::Human *>(player);
+    if (enabled)
+        IGI::HUMAN::ENABLE_LOOK(human);
+    else
+        IGI::HUMAN::DISABLE_LOOK(human);
+    log(LogLevel::Info, std::string("player look ") + (enabled ? "enabled" : "disabled"));
+    return true;
+}
+
+bool setMusicVolume(Runtime &runtime, float volume) {
+    if (!requireLiveGameThread(runtime))
+        return false;
+    const float clamped = std::clamp(volume, 0.0F, 1.0F);
+    IGI::AUDIO::MUSIC_SET_VOLUME(clamped, clamped);
+    log(LogLevel::Info, "music volume set to " + std::to_string(clamped));
+    (void)refreshLiveMenu(runtime, "music volume");
+    return true;
+}
+
+bool setSfxVolume(Runtime &runtime, float volume) {
+    if (!requireLiveGameThread(runtime))
+        return false;
+    const float clamped = std::clamp(volume, 0.0F, 1.0F);
+    IGI::AUDIO::SET_SFX_VOLUME(clamped);
+    log(LogLevel::Info, "SFX volume set to " + std::to_string(clamped));
+    (void)refreshLiveMenu(runtime, "SFX volume");
+    return true;
+}
+
+bool logFlowDiagnostics(Runtime &runtime) {
+    if (!requireLiveGameThread(runtime))
+        return false;
+    std::ostringstream state;
+    state << "IGI flow: fps=" << IGI::OTHER::FLOW_GET_FPS()
+          << " frames=" << IGI::OTHER::FLOW_GET_FRAMES()
+          << " renders=" << IGI::OTHER::FLOW_GET_RENDERS();
+    log(LogLevel::Info, state.str());
+    return true;
+}
+
+bool logPlayerState(Runtime &runtime) {
+    if (!requireLiveGameThread(runtime))
+        return false;
+    auto *player = reinterpret_cast<IGI::Human *>(IGI::GAME::GET_PLAYER(0));
+    if (!player)
+        return false;
+    const std::string state = "Player: team " + std::to_string(IGI::HUMAN::GET_TEAM(player)) +
+                              ", " + (IGI::HUMAN::IS_DEAD(player) ? "dead" : "alive");
+    log(LogLevel::Info, state);
+    IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, state.c_str());
+    return true;
+}
+
+bool setPlayerThirdPersonView(Runtime &runtime, bool active) {
+    if (!requireLiveGameThread(runtime))
+        return false;
+    auto *player = IGI::GAME::GET_PLAYER(0);
+    if (!player)
+        return false;
+    const int mode = active ? 2 : 1;
+    IGI::HUMAN::VIEW_CAM(reinterpret_cast<IGI::Human *>(player), mode);
+    setThirdPersonView(active);
+    log(LogLevel::Info,
+        std::string("camera view set to ") + (active ? "third person" : "first person"));
+    (void)refreshLiveMenu(runtime, "camera view");
     return true;
 }
 
@@ -213,10 +372,7 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
     } else if (id == "fps" || id == "frames" || action.find("Frame") != std::string::npos) {
         setFps(runtime, value);
     } else if (id == "ammo" || action.find("UnlimitedAmmo") != std::string::npos) {
-        IGI::PLAYER::SET_UNLIMITED_AMMO();
-        IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, "IGI MOD: Unlimited ammo enabled");
-        log(LogLevel::Info, "unlimited ammo enabled via IGI::PLAYER::SET_UNLIMITED_AMMO");
-        (void)refreshLiveMenu(runtime, "unlimited ammo");
+        enableUnlimitedAmmo(runtime);
     } else if (id == "music" || action.find("MusicVolume") != std::string::npos) {
         float volume = 1.0F;
         if (value == "mute" || value == "Mute")
@@ -225,9 +381,7 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
             volume = 0.35F;
         else
             volume = 1.0F;
-        IGI::AUDIO::MUSIC_SET_VOLUME(volume, volume);
-        log(LogLevel::Info, "music volume set to " + std::to_string(volume));
-        (void)refreshLiveMenu(runtime, "music volume");
+        setMusicVolume(runtime, volume);
     } else if (id == "sfx") {
         float vol = 1.0F;
         if (value == "Mute" || value == "mute")
@@ -236,18 +390,9 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
             vol = 0.35F;
         else
             vol = 1.0F;
-        IGI::AUDIO::SET_SFX_VOLUME(vol);
-        log(LogLevel::Info, "SFX volume set to " + std::to_string(vol));
-        (void)refreshLiveMenu(runtime, "SFX volume");
+        setSfxVolume(runtime, vol);
     } else if (id == "view") {
-        auto *player = IGI::GAME::GET_PLAYER(0);
-        if (player) {
-            const int mode = (value == "Third Person") ? 2 : 1;
-            setThirdPersonView(mode == 2);
-            IGI::HUMAN::VIEW_CAM(reinterpret_cast<IGI::Human *>(player), mode);
-            log(LogLevel::Info, "camera view set to " + std::string(value));
-            (void)refreshLiveMenu(runtime, "camera view");
-        }
+        setPlayerThirdPersonView(runtime, value == "Third Person");
     } else if (id == "level") {
         int levelNum = 1;
         if (value.starts_with("Level ")) {
@@ -308,7 +453,7 @@ static bool executeMenuCommandFor(IGI::Task *manager, std::string_view commandSc
     return true;
 }
 
-bool executeMenuCommand(std::string_view commandScript) {
+static bool executeMenuCommand(std::string_view commandScript) {
     auto *game = IGI::GAME::GET();
     if (!game)
         return false;
@@ -325,6 +470,8 @@ bool executeMenuCommand(std::string_view commandScript) {
 }
 
 bool changeLevel(Runtime &runtime, int levelId) {
+    if (!requireLiveGameThread(runtime))
+        return false;
     if (levelId < 1 || levelId > 14)
         return false;
     auto *game = IGI::GAME::GET();
@@ -346,78 +493,66 @@ bool changeLevel(Runtime &runtime, int levelId) {
     return true;
 }
 
-void setThirdPersonView(bool active) {
+static void setThirdPersonView(bool active) {
     g_thirdPersonActive.store(active, std::memory_order_release);
 }
 
 bool isThirdPersonActive() {
-    if (g_thirdPersonActive.load(std::memory_order_acquire))
-        return true;
-#if defined(_WIN32)
-    auto *game = IGI::GAME::GET();
-    if (!game)
-        return false;
-    auto **camPtr = reinterpret_cast<char **>(reinterpret_cast<char *>(game) + 0x5C);
-    if (!camPtr || !*camPtr)
-        return false;
-    return *reinterpret_cast<const int *>(*camPtr + 0xE8) == 2;
-#else
-    return false;
-#endif
+    return g_thirdPersonActive.load(std::memory_order_acquire);
 }
 
-void renderThirdPersonCrosshair() {
+bool renderThirdPersonCrosshair() {
 #if defined(_WIN32)
     if (!isThirdPersonActive())
-        return;
+        return false;
 
     auto *game = IGI::GAME::GET();
     if (!game)
-        return;
+        return false;
 
     if (IGI::GAME::IS_PAUSED && IGI::GAME::IS_PAUSED())
-        return;
+        return false;
 
     auto *player = IGI::GAME::GET_PLAYER(0);
     if (!player)
-        return;
+        return false;
 
     using StatusScreenGetFn = void *(__cdecl *)();
     const auto statusScreenGet =
         reinterpret_cast<StatusScreenGetFn>(igi::re::HASH::StatusScreen_Get);
     if (!statusScreenGet)
-        return;
+        return false;
 
     auto *status = statusScreenGet();
     if (!status)
-        return;
+        return false;
 
     void *cross = reinterpret_cast<char *>(status) + 0x74;
 
     using DisplayGetModeFn = int *(__cdecl *)();
     const auto displayGetMode = reinterpret_cast<DisplayGetModeFn>(igi::re::HASH::Display_GetMode);
     if (!displayGetMode)
-        return;
+        return false;
 
     auto *mode = displayGetMode();
     if (!mode)
-        return;
+        return false;
 
     const int width = mode[1];
     const int height = mode[2];
     if (width <= 0 || height <= 0)
-        return;
+        return false;
 
     using SpriteDimFn = int(__cdecl *)(void *);
     const auto spriteWidth = reinterpret_cast<SpriteDimFn>(igi::re::HASH::Sprite_Width);
     const auto spriteHeight = reinterpret_cast<SpriteDimFn>(igi::re::HASH::Sprite_Height);
     if (!spriteWidth || !spriteHeight)
-        return;
+        return false;
 
     const int sw = spriteWidth(cross);
     const int sh = spriteHeight(cross);
     if (sw <= 0 || sh <= 0)
-        return;
+        return false;
 
     const float cx = static_cast<float>(width) * 0.5f;
     const float cy = static_cast<float>(height) * 0.5f;
@@ -431,9 +566,12 @@ void renderThirdPersonCrosshair() {
     using DrawSpriteZFn =
         void(__cdecl *)(const void *, float, float, float, float, float, int, int, int, float);
     const auto drawSpriteZ = reinterpret_cast<DrawSpriteZFn>(igi::re::HASH::Draw_SpriteZ);
-    if (drawSpriteZ) {
-        drawSpriteZ(cross, x, y, kGray, kGray, kGray, 0, 0, 0, 1.0f);
-    }
+    if (!drawSpriteZ)
+        return false;
+    drawSpriteZ(cross, x, y, kGray, kGray, kGray, 0, 0, 0, 1.0f);
+    return true;
+#else
+    return false;
 #endif
 }
 } // namespace igi
