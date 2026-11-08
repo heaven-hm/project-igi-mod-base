@@ -20,7 +20,7 @@ All public helpers live in `demos/helpers/menu_helpers.hpp`, with their only imp
 
 ### WeaponHelpers
 
-`pickup(weaponId, ammo)` resolves a retail `WEAPON_ID_*` symbol and gives it to the local player; `enableUnlimitedAmmo()` calls the retail unlimited-ammo behavior; `cycle(force)`, `selectCategory()`, `setAnimation(animation)`, and `requestAnimation(animation)` invoke the player’s verified weapon controls. Use these for visible weapon gameplay effects, with IDs from the retail data rather than guessed constants.
+`pickup(weaponId, ammo)` resolves a retail `WEAPON_ID_*` symbol and gives it to the local player; `enableUnlimitedAmmo()` calls the retail unlimited-ammo behavior; `cycle(force)`, `selectCategory()`, `setAnimation(animation)`, and `requestAnimation(animation)` invoke the player’s verified weapon controls. Pass `1` to `cycle` for a direct forced next-weapon selection; pass `0` only from the game input update path, where it processes the next/previous key edges. Use IDs from retail data rather than guessed constants.
 
 `hasAmmo(task)` and `type(task)` inspect an existing retail weapon task. `fireEvent`, `typeEvent`, `triggerEvent`, `stateEvent`, and `moveEvent` return the game’s weapon event identifiers, for use only by code already handling the matching weapon task/event path.
 

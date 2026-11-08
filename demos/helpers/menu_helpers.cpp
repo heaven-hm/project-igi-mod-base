@@ -389,7 +389,7 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
     } else if (id == "ammo" || action.find("UnlimitedAmmo") != std::string::npos) {
         enableUnlimitedAmmo(runtime);
     } else if (id == "weapon_cycle") {
-        WeaponHelpers(runtime).cycle(0);
+        WeaponHelpers(runtime).cycle(1);
     } else if (id == "player_reset_damage") {
         PlayerHelpers(runtime).resetDamage();
     } else if (id == "input") {

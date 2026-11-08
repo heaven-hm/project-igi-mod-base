@@ -50,6 +50,7 @@ for item_id in ids:
 
 required_native_paths = {
     "weapon_pickup": "WeaponHelpers(runtime).pickup",
+    "weapon_cycle": "WeaponHelpers(runtime).cycle(1)",
     "vehicle_reset": "VehicleHelpers(runtime).resetControls",
     "vehicle_explode": "VehicleHelpers(runtime).explodeCar",
     "npc_ensure_weapon": "NpcHelpers(runtime).ensureWeapon",
