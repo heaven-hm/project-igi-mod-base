@@ -672,6 +672,18 @@ bool CameraHelpers::setViewMode(int mode) const {
         return false;
     return setPlayerThirdPersonView(runtime_, mode == 3);
 }
+std::optional<int> CameraHelpers::mode() const {
+    auto *player = localPlayer(runtime_);
+    if (!player)
+        return std::nullopt;
+    IGI::HumanCameraInfo info{};
+    IGI::HUMAN::GET_CAMERA_INFO(reinterpret_cast<IGI::Human *>(player), &info);
+    return info.mode;
+}
+std::optional<bool> CameraHelpers::isThirdPersonActive() const {
+    const auto cameraMode = mode();
+    return cameraMode ? std::optional<bool>(*cameraMode == 3) : std::nullopt;
+}
 bool WorldHelpers::changeLevel(int level) const {
     return igi::changeLevel(runtime_, level);
 }

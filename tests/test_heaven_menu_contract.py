@@ -35,6 +35,9 @@ assert set(assigned_categories.values()) == categories, (
 assert "const int mode = active ? 3 : 1;" in HELPERS, (
     "the retail camera path uses mode 1 for first person and mode 3 for third person"
 )
+assert "IGI::HUMAN::GET_CAMERA_INFO" in HELPERS, (
+    "camera state must come from the retail camera-info handler, not a helper-owned cache"
+)
 
 # weapon_pickup is intentionally resolved by the Heaven adapter so it can bind
 # the selected retail weapon symbol and ammo value together.

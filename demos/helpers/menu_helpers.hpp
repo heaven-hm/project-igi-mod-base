@@ -78,6 +78,8 @@ class CameraHelpers {
   public:
     explicit CameraHelpers(Runtime &runtime) : runtime_(runtime) {}
     bool setViewMode(int mode) const;
+    std::optional<int> mode() const;
+    std::optional<bool> isThirdPersonActive() const;
     bool setWeaponTarget(IGI::HumanView *view, float pitch, float yaw, float pitchSpeed,
                          float yawSpeed) const;
     bool setWeaponAngles(IGI::HumanView *view, float pitch, float yaw) const;

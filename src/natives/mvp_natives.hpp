@@ -17,6 +17,19 @@ struct Gun;
 struct Heli;
 struct Hud;
 struct Human;
+#pragma pack(push, 4)
+struct HumanCameraInfo {
+    double position[3];
+    float matrix[9];
+    int matrixCount;
+    float fov;
+    float body[9];
+    int bodyMatrixCount;
+    float verticalFov;
+    int mode;
+};
+#pragma pack(pop)
+static_assert(sizeof(HumanCameraInfo) == 0x74);
 struct HumanAI;
 struct HumanCamera;
 struct HumanPlayer;
@@ -210,6 +223,7 @@ inline constexpr std::uint32_t GAME_GET_EVENT11 = 0x00416860;
 inline constexpr std::uint32_t HUMAN_PLAYER_CLEAR_FLAG_D68 = 0x0040c2e0;
 inline constexpr std::uint32_t HUMAN_SET_AI = 0x00460c70;
 inline constexpr std::uint32_t HUMAN_RESET_DAMAGE = 0x00489e30;
+inline constexpr std::uint32_t HUMAN_GET_CAMERA_INFO = 0x0045fcd0;
 inline constexpr std::uint32_t SOLDIER_STATE17_ENTER = 0x0045aa60;
 inline constexpr std::uint32_t GUN_GET_EVENT2 = 0x00477c20;
 inline constexpr std::uint32_t HUMAN_VIEW_SET_ZOOMED = 0x004659d0;
@@ -435,6 +449,7 @@ NATIVE_DECL void *GET_PARAM_TABLE();
 NATIVE_DECL void *GET_LIST();
 NATIVE_DECL void SET_AI(Human *h, HumanAI *ai);
 NATIVE_DECL void RESET_DAMAGE(Human *h);
+NATIVE_DECL void GET_CAMERA_INFO(Human *h, HumanCameraInfo *info);
 NATIVE_DECL int GET_STATE(Human *h);
 NATIVE_DECL int GET_INDEX(Human *h);
 NATIVE_DECL int GET_TEAM(Human *h);
