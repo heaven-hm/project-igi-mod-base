@@ -120,6 +120,9 @@ LIVE_OBJECT_NATIVES = frozenset({
     "PLAYER::SET_WEAPON_ANIM",
     "PLAYER::SELECT_WEAPON_CATEGORY",
     "WEAPON::HAS_AMMO",
+    "WEAPON::WEAPON_GET_TYPE",
+    "TASK::FIND_CHILD",
+    "TASK::FIND_NEXT",
     "HUMAN::UNLOCK_INPUT",
     "HUMAN::LOCK_INPUT",
     "HUMAN::ENABLE_LOOK",
@@ -145,12 +148,15 @@ LIVE_OBJECT_NATIVES = frozenset({
     "VEHICLE::GET_GUNNER_POS",
     "VEHICLE::GET_TRACK_FACTOR",
     "VEHICLE::CAR_EXPLODE",
+    "VEHICLE::GET_MOUNTED_GUN",
+    "VEHICLE::FIND_DOOR",
     "VEHICLE::RESET_CONTROLS",
     "VEHICLE::HELI_GET_CONTROL_INFO",
     "VEHICLE::GET_STATE_SIZE",
     "VEHICLE::GET_CONFIG_SIZE",
     "VEHICLE::GET_SOUND_INFO",
     "SOLDIER::ENSURE_WEAPON",
+    "AI::REMOVE_ALARM_ACTIONS",
 })
 
 
@@ -615,8 +621,8 @@ def build_stubs():
 # once and builds the full name -> address map.
 
 _HASH_RE = re.compile(r"inline\s+constexpr\s+std::uint32_t\s+(\w+)\s*=\s*(0x[0-9a-fA-F]+)\s*;")
-_DECL_RE = re.compile(r"NATIVE_DECL\s+[\w:\s\*]+?\s+(\w+)\s*\([^)]*\)\s*\{")
-_SIGNATURE_RE = re.compile(r"NATIVE_DECL\s+[\w:\s\*]+?\s+(\w+)\s*\(([^)]*)\)\s*;")
+_DECL_RE = re.compile(r"NATIVE_DECL\s+[\w:\s\*]+?\*?\s*(\w+)\s*\([^)]*\)\s*\{")
+_SIGNATURE_RE = re.compile(r"NATIVE_DECL\s+[\w:\s\*]+?\*?\s*(\w+)\s*\(([^)]*)\)\s*;")
 _NAMESPACE_RE = re.compile(r"namespace\s+(\w+)\s*\{")
 _HASH_USE_RE = re.compile(r"HASH::(\w+)")
 _SOURCE_CALL_RE = re.compile(r"IGI::([A-Z_][A-Z_0-9]*)::([A-Z_][A-Z_0-9]*)")
