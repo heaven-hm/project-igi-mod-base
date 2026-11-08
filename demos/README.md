@@ -51,3 +51,7 @@ The old third-person crosshair API is deliberately absent. It had a helper-owned
 ## Safe unload
 
 Never force-eject a loaded mod DLL. Build `igi_injector` and request a coordinated unload with `IGI-Injector.exe -p <igi-pid> -i <absolute-dll-path> -e`. The DLL first removes its game-thread hooks, menu callbacks, and ImGui/QVM resources; only its own host thread then calls `FreeLibraryAndExitThread`. `run-igi-wine.sh` supports the same path with `IGI_SAFE_EJECT=true`.
+
+## Windows x86 verification
+
+Build and run the Windows unit executable under Wine without launching the game: `WINEPREFIX=<prefix> WINEDEBUG=-all <wine> build-win32-release/igi_sdk_tests.exe`. Then use the retail executable only through the Unicorn harness, which emulates the DLL/frame callback rather than injecting it: `IGI_EXE=<retail-igi.exe> IGI_DLL=build-win32-release/igi-heaven-mod-internal.dll python3 tools/igi_runtime_harness.py --frames 5 --lenient`. Run `--verify-menu-helpers` as a separate harness invocation to validate the weather and level-transition native sequence.
