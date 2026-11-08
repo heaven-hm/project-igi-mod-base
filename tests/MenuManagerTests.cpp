@@ -22,6 +22,7 @@ void menuManagerSchedulerBoundaryTest();
 void menuManagerInputRepeatTest();
 void menuManagerShutdownTest();
 void externalImGuiMenuParityTest();
+void verifiedMenuHelperContractTest();
 
 void menuConfigTest() {
     assert(igi::parseDirectInputKey("F5") == 0x3F);
@@ -101,6 +102,7 @@ void menuManagerModelTest() {
     menuManagerInputRepeatTest();
     menuManagerShutdownTest();
     externalImGuiMenuParityTest();
+    verifiedMenuHelperContractTest();
 }
 
 void menuManagerInputRepeatTest() {
@@ -233,31 +235,19 @@ std::string readDemoSource(const std::string& relativePath) {
     return buffer.str();
 }
 
-std::string normalizeMenuHelperInclude(std::string source) {
-    const std::string externalInclude = "../../internal/helpers/menu_helpers.hpp";
-    const std::string internalInclude = "../helpers/menu_helpers.hpp";
-    const auto pos = source.find(externalInclude);
-    if (pos != std::string::npos) {
-        source.replace(pos, externalInclude.size(), internalInclude);
-    }
-    return source;
-}
 } // namespace
 
 void externalImGuiMenuParityTest() {
     const auto internalBasic = readDemoSource("demos/internal/basic-mod/basic_menu.cpp");
-    const auto externalBasic =
-        normalizeMenuHelperInclude(readDemoSource("demos/external/basic-mod/basic_menu.cpp"));
+    const auto externalBasic = readDemoSource("demos/external/basic-mod/basic_menu.cpp");
     assert(internalBasic == externalBasic);
 
     const auto internalSimple = readDemoSource("demos/internal/simple-mod/simple_menu.cpp");
-    const auto externalSimple =
-        normalizeMenuHelperInclude(readDemoSource("demos/external/simple-mod/simple_menu.cpp"));
+    const auto externalSimple = readDemoSource("demos/external/simple-mod/simple_menu.cpp");
     assert(internalSimple == externalSimple);
 
     const auto internalAdvanced = readDemoSource("demos/internal/advanced-mod/advanced_menu.cpp");
-    const auto externalAdvanced =
-        normalizeMenuHelperInclude(readDemoSource("demos/external/advanced-mod/advanced_menu.cpp"));
+    const auto externalAdvanced = readDemoSource("demos/external/advanced-mod/advanced_menu.cpp");
     assert(internalAdvanced == externalAdvanced);
 
     const auto imguiHost = readDemoSource("src/mod_base/imgui_menu_host.cpp");
@@ -291,4 +281,11 @@ void externalImGuiMenuParityTest() {
         assert(dlclose(handle) == 0);
     }
 #endif
+}
+
+void verifiedMenuHelperContractTest() {
+    const auto helperSource = readDemoSource("demos/helpers/menu_helpers.cpp");
+    assert(helperSource.find("IGI::AUDIO::MUSIC_SET_VOLUME") != std::string::npos);
+    assert(helperSource.find("IGI::MISC::FRAMES_SET") != std::string::npos);
+    assert(helperSource.find("IGI::HUMAN::VIEW_CAM") != std::string::npos);
 }
