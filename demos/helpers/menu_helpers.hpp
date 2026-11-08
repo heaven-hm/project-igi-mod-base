@@ -153,6 +153,8 @@ class NpcHelpers {
     explicit NpcHelpers(Runtime &runtime) : runtime_(runtime) {}
     bool ensureWeapon(IGI::Human *npc) const;
     bool resetDamage(IGI::Human *npc) const;
+    bool snapToGround(IGI::Human *npc) const;
+    bool setCollisionEnabled(IGI::Human *npc, bool enabled) const;
     bool executeSoldier(IGI::Human *npc) const;
 
   private:

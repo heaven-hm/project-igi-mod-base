@@ -59,6 +59,8 @@ required_native_paths = {
     "vehicle_drive": "VehicleHelpers(runtime).driveCar",
     "npc_execute": "NpcHelpers(runtime).executeSoldier",
     "npc_ensure_weapon": "NpcHelpers(runtime).ensureWeapon",
+    "npc_snap_ground": "NpcHelpers(runtime).snapToGround",
+    "npc_collision": "NpcHelpers(runtime).setCollisionEnabled",
     "player_reset_damage": "PlayerHelpers(runtime).resetDamage",
     "player_snap_ground": "PlayerHelpers(runtime).snapToGround",
     "player_collision": "PlayerHelpers(runtime).setCollisionEnabled",

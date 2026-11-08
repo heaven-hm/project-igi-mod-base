@@ -524,6 +524,19 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
             log(LogLevel::Info, "NPC damage state reset through the human native");
         else
             log(LogLevel::Warning, "NPC damage reset rejected: selected NPC was unavailable");
+    } else if (id == "npc_snap_ground") {
+        auto *npc = EntityHelpers(runtime).npcAt(g_selectedNpcSlot);
+        if (NpcHelpers(runtime).snapToGround(npc))
+            log(LogLevel::Info, "NPC snapped to ground through the human native");
+        else
+            log(LogLevel::Warning, "NPC ground recovery rejected: selected NPC was unavailable");
+    } else if (id == "npc_collision") {
+        auto *npc = EntityHelpers(runtime).npcAt(g_selectedNpcSlot);
+        if (NpcHelpers(runtime).setCollisionEnabled(npc, value == "Enabled")) {
+            log(LogLevel::Info, "NPC collision state updated through the human native");
+        } else {
+            log(LogLevel::Warning, "NPC collision request rejected: selected NPC was unavailable");
+        }
     } else if (id == "npc_execute") {
         auto *npc = EntityHelpers(runtime).npcAt(g_selectedNpcSlot);
         if (NpcHelpers(runtime).executeSoldier(npc))
@@ -1247,6 +1260,12 @@ bool NpcHelpers::resetDamage(IGI::Human *npc) const {
         return false;
     IGI::HUMAN::RESET_DAMAGE(npc);
     return true;
+}
+bool NpcHelpers::snapToGround(IGI::Human *npc) const {
+    return EntityHelpers(runtime_).snapHumanToGround(npc);
+}
+bool NpcHelpers::setCollisionEnabled(IGI::Human *npc, bool enabled) const {
+    return EntityHelpers(runtime_).setHumanCollision(npc, enabled);
 }
 bool NpcHelpers::executeSoldier(IGI::Human *npc) const {
     if (!requireLiveGameThread(runtime_) || !npc)

@@ -62,6 +62,12 @@ bool configureModMenu(igi::MenuConfig &config) {
          {"NPC 1", "NPC 2", "NPC 3", "NPC 4", "NPC 5", "NPC 6", "NPC 7", "NPC 8"}},
         {"npc_ensure_weapon", igi::ModMenuItemKind::Action, "Equip Selected NPC", "", {}},
         {"npc_reset_damage", igi::ModMenuItemKind::Action, "Reset Selected NPC Damage", "", {}},
+        {"npc_snap_ground", igi::ModMenuItemKind::Action, "Snap Selected NPC To Ground", "", {}},
+        {"npc_collision",
+         igi::ModMenuItemKind::List,
+         "Selected NPC Collision",
+         "",
+         {"Enabled", "Disabled"}},
         {"npc_execute", igi::ModMenuItemKind::Action, "Execute Selected Soldier", "", {}},
         {"level",
          igi::ModMenuItemKind::List,
@@ -94,9 +100,11 @@ bool configureModMenu(igi::MenuConfig &config) {
     config.items[15].category = "AI / NPC";
     config.items[16].category = "AI / NPC";
     config.items[17].category = "AI / NPC";
-    config.items[18].category = "World";
-    config.items[19].category = "Player";
-    config.items[20].category = "Player";
+    config.items[18].category = "AI / NPC";
+    config.items[19].category = "AI / NPC";
+    config.items[20].category = "World";
+    config.items[21].category = "Player";
+    config.items[22].category = "Player";
     return true;
 }
 
