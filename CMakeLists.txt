@@ -209,6 +209,36 @@ if(IGI_SDK_BUILD_DEMOS)
         endif()
     endif()
 
+    set(IGI_CUSTOM_DEMO "demos/my-mod/my_mod.cpp" CACHE STRING "Custom mod menu source file")
+    if(IGI_CUSTOM_DEMO AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${IGI_CUSTOM_DEMO}")
+        add_library(igi_custom_mod_menu SHARED
+            src/mod_base/menu_host.cpp
+            ${IGI_CUSTOM_DEMO}
+            demos/helpers/menu_helpers.cpp
+            ${IGI_INTERNAL_MENU_PLATFORM}
+        )
+        target_link_libraries(igi_custom_mod_menu PRIVATE mod_base)
+        target_include_directories(igi_custom_mod_menu PRIVATE src demos)
+        if(WIN32)
+            target_link_options(igi_custom_mod_menu PRIVATE -static -Wl,--image-base,0x64000000)
+        endif()
+        set_target_properties(igi_custom_mod_menu PROPERTIES OUTPUT_NAME "igi-custom-mod-internal" PREFIX "")
+
+        add_library(igi_custom_mod_menu_external SHARED
+            src/mod_base/imgui_menu_host.cpp
+            ${IGI_CUSTOM_DEMO}
+            demos/helpers/menu_helpers.cpp
+            ${IGI_INTERNAL_MENU_PLATFORM}
+        )
+        target_link_libraries(igi_custom_mod_menu_external PRIVATE mod_base)
+        target_include_directories(igi_custom_mod_menu_external PRIVATE src demos)
+        if(WIN32)
+            target_link_libraries(igi_custom_mod_menu_external PRIVATE igi_imgui_dx7)
+            target_link_options(igi_custom_mod_menu_external PRIVATE -static -Wl,--image-base,0x64000000)
+        endif()
+        set_target_properties(igi_custom_mod_menu_external PROPERTIES OUTPUT_NAME "igi-custom-mod-external" PREFIX "")
+    endif()
+
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/demos/imgui/external_demo.cpp")
     add_executable(igi_menu_manager_external demos/imgui/external_demo.cpp)
     target_link_libraries(igi_menu_manager_external PRIVATE mod_base)

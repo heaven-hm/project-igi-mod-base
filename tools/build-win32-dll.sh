@@ -72,16 +72,27 @@ if [[ -f "$build_dir/CMakeCache.txt" ]]; then
     fi
 fi
 
+custom_demo_arg=()
+if [[ -n "$demo" ]]; then
+    custom_demo_arg=("-DIGI_CUSTOM_DEMO=$demo")
+    if [[ "$target" == "igi_basic_mod_menu" ]]; then
+        target=igi_custom_mod_menu
+    fi
+fi
+
 cmake -S "$root" -B "$build_dir" \
     -DCMAKE_SYSTEM_NAME=Windows \
     -DCMAKE_SYSTEM_PROCESSOR=x86 \
     -DCMAKE_C_COMPILER="$c_compiler" \
     -DCMAKE_CXX_COMPILER="$cxx_compiler" \
     -DCMAKE_RC_COMPILER="$rc_compiler" \
-    -DCMAKE_BUILD_TYPE="$configuration"
+    -DCMAKE_BUILD_TYPE="$configuration" \
+    "${custom_demo_arg[@]}"
 cmake --build "$build_dir" --parallel --target "$target"
 
 case "$target" in
+    igi_custom_mod_menu) artifact=${IGI_DLL_NAME:-igi-custom-mod-internal.dll} ;;
+    igi_custom_mod_menu_external) artifact=${IGI_DLL_NAME:-igi-custom-mod-external.dll} ;;
     igi_advanced_mod_menu) artifact=${IGI_DLL_NAME:-igi-advanced-mod-internal.dll} ;;
     igi_simple_mod_menu) artifact=${IGI_DLL_NAME:-igi-simple-mod-internal.dll} ;;
     igi_basic_mod_menu) artifact=${IGI_DLL_NAME:-igi-basic-mod-internal.dll} ;;
@@ -107,6 +118,7 @@ if ((verify)); then
     fi
     if [[ -z "$demo" ]]; then
         case "$target" in
+            igi_custom_mod_menu|igi_custom_mod_menu_external) demo=demos/my-mod/my_mod.cpp ;;
             igi_advanced_mod_menu) demo=demos/internal/advanced-mod/advanced_menu.cpp ;;
             igi_simple_mod_menu) demo=demos/internal/simple-mod/simple_menu.cpp ;;
             igi_basic_mod_menu) demo=demos/internal/basic-mod/basic_menu.cpp ;;
