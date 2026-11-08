@@ -16,7 +16,7 @@ if (!catalogue.add({0x00416110, "Game_SetRaining", "IGI-RE", "entry",
 if (!catalogue.add({0x00416010, "Game_SetDisplayMode", "IGI-RE", "entry",
                     "void Game_SetDisplayMode(void)", NativeVerification::Exposed}))
     return false;
-if (!catalogue.add({0x00416fe0, "Game_Restart", "IGI-RE", "entry", "void Game_Restart(void)",
+if (!catalogue.add({0x00416fe0, "LevelRestart", "IGI-RE", "entry", "void LevelRestart(void)",
                     NativeVerification::Exposed}))
     return false;
 if (!catalogue.add({0x004167d0, "Game_GetEvent0", "IGI-RE", "entry", "uint8_t Game_GetEvent0(void)",
@@ -440,7 +440,7 @@ if (!catalogue.add({0x004304b0, "Car_GetTrackFactor", "IGI-RE", "entry",
                     "long double Car_GetTrackFactor(Car *c, int joint)",
                     NativeVerification::Exposed}))
     return false;
-if (!catalogue.add({0x0042fc40, "Car_Explode", "IGI-RE", "entry", "void Car_Explode(Car *car)",
+if (!catalogue.add({0x0042fc40, "Car_Explode", "IGI-RE", "entry", "void Car_Explode(Car *c)",
                     NativeVerification::Exposed}))
     return false;
 if (!catalogue.add({0x00431ac0, "Heli_FindDoor", "IGI-RE", "entry", "Task *Heli_FindDoor(Heli *h)",
@@ -465,7 +465,7 @@ if (!catalogue.add({0x00433000, "Heli_GetSoundInfo", "IGI-RE", "entry",
                     "void Heli_GetSoundInfo(Heli *h, void **out)", NativeVerification::Exposed}))
     return false;
 if (!catalogue.add({0x004f4600, "Vehicle_ResetControls", "IGI-RE", "entry",
-                    "void Vehicle_ResetControls(Vehicle *vehicle)", NativeVerification::Exposed}))
+                    "void Vehicle_ResetControls(Vehicle *v)", NativeVerification::Exposed}))
     return false;
 if (!catalogue.add({0x004f9200, "Graph_GetParamTable", "IGI-RE", "entry",
                     "void *Graph_GetParamTable(void)", NativeVerification::Exposed}))

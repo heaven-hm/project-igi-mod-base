@@ -77,7 +77,7 @@ NATIVE_DECL void SET_DISPLAY_MODE() {
     return NATIVE_INVOKE<Void>(HASH::GAME_SET_DISPLAY_MODE, "void Game_SetDisplayMode(void)");
 }
 NATIVE_DECL void RESTART() {
-    return NATIVE_INVOKE<Void>(HASH::GAME_RESTART, "void Game_Restart(void)");
+    return NATIVE_INVOKE<Void>(HASH::GAME_RESTART, "void LevelRestart(void)");
 }
 NATIVE_DECL uint8_t GET_EVENT0() {
     return NATIVE_INVOKE<uint8_t>(HASH::GAME_GET_EVENT0, "uint8_t Game_GetEvent0(void)");
@@ -569,7 +569,7 @@ NATIVE_DECL long double GET_TRACK_FACTOR(Car *c, int joint) {
         HASH::CAR_GET_TRACK_FACTOR, "long double Car_GetTrackFactor(Car *c, int joint)", c, joint);
 }
 NATIVE_DECL void CAR_EXPLODE(Car *car) {
-    return NATIVE_INVOKE<Void>(HASH::CAR_EXPLODE, "void Car_Explode(Car *car)", car);
+    return NATIVE_INVOKE<Void>(HASH::CAR_EXPLODE, "void Car_Explode(Car *c)", car);
 }
 NATIVE_DECL Task *FIND_DOOR(Heli *h) {
     return NATIVE_INVOKE<Task *>(HASH::HELI_FIND_DOOR, "Task *Heli_FindDoor(Heli *h)", h);
@@ -600,7 +600,7 @@ NATIVE_DECL void GET_SOUND_INFO(Heli *h, void **out) {
 }
 NATIVE_DECL void RESET_CONTROLS(void *vehicle) {
     return NATIVE_INVOKE<Void>(HASH::VEHICLE_RESET_CONTROLS,
-                               "void Vehicle_ResetControls(Vehicle *vehicle)", vehicle);
+                               "void Vehicle_ResetControls(Vehicle *v)", vehicle);
 }
 } // namespace VEHICLE
 namespace GRAPH {
@@ -1350,7 +1350,7 @@ NATIVE_DECL int PROFILE_GET_LANGUAGE() {
 }
 } // namespace OTHER
 std::size_t NativeBindingCount() noexcept {
-    return 310;
+    return 316;
 }
 } // namespace IGI
 #undef NATIVE_INVOKE

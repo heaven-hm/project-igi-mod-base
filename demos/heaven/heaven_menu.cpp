@@ -62,10 +62,10 @@ bool configureModMenu(igi::MenuConfig &config) {
     config.items[8].category = "World";
     config.items[9].category = "World";
     config.items[10].category = "World";
-    config.items[11].category = "World";
+    config.items[11].category = "Vehicles";
     config.items[12].category = "Vehicles";
-    config.items[13].category = "Vehicles";
-    config.items[14].category = "AI / NPC";
+    config.items[13].category = "AI / NPC";
+    config.items[14].category = "World";
     return true;
 }
 

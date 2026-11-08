@@ -17,6 +17,21 @@ categories = {"Weapons", "Player", "Camera", "World", "Vehicles", "AI / NPC"}
 for category in categories:
     assert category in HEAVEN, f"missing Heaven category: {category}"
 
+assigned_categories = {
+    int(index): category
+    for index, category in re.findall(
+        r'config\.items\[(\d+)\]\.category\s*=\s*"([^"]+)"', HEAVEN
+    )
+}
+assert set(assigned_categories) == set(range(len(ids))), (
+    "every Heaven control must have exactly one category; "
+    f"got indexes {sorted(assigned_categories)} for {len(ids)} items"
+)
+assert set(assigned_categories.values()) == categories, (
+    "Heaven categories must exactly match the production category set; "
+    f"got {set(assigned_categories.values())}"
+)
+
 # weapon_pickup is intentionally resolved by the Heaven adapter so it can bind
 # the selected retail weapon symbol and ammo value together.
 special_routes = {"weapon_pickup"}
