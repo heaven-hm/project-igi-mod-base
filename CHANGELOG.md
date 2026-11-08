@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.3 — Heaven production menu: 50 verified controls
+
+- Heaven now ships 50 controls across seven categories (Weapons, Player,
+  Camera, World, Vehicles, AI / NPC, Audio), all declared from one table so a
+  control cannot ship without a category or an action route.
+- The retail QVM menu fits only a handful of rows, so a control set that
+  outgrows the frame now generates one scrollable `ListBox` over a flattened
+  command list (`IGI_SDK_FillList/GetList/SetList(-1)`). Every option stays
+  reachable instead of being drawn past the frame edge; small control sets keep
+  the previous per-control layout.
+- Live NPC, car, and helicopter target lists render the retail task name plus a
+  stable task id (`HumanSoldier_2021 [#2021]`), refresh from the running game's
+  task table in both menu frontends, follow the selected target by task
+  identity, and drop a target that leaves the task table.
+- Added gameplay readouts backed by verified retail getters: player status,
+  camera info, NPC status, soldier parameters, car and helicopter info, level
+  tick, flow counters, game events, weapon events, and audio info/rate.
+- Added player position sync, player controller flag controls, all-weapon equip,
+  all-car explode/reset, and soldier stand-down.
+- Native verification found and fixed three defects before release:
+  `Task_Find`-by-name faulted without a populated type table (helicopters now
+  match the retail type name), `Level_GetTick` dereferenced an absent level
+  (now guarded), and `Vehicle_ResetControls` used a widened pointer signature.
+- Added `igi_heaven_layout` and route-audit tests that fail if the shipped
+  control set drops below 30 controls, loses a category, loses its dispatch
+  branch, or stops generating a complete compilable menu resource.
+
 ## 0.2 — Restructure, Dear ImGui Direct3D 7, and runtime lifecycle
 
 - Integrated Dear ImGui Direct3D 7 renderer backend from
