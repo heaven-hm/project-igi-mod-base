@@ -433,12 +433,33 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
         WorldHelpers(runtime).restartMission();
     } else if (id == "vehicle_reset") {
         auto *car = EntityHelpers(runtime).firstCar();
-        if (!VehicleHelpers(runtime).resetControls(car))
-            log(LogLevel::Warning, "vehicle reset rejected: no live car task was found");
+        void *targetVehicle = car;
+        if (!targetVehicle)
+            targetVehicle = EntityHelpers(runtime).firstVehicle();
+        if (targetVehicle && VehicleHelpers(runtime).resetControls(targetVehicle)) {
+            log(LogLevel::Info, car ? "vehicle reset: controls reset for first car"
+                                    : "vehicle reset: controls reset for live vehicle");
+        } else {
+            log(LogLevel::Warning,
+                "vehicle reset rejected: no live car or vehicle task was found on current level");
+        }
     } else if (id == "vehicle_explode") {
         auto *car = EntityHelpers(runtime).firstCar();
-        if (!VehicleHelpers(runtime).explodeCar(car))
-            log(LogLevel::Warning, "vehicle explode rejected: no live car task was found");
+        if (car && VehicleHelpers(runtime).explodeCar(car)) {
+            log(LogLevel::Info, "vehicle explode: triggered explosion for first car");
+        } else if (auto *veh = EntityHelpers(runtime).firstVehicle()) {
+            if (VehicleHelpers(runtime).explodeVehicle(veh)) {
+                log(LogLevel::Info, "vehicle explode: triggered explosion for live vehicle");
+            } else {
+                log(LogLevel::Warning,
+                    "vehicle explode rejected: vehicle found but this vehicle type cannot explode "
+                    "(only Car and Heli can explode)");
+            }
+        } else {
+            log(LogLevel::Warning,
+                "vehicle explode rejected: no live car or vehicle task was found on current level "
+                "(Car tasks only exist on Level 1 and Level 2 in retail campaign)");
+        }
     } else if (id == "npc_ensure_weapon") {
         auto *npc = EntityHelpers(runtime).firstNpc();
         if (!NpcHelpers(runtime).ensureWeapon(npc))
@@ -540,36 +561,179 @@ bool changeLevel(Runtime &runtime, int levelId) {
 bool PlayerHelpers::setInputEnabled(bool enabled) const {
     return setPlayerInputEnabled(runtime_, enabled);
 }
+static IGI::Task *entityContainer(Runtime &runtime) {
+    if (!requireLiveGameThread(runtime))
+        return nullptr;
+    if (auto *dynamic = IGI::LEVEL::GET_DYNAMIC())
+        return dynamic;
+    if (auto *level = reinterpret_cast<IGI::Task *>(IGI::LEVEL::GET()))
+        return level;
+    return gameRoot(runtime);
+}
+
+#pragma pack(push, 1)
+struct IgiTaskLayout {
+    IgiTaskLayout *next;
+    IgiTaskLayout *prev;
+    IgiTaskLayout *head;
+    IgiTaskLayout *tail;
+    IgiTaskLayout *tailpred;
+    IgiTaskLayout *parent;
+    int refs;
+    std::uint16_t type;
+    char pooled;
+    char unk1F;
+};
+#pragma pack(pop)
+
+template <typename Predicate>
+static IGI::Task *findTaskInHierarchy(IGI::Task *root, Predicate &&pred, int depth = 10) {
+    if (!root || depth <= 0)
+        return nullptr;
+    auto *taskNode = reinterpret_cast<const IgiTaskLayout *>(root);
+    if (pred(root, taskNode->type))
+        return root;
+    for (auto *child = taskNode->head; child && child->next; child = child->next) {
+        if (auto *found =
+                findTaskInHierarchy(reinterpret_cast<IGI::Task *>(child), pred, depth - 1))
+            return found;
+    }
+    return nullptr;
+}
+
 IGI::Human *EntityHelpers::firstHuman() const {
-    auto *root = gameRoot(runtime_);
-    return root
-               ? reinterpret_cast<IGI::Human *>(IGI::TASK::FIND_CHILD(root, IGI::HUMAN::GET_TYPE()))
-               : nullptr;
+    if (!requireLiveGameThread(runtime_))
+        return nullptr;
+    auto *container = entityContainer(runtime_);
+    if (container) {
+        if (auto *human = IGI::TASK::FIND_CHILD(container, IGI::HUMAN::GET_TYPE()))
+            return reinterpret_cast<IGI::Human *>(human);
+        if (auto *soldier = IGI::TASK::FIND_CHILD(container, IGI::SOLDIER::GET_TYPE()))
+            return reinterpret_cast<IGI::Human *>(soldier);
+    }
+    for (int id = 0; id < 4096; ++id) {
+        auto *task = IGI::TASK::FIND_BY_ID(id);
+        if (!task)
+            continue;
+        const auto type = *reinterpret_cast<const std::uint16_t *>(
+            reinterpret_cast<const std::uint8_t *>(task) + 0x1c);
+        if (type == IGI::HUMAN::GET_TYPE() || type == IGI::SOLDIER::GET_TYPE() ||
+            type == IGI::PLAYER::GET_TYPE()) {
+            return reinterpret_cast<IGI::Human *>(task);
+        }
+    }
+    return nullptr;
 }
 IGI::Human *EntityHelpers::nextHuman(IGI::Human *current) const {
     if (!requireLiveGameThread(runtime_) || !current)
         return nullptr;
-    return reinterpret_cast<IGI::Human *>(
-        IGI::TASK::FIND_NEXT(reinterpret_cast<IGI::Task *>(current), IGI::HUMAN::GET_TYPE()));
+    auto *next =
+        IGI::TASK::FIND_NEXT(reinterpret_cast<IGI::Task *>(current), IGI::HUMAN::GET_TYPE());
+    if (!next) {
+        next =
+            IGI::TASK::FIND_NEXT(reinterpret_cast<IGI::Task *>(current), IGI::SOLDIER::GET_TYPE());
+    }
+    if (next)
+        return reinterpret_cast<IGI::Human *>(next);
+    return nullptr;
 }
 IGI::Human *EntityHelpers::firstNpc() const {
+    if (!requireLiveGameThread(runtime_))
+        return nullptr;
     for (auto *human = firstHuman(); human; human = nextHuman(human)) {
         if (!IGI::HUMAN::IS_PLAYER(human))
             return human;
     }
+    auto *player = IGI::GAME::GET_PLAYER(0);
+    for (int id = 0; id < 4096; ++id) {
+        auto *task = IGI::TASK::FIND_BY_ID(id);
+        if (!task || task == player)
+            continue;
+        const auto type = *reinterpret_cast<const std::uint16_t *>(
+            reinterpret_cast<const std::uint8_t *>(task) + 0x1c);
+        if (type == IGI::HUMAN::GET_TYPE() || type == IGI::SOLDIER::GET_TYPE()) {
+            auto *human = reinterpret_cast<IGI::Human *>(task);
+            if (!IGI::HUMAN::IS_PLAYER(human))
+                return human;
+        }
+    }
     return nullptr;
 }
 IGI::Car *EntityHelpers::firstCar() const {
-    auto *root = gameRoot(runtime_);
-    return root
-               ? reinterpret_cast<IGI::Car *>(IGI::TASK::FIND_CHILD(root, IGI::VEHICLE::GET_TYPE()))
-               : nullptr;
+    if (!requireLiveGameThread(runtime_))
+        return nullptr;
+    const auto carType = IGI::VEHICLE::GET_TYPE();
+    auto isCar = [carType](IGI::Task *t, std::uint16_t type) {
+        if (!t)
+            return false;
+        if (type == carType)
+            return true;
+        return IGI::TASK::IS_A(type, carType) != 0;
+    };
+    if (auto *dynamic = IGI::LEVEL::GET_DYNAMIC()) {
+        if (auto *found = findTaskInHierarchy(dynamic, isCar))
+            return reinterpret_cast<IGI::Car *>(found);
+    }
+    if (auto *level = reinterpret_cast<IGI::Task *>(IGI::LEVEL::GET())) {
+        if (auto *found = findTaskInHierarchy(level, isCar))
+            return reinterpret_cast<IGI::Car *>(found);
+    }
+    for (int knownId : {1099, 778}) {
+        if (auto *task = IGI::TASK::FIND_BY_ID(knownId)) {
+            const auto type = reinterpret_cast<const IgiTaskLayout *>(task)->type;
+            if (isCar(task, type))
+                return reinterpret_cast<IGI::Car *>(task);
+        }
+    }
+    for (int id = 0; id < 4096; ++id) {
+        auto *task = IGI::TASK::FIND_BY_ID(id);
+        if (!task)
+            continue;
+        const auto type = reinterpret_cast<const IgiTaskLayout *>(task)->type;
+        if (isCar(task, type))
+            return reinterpret_cast<IGI::Car *>(task);
+    }
+    return nullptr;
 }
 IGI::Car *EntityHelpers::nextCar(IGI::Car *current) const {
     if (!requireLiveGameThread(runtime_) || !current)
         return nullptr;
     return reinterpret_cast<IGI::Car *>(
         IGI::TASK::FIND_NEXT(reinterpret_cast<IGI::Task *>(current), IGI::VEHICLE::GET_TYPE()));
+}
+IGI::Task *EntityHelpers::firstVehicle() const {
+    if (!requireLiveGameThread(runtime_))
+        return nullptr;
+    const auto baseVehicleType = IGI::VEHICLE::GET_BASE_TYPE();
+    auto isVehicle = [baseVehicleType](IGI::Task *t, std::uint16_t type) {
+        if (!t)
+            return false;
+        if (type == baseVehicleType)
+            return true;
+        return IGI::TASK::IS_A(type, baseVehicleType) != 0;
+    };
+    if (auto *dynamic = IGI::LEVEL::GET_DYNAMIC()) {
+        if (auto *found = findTaskInHierarchy(dynamic, isVehicle))
+            return found;
+    }
+    if (auto *level = reinterpret_cast<IGI::Task *>(IGI::LEVEL::GET())) {
+        if (auto *found = findTaskInHierarchy(level, isVehicle))
+            return found;
+    }
+    for (int id = 0; id < 4096; ++id) {
+        auto *task = IGI::TASK::FIND_BY_ID(id);
+        if (!task)
+            continue;
+        const auto type = reinterpret_cast<const IgiTaskLayout *>(task)->type;
+        if (isVehicle(task, type))
+            return task;
+    }
+    return nullptr;
+}
+IGI::Task *EntityHelpers::nextVehicle(IGI::Task *current) const {
+    if (!requireLiveGameThread(runtime_) || !current)
+        return nullptr;
+    return IGI::TASK::FIND_NEXT(current, IGI::VEHICLE::GET_BASE_TYPE());
 }
 bool PlayerHelpers::setLookEnabled(bool enabled) const {
     return setPlayerLookEnabled(runtime_, enabled);
@@ -904,6 +1068,25 @@ bool VehicleHelpers::explodeCar(IGI::Car *car) const {
     IGI::VEHICLE::CAR_EXPLODE(car);
     return true;
 }
+bool VehicleHelpers::explodeVehicle(IGI::Task *vehicle) const {
+    if (!requireLiveGameThread(runtime_) || !vehicle)
+        return false;
+    const auto type = reinterpret_cast<const IgiTaskLayout *>(vehicle)->type;
+    const auto carType = IGI::VEHICLE::GET_TYPE();
+    if (type == carType || IGI::TASK::IS_A(type, carType)) {
+        IGI::VEHICLE::CAR_EXPLODE(reinterpret_cast<IGI::Car *>(vehicle));
+        return true;
+    }
+    // Check if it's a Heli (gHeliType at 0x0053BE58)
+    const auto *heliTypePtr = reinterpret_cast<const std::uint16_t *>(0x0053BE58);
+    if (heliTypePtr && (type == *heliTypePtr || IGI::TASK::IS_A(type, *heliTypePtr))) {
+        auto *heliBytes = reinterpret_cast<char *>(vehicle);
+        heliBytes[0x750] = 1;
+        *reinterpret_cast<int *>(heliBytes + 0x754) = -1;
+        return true;
+    }
+    return false;
+}
 bool VehicleHelpers::resetControls(void *vehicle) const {
     if (!requireLiveGameThread(runtime_) || !vehicle)
         return false;
@@ -956,7 +1139,12 @@ bool VehicleHelpers::heliSoundInfo(IGI::Heli *h, void **out) const {
         IGI::AI::native(c.out, c.data, c.args);                                                    \
         return true;                                                                               \
     }
-AI_HELPER(removeAlarmActions, REMOVE_ALARM_ACTIONS)
+bool AiHelpers::removeAlarmActions(const AiScriptContext &c) const {
+    if (!requireLiveGameThread(runtime_) || !c.out || !c.data || !c.args)
+        return false;
+    IGI::AI::REMOVE_ALARM_ACTIONS(c.out, c.data, c.args);
+    return true;
+}
 AI_HELPER(setViewLength, SET_VIEW_LENGTH)
 AI_HELPER(setAlarmViewLength, SET_ALARM_VIEW_LENGTH)
 AI_HELPER(setViewAlpha, SET_VIEW_ALPHA)

@@ -445,15 +445,22 @@ bool closeMenuScreen() {
 }
 
 bool reopenMenuScreen() {
-    if (menuScreenCreated) {
-        if (!runMenuCommand("LOCAL:mod_base/modmenu-reopen.qvm", "reopen"))
-            return false;
-        pendingTransition = MenuTransition::Reopening;
-        transitionDeadlineFrame = runtime.scheduler().gameHookInvocationCount() + 120;
-        safeToShutdown.store(false, std::memory_order_release);
-        igi::log(igi::LogLevel::Info,
-                 "internal menu reopen: awaiting retail screen transition before pausing game");
+    if (isConfiguredMenuScreenActive()) {
+        menuScreenAttached = true;
+        menuScreenCreated = true;
         return true;
+    }
+    if (menuScreenCreated) {
+        if (runMenuCommand("LOCAL:mod_base/modmenu-reopen.qvm", "reopen")) {
+            pendingTransition = MenuTransition::Reopening;
+            transitionDeadlineFrame = runtime.scheduler().gameHookInvocationCount() + 120;
+            safeToShutdown.store(false, std::memory_order_release);
+            igi::log(igi::LogLevel::Info,
+                     "internal menu reopen: awaiting retail screen transition before pausing game");
+            return true;
+        }
+        igi::log(igi::LogLevel::Warning,
+                 "internal menu reopen: reopen script failed; falling back to fresh attach");
     }
     menuScreenCreated = false;
     menuScreenAttached = false;
@@ -466,6 +473,9 @@ bool toggleMenuScreenOnGameThread() {
     if (!IGI::GAME::GET()) {
         igi::log(igi::LogLevel::Warning, "internal menu toggle: menu requires an active game");
         return false;
+    }
+    if (isConfiguredMenuScreenActive()) {
+        return closeMenuScreen();
     }
     return menuScreenAttached ? closeMenuScreen() : reopenMenuScreen();
 }

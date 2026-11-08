@@ -566,6 +566,9 @@ NATIVE_DECL void GET_LIGHT(Car *c, void **out) {
 NATIVE_DECL uint16_t GET_TYPE() {
     return NATIVE_INVOKE<uint16_t>(HASH::CAR_GET_TYPE, "uint16_t Car_GetType(void)");
 }
+NATIVE_DECL uint16_t GET_BASE_TYPE() {
+    return NATIVE_INVOKE<uint16_t>(HASH::VEHICLE_GET_BASE_TYPE, "uint16_t Vehicle_GetType(void)");
+}
 NATIVE_DECL Task *GET_MOUNTED_GUN(Car *c) {
     return NATIVE_INVOKE<Task *>(HASH::CAR_GET_MOUNTED_GUN, "Task *Car_GetMountedGun(Car *c)", c);
 }

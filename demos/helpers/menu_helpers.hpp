@@ -23,6 +23,8 @@ class EntityHelpers {
     IGI::Human *firstNpc() const;
     IGI::Car *firstCar() const;
     IGI::Car *nextCar(IGI::Car *current) const;
+    IGI::Task *firstVehicle() const;
+    IGI::Task *nextVehicle(IGI::Task *current) const;
 
   private:
     Runtime &runtime_;
@@ -124,6 +126,7 @@ class VehicleHelpers {
     bool carGunnerPose(IGI::Car *car, IGI::Vec3d *position, IGI::Matrix *matrix) const;
     std::optional<long double> carTrackFactor(IGI::Car *car, int joint) const;
     bool explodeCar(IGI::Car *car) const;
+    bool explodeVehicle(IGI::Task *vehicle) const;
     bool resetControls(void *vehicle) const;
     IGI::Task *heliDoor(IGI::Heli *heli) const;
     bool heliControlInfo(IGI::Heli *heli, int *out) const;
@@ -182,4 +185,20 @@ class AudioHelpers {
 
 void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::size_t item,
                              std::string_view value);
+
+bool setWeather(Runtime &runtime, std::string_view weather);
+bool setFps(Runtime &runtime, std::string_view value);
+bool enableUnlimitedAmmo(Runtime &runtime);
+bool pickupPlayerWeapon(Runtime &runtime, std::string_view weaponId, int ammo);
+bool cyclePlayerWeapon(Runtime &runtime, int force);
+bool requestPlayerWeaponAnimation(Runtime &runtime, int animationId);
+bool restorePlayerVisualFeedback(Runtime &runtime);
+bool setPlayerInputEnabled(Runtime &runtime, bool enabled);
+bool setPlayerLookEnabled(Runtime &runtime, bool enabled);
+bool setMusicVolume(Runtime &runtime, float volume);
+bool setSfxVolume(Runtime &runtime, float volume);
+bool logFlowDiagnostics(Runtime &runtime);
+bool logPlayerState(Runtime &runtime);
+bool setPlayerThirdPersonView(Runtime &runtime, bool active);
+bool changeLevel(Runtime &runtime, int levelId);
 } // namespace igi
