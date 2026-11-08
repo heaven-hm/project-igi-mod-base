@@ -163,6 +163,7 @@ LIVE_OBJECT_NATIVES = frozenset({
     "VEHICLE::GET_CONFIG_SIZE",
     "VEHICLE::GET_SOUND_INFO",
     "SOLDIER::ENSURE_WEAPON",
+    "SOLDIER::EXECUTE",
     "AI::REMOVE_ALARM_ACTIONS",
 })
 
@@ -716,6 +717,8 @@ def scan_source_file(path: Path) -> list[str]:
     text = path.read_text(errors="replace")
     seen: dict[str, None] = {}
     for match in _SOURCE_CALL_RE.finditer(text):
+        if match.group(1) == "HASH":
+            continue
         seen[f"{match.group(1)}::{match.group(2)}"] = None
     return list(seen)
 

@@ -246,6 +246,9 @@ if (!catalogue.add({0x0045a7f0, "Soldier_Footstep", "IGI-RE", "entry",
 if (!catalogue.add({0x0045d360, "Soldier_EnsureWeapon", "IGI-RE", "entry",
                     "void Soldier_EnsureWeapon(Human *h)", NativeVerification::Exposed}))
     return false;
+if (!catalogue.add({0x0045c440, "Soldier_DieEnter", "IGI-RE", "entry",
+                    "void Soldier_DieEnter(HumanSM *sm, Human *h)", NativeVerification::Exposed}))
+    return false;
 if (!catalogue.add({0x0045daa0, "Soldier_TurnToHit", "IGI-RE", "entry",
                     "char Soldier_TurnToHit(Human *h, double *dir)", NativeVerification::Exposed}))
     return false;
@@ -419,6 +422,9 @@ if (!catalogue.add({0x0042f850, "Car_GetSoundParams", "IGI-RE", "entry",
     return false;
 if (!catalogue.add({0x0042f870, "Car_GetControlInfo", "IGI-RE", "entry",
                     "void Car_GetControlInfo(Car *c, int *arg)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0042ea10, "Car_Control", "IGI-RE", "entry",
+                    "void Car_Control(Car *o, CarControlArg *arg)", NativeVerification::Exposed}))
     return false;
 if (!catalogue.add({0x0042fc00, "Car_GetFrame", "IGI-RE", "entry",
                     "void Car_GetFrame(Car *c, void **out)", NativeVerification::Exposed}))

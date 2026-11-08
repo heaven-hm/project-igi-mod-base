@@ -5,13 +5,16 @@
 #include "natives/igi_hashes/hashes.hpp"
 #include "natives/igi_native_registry.hpp"
 #include "natives/mvp_natives.hpp"
+#include "natives/native_caller.hpp"
 #include "ui/menu_resource.hpp"
 #include "ui/menu_script.hpp"
 
 #include <algorithm>
+#include <charconv>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <sstream>
 #include <vector>
 
@@ -23,6 +26,30 @@ static bool executeMenuCommand(std::string_view commandScript);
 
 namespace {
 constexpr int kModPrecipitationTaskId = 4095;
+constexpr std::size_t kMaxTargetSlots = 8;
+
+std::size_t g_selectedNpcSlot = 0;
+std::size_t g_selectedCarSlot = 0;
+
+bool isCallableNative(std::uint32_t address, std::string_view signature) {
+    auto *caller = igiNativeCaller();
+    if (!caller)
+        return false;
+    std::uintptr_t resolved = 0;
+    return caller->resolveByAddress(address, signature, resolved) == NativeCallStatus::Success;
+}
+
+std::optional<std::size_t> targetSlot(std::string_view value, std::string_view label) {
+    if (!value.starts_with(label) || value.size() <= label.size() + 1 || value[label.size()] != ' ')
+        return std::nullopt;
+    int number = 0;
+    const auto suffix = value.substr(label.size() + 1);
+    const auto [end, error] = std::from_chars(suffix.data(), suffix.data() + suffix.size(), number);
+    if (error != std::errc{} || end != suffix.data() + suffix.size() || number < 1 ||
+        number > static_cast<int>(kMaxTargetSlots))
+        return std::nullopt;
+    return static_cast<std::size_t>(number - 1);
+}
 
 IGI::Game *g_precipitationGame = nullptr;
 bool g_precipitationActive = false;
@@ -382,7 +409,21 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
     log(LogLevel::Info,
         "menu action: id=" + id + " action=" + action + " value=" + std::string(value));
 
-    if (id == "weather" || action.find("SetWeather") != std::string::npos) {
+    if (id == "npc_target") {
+        if (const auto slot = targetSlot(value, "NPC")) {
+            g_selectedNpcSlot = *slot;
+            log(LogLevel::Info, "NPC target selected: slot " + std::to_string(*slot + 1));
+        } else {
+            log(LogLevel::Warning, "NPC target selection rejected");
+        }
+    } else if (id == "vehicle_target") {
+        if (const auto slot = targetSlot(value, "Car")) {
+            g_selectedCarSlot = *slot;
+            log(LogLevel::Info, "car target selected: slot " + std::to_string(*slot + 1));
+        } else {
+            log(LogLevel::Warning, "car target selection rejected");
+        }
+    } else if (id == "weather" || action.find("SetWeather") != std::string::npos) {
         setWeather(runtime, value);
     } else if (id == "fps" || id == "frames" || action.find("Frame") != std::string::npos) {
         setFps(runtime, value);
@@ -436,33 +477,40 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
     } else if (id == "restart_mission") {
         WorldHelpers(runtime).restartMission();
     } else if (id == "vehicle_reset") {
-        auto *car = EntityHelpers(runtime).firstCar();
+        auto *car = EntityHelpers(runtime).carAt(g_selectedCarSlot);
         if (VehicleHelpers(runtime).resetCar(car)) {
-            log(LogLevel::Info, "vehicle reset: restored first car through retail control flow");
+            log(LogLevel::Info, "vehicle reset: restored selected car through retail control flow");
         } else {
             log(LogLevel::Warning,
-                "vehicle reset rejected: no live car task was found on current level");
+                "vehicle reset rejected: selected car was unavailable or its native was rejected");
         }
     } else if (id == "vehicle_explode") {
-        auto *car = EntityHelpers(runtime).firstCar();
+        auto *car = EntityHelpers(runtime).carAt(g_selectedCarSlot);
         if (car && VehicleHelpers(runtime).explodeCar(car)) {
-            log(LogLevel::Info, "vehicle explode: triggered explosion for first car");
+            log(LogLevel::Info, "vehicle explode: triggered explosion for selected car");
         } else {
             log(LogLevel::Warning,
-                "vehicle explode rejected: no live car task was found on current level");
+                "vehicle explode rejected: selected car was unavailable on current level");
         }
     } else if (id == "npc_ensure_weapon") {
-        auto *npc = EntityHelpers(runtime).firstNpc();
+        auto *npc = EntityHelpers(runtime).npcAt(g_selectedNpcSlot);
         if (NpcHelpers(runtime).ensureWeapon(npc))
             log(LogLevel::Info, "NPC weapon provisioned through the soldier native");
         else
-            log(LogLevel::Warning, "NPC weapon request rejected: no live NPC task was found");
+            log(LogLevel::Warning, "NPC weapon request rejected: selected NPC was unavailable");
     } else if (id == "npc_reset_damage") {
-        auto *npc = EntityHelpers(runtime).firstNpc();
+        auto *npc = EntityHelpers(runtime).npcAt(g_selectedNpcSlot);
         if (NpcHelpers(runtime).resetDamage(npc))
             log(LogLevel::Info, "NPC damage state reset through the human native");
         else
-            log(LogLevel::Warning, "NPC damage reset rejected: no live NPC task was found");
+            log(LogLevel::Warning, "NPC damage reset rejected: selected NPC was unavailable");
+    } else if (id == "npc_execute") {
+        auto *npc = EntityHelpers(runtime).npcAt(g_selectedNpcSlot);
+        if (NpcHelpers(runtime).executeSoldier(npc))
+            log(LogLevel::Info, "selected soldier executed through the retail soldier flow");
+        else
+            log(LogLevel::Warning,
+                "soldier execution rejected: select a live standard Soldier target first");
     } else if (id == "display" || action.find("RefreshDisplay") != std::string::npos) {
         IGI::GAME::SET_DISPLAY_MODE();
         log(LogLevel::Info, "display mode refreshed");
@@ -654,6 +702,26 @@ IGI::Human *EntityHelpers::firstNpc() const {
     }
     return nullptr;
 }
+IGI::Human *EntityHelpers::npcAt(std::size_t slot) const {
+    if (!requireLiveGameThread(runtime_))
+        return nullptr;
+    const auto humanType = IGI::HUMAN::GET_TYPE();
+    std::size_t found = 0;
+    for (int id = 0; id < 4096; ++id) {
+        auto *task = IGI::TASK::FIND_BY_ID(id);
+        if (!task)
+            continue;
+        const auto type = reinterpret_cast<const IgiTaskLayout *>(task)->type;
+        if (type != humanType && IGI::TASK::IS_A(type, humanType) == 0)
+            continue;
+        auto *human = reinterpret_cast<IGI::Human *>(task);
+        if (IGI::HUMAN::IS_PLAYER(human))
+            continue;
+        if (found++ == slot)
+            return human;
+    }
+    return nullptr;
+}
 IGI::Car *EntityHelpers::firstCar() const {
     if (!requireLiveGameThread(runtime_))
         return nullptr;
@@ -686,6 +754,23 @@ IGI::Car *EntityHelpers::firstCar() const {
             continue;
         const auto type = reinterpret_cast<const IgiTaskLayout *>(task)->type;
         if (isCar(task, type))
+            return reinterpret_cast<IGI::Car *>(task);
+    }
+    return nullptr;
+}
+IGI::Car *EntityHelpers::carAt(std::size_t slot) const {
+    if (!requireLiveGameThread(runtime_))
+        return nullptr;
+    const auto carType = IGI::VEHICLE::GET_TYPE();
+    std::size_t found = 0;
+    for (int id = 0; id < 4096; ++id) {
+        auto *task = IGI::TASK::FIND_BY_ID(id);
+        if (!task)
+            continue;
+        const auto type = reinterpret_cast<const IgiTaskLayout *>(task)->type;
+        if (type != carType && IGI::TASK::IS_A(type, carType) == 0)
+            continue;
+        if (found++ == slot)
             return reinterpret_cast<IGI::Car *>(task);
     }
     return nullptr;
@@ -1108,6 +1193,8 @@ bool VehicleHelpers::explodeCar(IGI::Car *car) const {
 bool VehicleHelpers::resetCar(IGI::Car *car) const {
     if (!requireLiveGameThread(runtime_) || !car)
         return false;
+    if (!isCallableNative(IGI::HASH::CAR_CONTROL, "void Car_Control(Car *o, CarControlArg *arg)"))
+        return false;
     float input[4] = {0.0F, -1.0F, -2.0F, -1.0F};
     IGI::CarControlArg reset{0, input};
     IGI::VEHICLE::CAR_CONTROL(car, &reset);
@@ -1129,6 +1216,19 @@ bool NpcHelpers::resetDamage(IGI::Human *npc) const {
     if (!requireLiveGameThread(runtime_) || !npc)
         return false;
     IGI::HUMAN::RESET_DAMAGE(npc);
+    return true;
+}
+bool NpcHelpers::executeSoldier(IGI::Human *npc) const {
+    if (!requireLiveGameThread(runtime_) || !npc)
+        return false;
+    const auto type = reinterpret_cast<const IgiTaskLayout *>(npc)->type;
+    if (type != IGI::SOLDIER::GET_TYPE())
+        return false;
+    if (!isCallableNative(IGI::HASH::SOLDIER_DIE_ENTER,
+                          "void Soldier_DieEnter(HumanSM *sm, Human *h)"))
+        return false;
+    auto *state = reinterpret_cast<void *>(reinterpret_cast<std::uint8_t *>(npc) + 0x2ec);
+    IGI::SOLDIER::EXECUTE(state, npc);
     return true;
 }
 IGI::Task *VehicleHelpers::heliDoor(IGI::Heli *h) const {

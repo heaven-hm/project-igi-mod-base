@@ -371,6 +371,10 @@ NATIVE_DECL void ENSURE_WEAPON(Human *h) {
     return NATIVE_INVOKE<Void>(HASH::SOLDIER_ENSURE_WEAPON, "void Soldier_EnsureWeapon(Human *h)",
                                h);
 }
+NATIVE_DECL void EXECUTE(void *state, Human *soldier) {
+    return NATIVE_INVOKE<Void>(HASH::SOLDIER_DIE_ENTER,
+                               "void Soldier_DieEnter(HumanSM *sm, Human *h)", state, soldier);
+}
 NATIVE_DECL char TURN_TO_HIT(Human *h, double *dir) {
     return NATIVE_INVOKE<char>(HASH::SOLDIER_TURN_TO_HIT,
                                "char Soldier_TurnToHit(Human *h, double *dir)", h, dir);
@@ -1388,7 +1392,7 @@ NATIVE_DECL int PROFILE_GET_LANGUAGE() {
 }
 } // namespace OTHER
 std::size_t NativeBindingCount() noexcept {
-    return 318;
+    return 320;
 }
 } // namespace IGI
 #undef NATIVE_INVOKE

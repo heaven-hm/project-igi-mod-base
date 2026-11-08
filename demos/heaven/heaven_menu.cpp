@@ -43,10 +43,21 @@ bool configureModMenu(igi::MenuConfig &config) {
         {"fps", igi::ModMenuItemKind::List, "Frame Cap", "", {"30", "60", "120"}},
         {"display", igi::ModMenuItemKind::Action, "Refresh Display", "", {}},
         {"restart_mission", igi::ModMenuItemKind::Action, "Restart Mission", "", {}},
-        {"vehicle_reset", igi::ModMenuItemKind::Action, "Reset First Car", "", {}},
-        {"vehicle_explode", igi::ModMenuItemKind::Action, "Explode First Car", "", {}},
-        {"npc_ensure_weapon", igi::ModMenuItemKind::Action, "Equip First NPC", "", {}},
-        {"npc_reset_damage", igi::ModMenuItemKind::Action, "Reset First NPC Damage", "", {}},
+        {"vehicle_target",
+         igi::ModMenuItemKind::List,
+         "Car Target",
+         "",
+         {"Car 1", "Car 2", "Car 3", "Car 4", "Car 5", "Car 6", "Car 7", "Car 8"}},
+        {"vehicle_reset", igi::ModMenuItemKind::Action, "Reset Selected Car", "", {}},
+        {"vehicle_explode", igi::ModMenuItemKind::Action, "Explode Selected Car", "", {}},
+        {"npc_target",
+         igi::ModMenuItemKind::List,
+         "NPC Target",
+         "",
+         {"NPC 1", "NPC 2", "NPC 3", "NPC 4", "NPC 5", "NPC 6", "NPC 7", "NPC 8"}},
+        {"npc_ensure_weapon", igi::ModMenuItemKind::Action, "Equip Selected NPC", "", {}},
+        {"npc_reset_damage", igi::ModMenuItemKind::Action, "Reset Selected NPC Damage", "", {}},
+        {"npc_execute", igi::ModMenuItemKind::Action, "Execute Selected Soldier", "", {}},
         {"level",
          igi::ModMenuItemKind::List,
          "Mission",
@@ -72,11 +83,14 @@ bool configureModMenu(igi::MenuConfig &config) {
     config.items[9].category = "World";
     config.items[10].category = "Vehicles";
     config.items[11].category = "Vehicles";
-    config.items[12].category = "AI / NPC";
+    config.items[12].category = "Vehicles";
     config.items[13].category = "AI / NPC";
-    config.items[14].category = "World";
-    config.items[15].category = "Player";
-    config.items[16].category = "Player";
+    config.items[14].category = "AI / NPC";
+    config.items[15].category = "AI / NPC";
+    config.items[16].category = "AI / NPC";
+    config.items[17].category = "World";
+    config.items[18].category = "Player";
+    config.items[19].category = "Player";
     return true;
 }
 

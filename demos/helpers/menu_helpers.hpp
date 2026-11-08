@@ -22,7 +22,9 @@ class EntityHelpers {
     IGI::Human *firstHuman() const;
     IGI::Human *nextHuman(IGI::Human *current) const;
     IGI::Human *firstNpc() const;
+    IGI::Human *npcAt(std::size_t slot) const;
     IGI::Car *firstCar() const;
+    IGI::Car *carAt(std::size_t slot) const;
     IGI::Car *nextCar(IGI::Car *current) const;
     IGI::Task *firstVehicle() const;
     IGI::Task *nextVehicle(IGI::Task *current) const;
@@ -150,6 +152,7 @@ class NpcHelpers {
     explicit NpcHelpers(Runtime &runtime) : runtime_(runtime) {}
     bool ensureWeapon(IGI::Human *npc) const;
     bool resetDamage(IGI::Human *npc) const;
+    bool executeSoldier(IGI::Human *npc) const;
 
   private:
     Runtime &runtime_;
