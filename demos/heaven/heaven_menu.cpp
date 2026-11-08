@@ -20,6 +20,7 @@ constexpr std::array kWeapons = {
     WeaponEntry{"Dragunov SVD", "WEAPON_ID_DRAGUNOV", 30},
     WeaponEntry{"Minimi", "WEAPON_ID_MINIMI", 200},
     WeaponEntry{"SPAS-12", "WEAPON_ID_SPAS12", 16},
+    WeaponEntry{"Binoculars", "WEAPON_ID_BINOCULARS", 0},
 };
 } // namespace
 
@@ -31,7 +32,8 @@ bool configureModMenu(igi::MenuConfig &config) {
          igi::ModMenuItemKind::List,
          "Equip Weapon",
          "",
-         {"Glock 17", "MP5SD", "Uzi", "M16A2", "AK-47", "Dragunov SVD", "Minimi", "SPAS-12"}},
+         {"Glock 17", "MP5SD", "Uzi", "M16A2", "AK-47", "Dragunov SVD", "Minimi", "SPAS-12",
+          "Binoculars"}},
         {"weapon_cycle", igi::ModMenuItemKind::Action, "Cycle Weapon", "", {}},
         {"view", igi::ModMenuItemKind::List, "Camera Mode", "", {"First Person", "Third Person"}},
         {"input", igi::ModMenuItemKind::List, "Player Input", "", {"Enabled", "Disabled"}},

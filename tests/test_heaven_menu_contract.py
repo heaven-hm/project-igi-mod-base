@@ -62,4 +62,8 @@ for item_id, native_path in required_native_paths.items():
     source = HEAVEN if item_id == "weapon_pickup" else HELPERS
     assert native_path in source, f"{item_id} lacks its verified helper path"
 
+assert 'WeaponEntry{"Binoculars", "WEAPON_ID_BINOCULARS", 0}' in HEAVEN, (
+    "binocular pickup must use its retail symbol with no invented ammo count"
+)
+
 print(f"PASS Heaven routes {len(ids)} production controls across {len(categories)} categories")
