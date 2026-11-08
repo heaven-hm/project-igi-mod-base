@@ -298,6 +298,8 @@ target_compile_definitions(igi_demo_native_contract_tests PRIVATE IGI_SDK_SOURCE
 
 enable_testing()
 add_test(NAME igi_sdk_tests COMMAND igi_sdk_tests)
+add_test(NAME igi_heaven_menu_contract
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_heaven_menu_contract.py)
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/data/igi-natives.csv")
 add_test(NAME igi_generated_natives
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_generated_natives.py)
