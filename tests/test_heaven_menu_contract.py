@@ -56,6 +56,14 @@ assert '"void Vehicle_ResetControls(Vehicle *v)"' in HELPERS, (
     "vehicle control resets must use the catalogued signature, not a widened pointer"
 )
 
+# Routing is checked inside executeMenuNativeAction only, so an unrelated match
+# elsewhere in the helper file cannot hide a control that silently falls through
+# to the "menu action has no native adapter" branch.
+dispatcher_start = HELPERS.index("void executeMenuNativeAction(")
+dispatcher_end = HELPERS.index("static bool executeMenuCommandFor(IGI::Task *manager", dispatcher_start)
+DISPATCHER = HELPERS[dispatcher_start:dispatcher_end]
+dispatched = set(re.findall(r'id == "([a-z_]+)"', DISPATCHER))
+
 # weapon_pickup is intentionally resolved by the Heaven adapter so it can bind
 # the selected retail weapon symbol and ammo value together.
 special_routes = {"weapon_pickup"}
@@ -63,7 +71,9 @@ for item_id in ids:
     if item_id in special_routes:
         assert f'config.items[item].id == "{item_id}"' in HEAVEN
         continue
-    assert f'id == "{item_id}"' in HELPERS, f"unrouted Heaven item: {item_id}"
+    assert item_id in dispatched, (
+        f"unrouted Heaven control {item_id!r}: no dedicated branch in executeMenuNativeAction"
+    )
 
 required_native_paths = {
     "weapon_pickup": "WeaponHelpers(runtime).pickup",
