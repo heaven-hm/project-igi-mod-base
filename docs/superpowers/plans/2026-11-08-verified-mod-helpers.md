@@ -48,7 +48,7 @@ assert(helperSource.find("IGI::HUMAN::VIEW_CAM") != std::string::npos);
 
 - [ ] **Step 2: Run the focused test and verify it fails**
 
-Run: `cmake --build build-macos-verify --target igi_sdk_tests && build-macos-verify/igi_sdk_tests`
+Run: `cmake --build build-macos-verify --parallel && ctest --test-dir build-macos-verify -R '^igi_sdk_tests$' --output-on-failure`
 
 Expected: failure because the test function does not yet exist.
 
@@ -58,7 +58,7 @@ Change the harness path to `ROOT / "demos" / "helpers" / "menu_helpers.cpp"`. Re
 
 - [ ] **Step 4: Run the focused test and verify the path repair passes**
 
-Run: `cmake --build build-macos-verify --target igi_sdk_tests && build-macos-verify/igi_sdk_tests`
+Run: `cmake --build build-macos-verify --parallel && ctest --test-dir build-macos-verify -R '^igi_sdk_tests$' --output-on-failure`
 
 Expected: the source-contract and existing parity tests pass.
 
@@ -104,7 +104,7 @@ assert(helperSource.find("IGI::AUDIO::SET_SFX_VOLUME") != std::string::npos);
 
 - [ ] **Step 2: Run the contract test and verify it fails**
 
-Run: `cmake --build build-macos-verify --target igi_sdk_tests && build-macos-verify/igi_sdk_tests`
+Run: `cmake --build build-macos-verify --parallel && ctest --test-dir build-macos-verify -R '^igi_sdk_tests$' --output-on-failure`
 
 Expected: failure on the first absent function signature.
 
@@ -132,8 +132,8 @@ Run:
 
 ```bash
 python3 tools/format_cpp.py --check
-cmake --build build-macos-verify --target igi_sdk_tests
-build-macos-verify/igi_sdk_tests
+cmake --build build-macos-verify --parallel
+ctest --test-dir build-macos-verify -R '^igi_sdk_tests$' --output-on-failure
 IGI_EXE=/Users/haseeb-mir/Downloads/IGI/igi.exe python3 tools/igi_runtime_harness.py --path demos/helpers/menu_helpers.cpp
 ```
 
@@ -166,7 +166,7 @@ helper source contains the exact comment `AI script context is required`.
 
 - [ ] **Step 2: Run the contract test and verify it fails**
 
-Run: `cmake --build build-macos-verify --target igi_sdk_tests && build-macos-verify/igi_sdk_tests`
+Run: `cmake --build build-macos-verify --parallel && ctest --test-dir build-macos-verify -R '^igi_sdk_tests$' --output-on-failure`
 
 Expected: failure because the boundary documentation is absent.
 
@@ -184,8 +184,8 @@ Run:
 
 ```bash
 python3 tools/format_cpp.py --check
-cmake --build build-macos-verify --target igi_sdk_tests
-build-macos-verify/igi_sdk_tests
+cmake --build build-macos-verify --parallel
+ctest --test-dir build-macos-verify -R '^igi_sdk_tests$' --output-on-failure
 IGI_EXE=/Users/haseeb-mir/Downloads/IGI/igi.exe python3 tools/igi_runtime_harness.py --path demos/helpers/menu_helpers.cpp
 ```
 
@@ -253,7 +253,7 @@ game-thread precondition, retail call chain, failure behavior, and example use.
 
 - [ ] **Step 2: Run the test and verify it fails**
 
-Run: `cmake --build build-macos-verify --target igi_sdk_tests && build-macos-verify/igi_sdk_tests`
+Run: `cmake --build build-macos-verify --parallel && ctest --test-dir build-macos-verify -R '^igi_sdk_tests$' --output-on-failure`
 
 Expected: failure until the comments and verified call path are present.
 
@@ -280,8 +280,8 @@ Run:
 
 ```bash
 python3 tools/format_cpp.py --check
-cmake --build build-macos-verify --target igi_sdk_tests
-build-macos-verify/igi_sdk_tests
+cmake --build build-macos-verify --parallel
+ctest --test-dir build-macos-verify -R '^igi_sdk_tests$' --output-on-failure
 IGI_EXE=/Users/haseeb-mir/Downloads/IGI/igi.exe python3 tools/igi_runtime_harness.py --path demos/helpers/menu_helpers.cpp
 ```
 
