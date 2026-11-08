@@ -363,7 +363,7 @@ bool setPlayerThirdPersonView(Runtime &runtime, bool active) {
     auto *player = IGI::GAME::GET_PLAYER(0);
     if (!player)
         return false;
-    const int mode = active ? 3 : 1;
+    const int mode = active ? 2 : 1;
     IGI::HUMAN::VIEW_CAM(reinterpret_cast<IGI::Human *>(player), mode);
     log(LogLevel::Info,
         std::string("camera view set to ") + (active ? "third person" : "first person"));
@@ -668,9 +668,9 @@ IGI::WeaponType *WeaponHelpers::type(void *task) const {
     return requireLiveGameThread(runtime_) && task ? IGI::WEAPON::WEAPON_GET_TYPE(task) : nullptr;
 }
 bool CameraHelpers::setViewMode(int mode) const {
-    if (mode != 1 && mode != 3)
+    if (mode != 1 && mode != 2)
         return false;
-    return setPlayerThirdPersonView(runtime_, mode == 3);
+    return setPlayerThirdPersonView(runtime_, mode == 2);
 }
 std::optional<int> CameraHelpers::mode() const {
     auto *player = localPlayer(runtime_);
@@ -682,7 +682,7 @@ std::optional<int> CameraHelpers::mode() const {
 }
 std::optional<bool> CameraHelpers::isThirdPersonActive() const {
     const auto cameraMode = mode();
-    return cameraMode ? std::optional<bool>(*cameraMode == 3) : std::nullopt;
+    return cameraMode ? std::optional<bool>(*cameraMode == 2) : std::nullopt;
 }
 bool WorldHelpers::changeLevel(int level) const {
     return igi::changeLevel(runtime_, level);

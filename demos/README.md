@@ -26,7 +26,7 @@ All public helpers live in `demos/helpers/menu_helpers.hpp`, with their only imp
 
 ### CameraHelpers
 
-`setViewMode(mode)` calls the retail `Human_ViewCam` setter for the local player and accepts mode `1` for first person or `3` for third person; the Heaven menu exposes both. `mode()` obtains the effective mode through the retail camera-info handler, including built-in camera toggles and overrides, and `isThirdPersonActive()` returns true only when that handler reports mode `3`; both return an empty result if there is no live player.
+`setViewMode(mode)` calls the retail `Human_ViewCam` setter for the local player and accepts mode `1` for first person or `2` for third person; the Heaven menu exposes both. `mode()` obtains the effective mode through the retail camera-info handler, including built-in camera toggles and overrides, and `isThirdPersonActive()` returns true only when that handler reports mode `2`; both return an empty result if there is no live player.
 
 `setWeaponTarget`, `setWeaponAngles`, `setCamera`, `setTarget`, `setDip`, and `setZoomed` manipulate a supplied live `IGI::HumanView`. `eye`, `forward`, and `matrix` read that same live view into caller-owned storage. Obtain the view from a verified game callback/owner before use; these methods never manufacture pointers.
 

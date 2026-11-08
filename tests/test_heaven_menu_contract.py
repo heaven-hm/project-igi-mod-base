@@ -32,8 +32,8 @@ assert set(assigned_categories.values()) == categories, (
     f"got {set(assigned_categories.values())}"
 )
 
-assert "const int mode = active ? 3 : 1;" in HELPERS, (
-    "the retail camera path uses mode 1 for first person and mode 3 for third person"
+assert "const int mode = active ? 2 : 1;" in HELPERS, (
+    "the retail camera path uses mode 1 for first person and mode 2 for third person"
 )
 assert "IGI::HUMAN::GET_CAMERA_INFO" in HELPERS, (
     "camera state must come from the retail camera-info handler, not a helper-owned cache"
