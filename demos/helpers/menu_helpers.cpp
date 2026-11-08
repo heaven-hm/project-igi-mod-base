@@ -33,6 +33,13 @@ constexpr std::size_t kMaxLiveTargets = kMaxMenuListChoices;
 int g_selectedNpcTaskId = -1;
 int g_selectedCarTaskId = -1;
 
+// Reports whether a rebuilt live list changed, and whether the previously
+// selected task survived the rebuild.
+struct RefreshOutcome {
+    bool changed = false;
+    bool preservedIsLive = true;
+};
+
 // Level unloads and mission restarts rebuild the game task list, so previously
 // selected NPC/car task ids can never stay valid across those transitions.
 void clearLiveTargetSelections(const std::string &reason) {
@@ -458,32 +465,54 @@ bool setPlayerThirdPersonView(Runtime &runtime, bool active) {
 bool refreshLiveTargetOptions(MenuConfig &config, Runtime &runtime) {
     if (!requireLiveGameThread(runtime) || !IGI::GAME::GET())
         return false;
-    const auto replaceChoices = [&config](std::string_view id,
-                                          const std::vector<LiveTarget> &targets,
-                                          std::string_view emptyLabel) {
+    // Live lists are rebuilt from the task table on every refresh, so the
+    // selection must follow its task identity instead of its old index.
+    // Otherwise every kill, respawn or level change silently re-points the
+    // menu at a different car or soldier.
+    const auto replaceChoices =
+        [&config](std::string_view id, const std::vector<LiveTarget> &targets,
+                  std::string_view emptyLabel, int selectedTaskId) -> RefreshOutcome {
         const auto item = std::find_if(config.items.begin(), config.items.end(),
                                        [id](const auto &candidate) { return candidate.id == id; });
         if (item == config.items.end())
-            return false;
+            return {};
+        int preserved = selectedTaskId;
+        if (preserved < 0 && item->defaultSelection < item->values.size())
+            preserved = targetId(item->values[item->defaultSelection]).value_or(-1);
         std::vector<std::string> choices;
         choices.reserve(targets.size());
-        for (const auto &target : targets)
+        std::size_t selection = 0;
+        bool preservedIsLive = preserved < 0;
+        for (const auto &target : targets) {
+            if (target.taskId == preserved) {
+                selection = choices.size();
+                preservedIsLive = true;
+            }
             choices.push_back(targetLabel(target.name, target.taskId));
+        }
         if (choices.empty())
             choices.emplace_back(emptyLabel);
         const bool changed = item->values != choices;
         item->values = std::move(choices);
-        item->defaultSelection = 0;
-        return changed;
+        item->defaultSelection = selection;
+        return {changed, preservedIsLive};
     };
 
     EntityHelpers entities(runtime);
-    const bool npcChanged = replaceChoices("npc_target", entities.npcTargets(), "No live NPCs");
-    const bool carChanged = replaceChoices("vehicle_target", entities.carTargets(), "No live cars");
-    if (npcChanged || carChanged) {
+    const auto npc =
+        replaceChoices("npc_target", entities.npcTargets(), "No live NPCs", g_selectedNpcTaskId);
+    const auto car = replaceChoices("vehicle_target", entities.carTargets(), "No live cars",
+                                    g_selectedCarTaskId);
+    // A selection that vanished from the task table is dropped so both menu
+    // frontends stop offering actions for a task that no longer exists.
+    if (!npc.preservedIsLive)
+        g_selectedNpcTaskId = -1;
+    if (!car.preservedIsLive)
+        g_selectedCarTaskId = -1;
+    if (npc.changed || car.changed) {
         log(LogLevel::Info, "live targets refreshed from the active game task list");
     }
-    return npcChanged || carChanged;
+    return npc.changed || car.changed;
 }
 
 void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::size_t item,

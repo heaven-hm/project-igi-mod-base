@@ -24,6 +24,10 @@ class MenuValues final {
     bool setToggle(std::size_t item, bool value) noexcept;
     // Feed IGI's currently filling ListBox through a supplied game-thread adapter.
     bool fill(std::size_t item, const std::function<void(std::string_view, int)> &addItem) const;
+    // Re-read choices from the live config so a list rebuilt from the game task
+    // table (live NPC/car targets) is what the retail ListBox collects. Returns
+    // true when any list content changed and the screen must re-collect.
+    bool resync(const MenuConfig &config);
 
     void snapshot() noexcept;
     void revert() noexcept;

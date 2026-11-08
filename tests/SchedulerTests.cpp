@@ -27,6 +27,7 @@
 #include <stdexcept>
 
 void menuManagerModelTest();
+void menuValuesLiveResyncTest();
 
 namespace {
 std::vector<std::string> csvFields(const std::string& line) {
@@ -526,6 +527,7 @@ int main() {
     assert(aliasedCatalogue.findByAddress(0x00400000) != nullptr);
     igi::NativeRunner ambiguousRunner(aliasedCatalogue, scheduler);
     assert(ambiguousRunner.queueResolution("SharedName", [](const igi::NativeRecord&) {}) == 0);
+    menuValuesLiveResyncTest();
     menuManagerModelTest();
     return 0;
 }

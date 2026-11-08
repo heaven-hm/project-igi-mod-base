@@ -108,6 +108,13 @@ assert "invoking Car_Control reset for task #" in HELPERS, (
     "car resets must log the native invocation so a crash inside it is traceable"
 )
 
+assert "target.taskId == preserved" in HELPERS, (
+    "live target lists must preserve the selected task identity, not its old index"
+)
+assert "preservedIsLive" in HELPERS, (
+    "a selection that vanished from the task table must be dropped, not silently re-pointed"
+)
+
 assert 'WeaponEntry{"Binoculars", "WEAPON_ID_BINOCULARS", 0}' in HEAVEN, (
     "binocular pickup must use its retail symbol with no invented ammo count"
 )

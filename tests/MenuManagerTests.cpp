@@ -1,6 +1,7 @@
 #include "config/menu_config.hpp"
 #include "ui/menu_manager.hpp"
 #include "ui/menu_script.hpp"
+#include "ui/menu_values.hpp"
 #include "runtime/scheduler.hpp"
 
 #include <cassert>
@@ -321,4 +322,62 @@ void verifiedMenuHelperContractTest() {
     assert(helperSource.find("VehicleHelpers::explodeCar") != std::string::npos);
     assert(helperSource.find("NpcHelpers::ensureWeapon") != std::string::npos);
     assert(helperSource.find("AiHelpers::removeAlarmActions") != std::string::npos);
+    // Live lists must keep the selected task instead of its old index.
+    assert(helperSource.find("target.taskId == preserved") != std::string::npos);
+    assert(helperSource.find("preservedIsLive") != std::string::npos);
+}
+
+// The retail (internal) menu collects its ListBox content from MenuValues, so a
+// live list rebuilt from the task table must reach it through resync().
+void menuValuesLiveResyncTest() {
+    igi::MenuConfig config;
+    igi::ModMenuItemConfig list;
+    list.id = "vehicle_target";
+    list.kind = igi::ModMenuItemKind::List;
+    list.label = "Live Car Target";
+    list.values = {"Car_351 [#351]", "Car_352 [#352]"};
+    list.defaultSelection = 1;
+    list.category = "Vehicles";
+    config.items.push_back(list);
+    igi::ModMenuItemConfig toggle;
+    toggle.id = "npc_collision";
+    toggle.kind = igi::ModMenuItemKind::Toggle;
+    toggle.label = "Selected NPC Collision";
+    toggle.defaultToggle = true;
+    config.items.push_back(toggle);
+
+    igi::MenuValues values(config);
+    assert(values.choiceCount(0) == 2);
+    assert(values.selected(0) == std::optional<std::size_t>(1));
+    assert(values.toggle(1) == std::optional<bool>(true));
+
+    // Unchanged config: nothing to re-collect.
+    assert(!values.resync(config));
+
+    // Car #352 was destroyed, #351 survived and a new car appeared; the
+    // refresher resolved the surviving selection to index 0.
+    config.items[0].values = {"Car_351 [#351]", "Car_900 [#900]"};
+    config.items[0].defaultSelection = 0;
+    assert(values.resync(config));
+    assert(values.choiceCount(0) == 2);
+    assert(values.choice(0, 0) == std::optional<std::string_view>("Car_351 [#351]"));
+    assert(values.choice(0, 1) == std::optional<std::string_view>("Car_900 [#900]"));
+    assert(values.selected(0) == std::optional<std::size_t>(0));
+    // The pending-selection mirrors follow the refresh so Apply stays honest.
+    assert(!values.selectedChanged(0));
+    // Toggles are not touched by a list refresh.
+    assert(values.toggle(1) == std::optional<bool>(true));
+
+    // A user selection then an unrelated live refresh keeps the new index.
+    assert(values.select(0, 1));
+    assert(values.selectedChanged(0));
+    config.items[0].values = {"Car_351 [#351]", "Car_900 [#900]", "Car_901 [#901]"};
+    config.items[0].defaultSelection = 1;
+    assert(values.resync(config));
+    assert(values.selected(0) == std::optional<std::size_t>(1));
+
+    // A different control set needs a new bridge, not a resync.
+    config.items.push_back(toggle);
+    assert(!values.resync(config));
+    assert(values.choiceCount(0) == 3);
 }

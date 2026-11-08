@@ -70,6 +70,7 @@ struct InternalMenuState {
     igi::MenuResource reopenResource;
     igi::MenuResource closeResource;
     std::atomic<std::uint64_t> frameCount{0};
+    std::uint64_t lastLiveRefreshTick = 0;
     std::atomic<std::int32_t> observedScreen{0};
     std::atomic<bool> safeToShutdown{true};
     std::atomic<bool> shutdownPending{false};
@@ -95,6 +96,7 @@ auto &menuResource = g_menu.menuResource;
 auto &reopenResource = g_menu.reopenResource;
 auto &closeResource = g_menu.closeResource;
 auto &frameCount = g_menu.frameCount;
+auto &lastLiveRefreshTick = g_menu.lastLiveRefreshTick;
 auto &safeToShutdown = g_menu.safeToShutdown;
 auto &shutdownPending = g_menu.shutdownPending;
 auto &menuScreenCreated = g_menu.menuScreenCreated;
@@ -350,6 +352,37 @@ bool selectFreeMenuScreenId() {
 }
 
 #if defined(_WIN32)
+// Frames between live-task-table refreshes for the attached screen (~1s at 60Hz).
+constexpr std::uint64_t kLiveRefreshTicks = 60;
+
+// The retail screen fills its ListBoxes from the script bridge, so a live target
+// list rebuilt from the task table only reaches the screen after the bridge is
+// resynced and the screen's changed event is broadcast again. Without this the
+// internal menu kept the list it collected when it first attached.
+void refreshAttachedLiveItems() {
+    if (!menuScreenAttached || pendingTransition != MenuTransition::None || !menuBridge ||
+        !menuConfig.refreshLiveItems)
+        return;
+    const auto tick = runtime.scheduler().gameHookInvocationCount();
+    if (tick - lastLiveRefreshTick < kLiveRefreshTicks)
+        return;
+    lastLiveRefreshTick = tick;
+    if (!menuConfig.refreshLiveItems(menuConfig, runtime))
+        return;
+    if (!menuBridge->resync(menuConfig))
+        return;
+    if (auto *screen = IGI::TASK::FIND_BY_ID(menuConfig.screenId)) {
+        using GetChangedEvent = std::uint8_t(__cdecl *)();
+        using Broadcast = void(__cdecl *)(IGI::Task *, std::uint8_t, void *);
+        const auto changedEvent =
+            reinterpret_cast<GetChangedEvent>(igi::re::HASH::Param_GetChangedEvent)();
+        char changed = 1;
+        reinterpret_cast<Broadcast>(igi::re::HASH::Task_Broadcast)(screen, changedEvent, &changed);
+    }
+    igi::log(igi::LogLevel::Info,
+             "internal menu: live target lists refreshed for the attached screen");
+}
+
 // Runs on the verified Display_AddFrameCallback thread once the tick fires.
 // Registers the script callbacks, then attaches the generated menu screen to
 // the game root task. Every step is logged so an in-game failure points at the
@@ -358,6 +391,7 @@ void menuFrameWork() {
     if (!runtime.initialized())
         return;
     processPendingMenuTransition();
+    refreshAttachedLiveItems();
     if (menuScreenAttached || pendingTransition != MenuTransition::None)
         return;
     if (!initialAttachPending.load(std::memory_order_acquire))
@@ -421,6 +455,7 @@ void menuFrameWork() {
     menuScreenAttached = screen != nullptr;
     if (menuScreenAttached) {
         initialAttachPending.store(false, std::memory_order_release);
+        lastLiveRefreshTick = runtime.scheduler().gameHookInvocationCount();
         safeToShutdown.store(false, std::memory_order_release);
         if (!igi::pauseForMenu(runtime)) {
             igi::log(igi::LogLevel::Error, "internal menu open: unable to pause game");

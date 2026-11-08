@@ -15,6 +15,11 @@ class MenuScriptBridge final {
         : values_(config), onSelection_(std::move(onSelection)), onClose_(std::move(onClose)),
           deferUntilApply_(deferUntilApply), screenId_(config.screenId) {}
     bool fillList(int item, const std::function<void(std::string_view, int)> &addItem) const;
+    // Aligns the script-visible choices with the live menu config. The retail
+    // menu host calls this from the frame tick while its screen is attached.
+    bool resync(const MenuConfig &config) {
+        return values_.resync(config);
+    }
     int getList(int item) const noexcept;
     bool setList(int item, int value);
     bool activate(int item);

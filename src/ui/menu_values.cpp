@@ -81,6 +81,29 @@ bool MenuValues::select(std::size_t item, std::size_t index) noexcept {
     return true;
 }
 
+bool MenuValues::resync(const MenuConfig &config) {
+    if (config.items.size() != items_.size()) {
+        // A different control set needs a new bridge and screen, not a resync.
+        return false;
+    }
+    bool changed = false;
+    for (std::size_t i = 0; i < items_.size(); ++i) {
+        const auto &live = config.items[i];
+        if (items_[i].kind == ModMenuItemKind::List && items_[i].values != live.values) {
+            items_[i].values = live.values;
+            // The refresher resolved the previously selected task identity to a
+            // new index; adopt it on both mirrors so Apply/Cancel stay honest.
+            const std::size_t selection =
+                live.defaultSelection < live.values.size() ? live.defaultSelection : 0;
+            selected_[i] = selection;
+            committedSelected_[i] = selection;
+            changed = true;
+        }
+        items_[i].label = live.label;
+    }
+    return changed;
+}
+
 bool MenuValues::fill(std::size_t item,
                       const std::function<void(std::string_view, int)> &addItem) const {
     const auto count = choiceCount(item);

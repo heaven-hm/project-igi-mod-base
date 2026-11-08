@@ -121,6 +121,19 @@ std::string immediateCategoryChild(std::string_view category, std::string_view p
     return parent.empty() ? std::string(child) : std::string(parent) + "/" + std::string(child);
 }
 
+// Distinct top-level categories, used for the attach log so an in-game issue
+// immediately shows whether the configured control set was actually built.
+std::size_t liveCategoryCount() {
+    std::vector<std::string> categories;
+    for (const auto &item : menuConfig.items) {
+        const std::string top = immediateCategoryChild(item.category, "");
+        const std::string name = top.empty() ? std::string("General") : top;
+        if (std::find(categories.begin(), categories.end(), name) == categories.end())
+            categories.push_back(name);
+    }
+    return categories.size();
+}
+
 void initializeMenuStateBuffers() {
     listSelections.assign(menuConfig.items.size(), 0);
     toggleValues.resize(menuConfig.items.size(), false);
@@ -138,15 +151,32 @@ void initializeMenuStateBuffers() {
 }
 
 void refreshLiveMenuItems() {
-    if (!menuConfig.refreshLiveItems || !menuConfig.refreshLiveItems(menuConfig, runtime))
+    if (!menuConfig.refreshLiveItems)
+        return;
+    // Keep the pre-refresh choices so a list that actually changed can adopt the
+    // refresher's task-id-preserving selection instead of resetting to entry 0.
+    std::vector<std::vector<std::string>> previousChoices;
+    previousChoices.reserve(menuConfig.items.size());
+    bool anyList = false;
+    for (const auto &item : menuConfig.items) {
+        const bool isList = item.kind == igi::ModMenuItemKind::List;
+        anyList = anyList || isList;
+        previousChoices.push_back(isList ? item.values : std::vector<std::string>{});
+    }
+    if (!anyList || !menuConfig.refreshLiveItems(menuConfig, runtime))
         return;
     for (std::size_t index = 0; index < menuConfig.items.size() && index < listSelections.size();
          ++index) {
         const auto &item = menuConfig.items[index];
-        if (item.kind == igi::ModMenuItemKind::List &&
-            (listSelections[index] < 0 ||
-             static_cast<std::size_t>(listSelections[index]) >= item.values.size())) {
+        if (item.kind != igi::ModMenuItemKind::List)
+            continue;
+        const bool changed =
+            index < previousChoices.size() && previousChoices[index] != item.values;
+        if (listSelections[index] < 0 ||
+            static_cast<std::size_t>(listSelections[index]) >= item.values.size()) {
             listSelections[index] = 0;
+        } else if (changed && item.defaultSelection < item.values.size()) {
+            listSelections[index] = static_cast<int>(item.defaultSelection);
         }
     }
 }
@@ -581,9 +611,9 @@ bool openImGuiMenu() {
         setKeyboardBlocked(true);
     }
     IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, "IGI SDK ImGui Mod Menu: enabled");
-    igi::log(igi::LogLevel::Info,
-             "internal menu screen: attached and requested from existing MenuManager");
-    igi::log(igi::LogLevel::Info, "external imgui menu: attached and visible");
+    igi::log(igi::LogLevel::Info, "external imgui menu: attached and visible with " +
+                                      std::to_string(menuConfig.items.size()) + " controls in " +
+                                      std::to_string(liveCategoryCount()) + " categories");
     return true;
 }
 
