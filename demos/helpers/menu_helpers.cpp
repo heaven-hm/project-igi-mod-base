@@ -988,6 +988,23 @@ IGI::Car *EntityHelpers::carAt(std::size_t slot) const {
     }
     return nullptr;
 }
+// Retail task names are the instance names created by the level script. A task
+// without an instance name still reports its retail type name, so every menu
+// entry carries a name the running game itself provides instead of a made-up
+// ordinal such as "NPC 3" or "Car 3".
+static std::string liveTaskName(IGI::Task *task) {
+    if (!task)
+        return {};
+    char name[128]{};
+    IGI::TASK::GET_TASK_NAME(name, task);
+    if (name[0] != '\0')
+        return name;
+    const auto type = reinterpret_cast<const IgiTaskLayout *>(task)->type;
+    if (const char *typeName = IGI::TASK::GET_NAME(type))
+        return typeName;
+    return {};
+}
+
 std::vector<LiveTarget> EntityHelpers::npcTargets() const {
     std::vector<LiveTarget> targets;
     if (!requireLiveGameThread(runtime_))
@@ -996,9 +1013,7 @@ std::vector<LiveTarget> EntityHelpers::npcTargets() const {
         auto *task = IGI::TASK::FIND_BY_ID(id);
         if (!isNpcTask(task))
             continue;
-        char name[128]{};
-        IGI::TASK::GET_TASK_NAME(name, task);
-        targets.push_back({IGI::TASK::GET_ID(task), name});
+        targets.push_back({IGI::TASK::GET_ID(task), liveTaskName(task)});
     }
     return targets;
 }
@@ -1010,9 +1025,7 @@ std::vector<LiveTarget> EntityHelpers::carTargets() const {
         auto *task = IGI::TASK::FIND_BY_ID(id);
         if (!isCarTask(task))
             continue;
-        char name[128]{};
-        IGI::TASK::GET_TASK_NAME(name, task);
-        targets.push_back({IGI::TASK::GET_ID(task), name});
+        targets.push_back({IGI::TASK::GET_ID(task), liveTaskName(task)});
     }
     return targets;
 }

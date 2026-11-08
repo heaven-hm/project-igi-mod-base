@@ -86,6 +86,16 @@ assert '"Live NPC Target"' in HEAVEN and '"Waiting for live NPC list"' in HEAVEN
 assert "IGI::TASK::GET_TASK_NAME" in HELPERS and "IGI::TASK::GET_ID" in HELPERS, (
     "live targets must use the retail task name and stable task ID natives"
 )
+assert "liveTaskName(task)" in HELPERS, (
+    "both live lists must resolve names through the shared retail name lookup"
+)
+assert "IGI::TASK::GET_NAME(type)" in HELPERS, (
+    "a task without an instance name must fall back to its retail type name"
+)
+for ordinal in ("NPC " + "1", "Car " + "1", "NPC #", "Car #"):
+    assert ordinal not in HEAVEN and ordinal not in HELPERS, (
+        f"live target lists must never render ordinal labels such as {ordinal!r}"
+    )
 assert "findLiveTarget(runtime, g_selectedCarTaskId, isCarTask)" in HELPERS, (
     "vehicle actions must resolve the selected live car by task identity at action time"
 )
