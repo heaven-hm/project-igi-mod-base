@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <cwchar>
+#include <optional>
 #include <string>
 #include <vector>
 #include <wchar.h>
@@ -75,6 +76,24 @@ std::vector<ProcessInfo> snapshotProcesses() {
     return processes;
 }
 
+std::optional<DWORD> findLoadedModule(DWORD pid, const std::wstring& dllPath) {
+    const HANDLE snapshot =
+        CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, pid);
+    if (snapshot == INVALID_HANDLE_VALUE) return std::nullopt;
+
+    MODULEENTRY32W entry{};
+    entry.dwSize = sizeof(entry);
+    for (BOOL more = Module32FirstW(snapshot, &entry); more; more = Module32NextW(snapshot, &entry)) {
+        if (_wcsicmp(entry.szExePath, dllPath.c_str()) == 0) {
+            const DWORD base = reinterpret_cast<DWORD>(entry.modBaseAddr);
+            CloseHandle(snapshot);
+            return base;
+        }
+    }
+    CloseHandle(snapshot);
+    return 0;
+}
+
 int listProcesses(const std::string& filter) {
     const std::wstring wanted = toWide(filter);
     int matches = 0;
@@ -92,6 +111,19 @@ int injectInto(DWORD pid, const std::string& dllPath, bool verbose) {
     if (widePath.empty() || widePath.size() < 3) {
         std::printf("error: the DLL path must be absolute\n");
         return 2;
+    }
+
+    const auto existingModule = findLoadedModule(pid, widePath);
+    if (!existingModule.has_value()) {
+        std::printf("error: unable to inspect modules for pid %lu: %lu\n",
+                    static_cast<unsigned long>(pid), GetLastError());
+        return 4;
+    }
+    if (*existingModule != 0) {
+        std::printf("already loaded in pid %lu (module 0x%08lX); restart igi.exe to reload %s\n",
+                    static_cast<unsigned long>(pid), static_cast<unsigned long>(*existingModule),
+                    dllPath.c_str());
+        return 0;
     }
 
     const HANDLE process = OpenProcess(
