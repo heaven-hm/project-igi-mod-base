@@ -4,6 +4,7 @@
 #include "natives/mvp_natives.hpp"
 #include "runtime/runtime.hpp"
 
+#include <array>
 #include <cstddef>
 #include <optional>
 #include <string_view>
@@ -25,6 +26,11 @@ class EntityHelpers {
     IGI::Car *nextCar(IGI::Car *current) const;
     IGI::Task *firstVehicle() const;
     IGI::Task *nextVehicle(IGI::Task *current) const;
+    bool moveHuman(IGI::Human *human, const std::array<double, 3> &position) const;
+    bool setHumanYaw(IGI::Human *human, float yaw) const;
+    bool snapHumanToGround(IGI::Human *human) const;
+    bool leaveHumanGround(IGI::Human *human) const;
+    bool setHumanCollision(IGI::Human *human, bool enabled) const;
 
   private:
     Runtime &runtime_;

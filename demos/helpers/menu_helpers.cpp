@@ -735,6 +735,40 @@ IGI::Task *EntityHelpers::nextVehicle(IGI::Task *current) const {
         return nullptr;
     return IGI::TASK::FIND_NEXT(current, IGI::VEHICLE::GET_BASE_TYPE());
 }
+bool EntityHelpers::moveHuman(IGI::Human *human, const std::array<double, 3> &position) const {
+    if (!requireLiveGameThread(runtime_) || !human)
+        return false;
+    auto mutablePosition = position;
+    IGI::HUMAN::SET_POSITION(human, mutablePosition.data());
+    return true;
+}
+bool EntityHelpers::setHumanYaw(IGI::Human *human, float yaw) const {
+    if (!requireLiveGameThread(runtime_) || !human)
+        return false;
+    IGI::HUMAN::SET_YAW(human, yaw);
+    return true;
+}
+bool EntityHelpers::snapHumanToGround(IGI::Human *human) const {
+    if (!requireLiveGameThread(runtime_) || !human)
+        return false;
+    IGI::HUMAN::SNAP_TO_GROUND(human);
+    return true;
+}
+bool EntityHelpers::leaveHumanGround(IGI::Human *human) const {
+    if (!requireLiveGameThread(runtime_) || !human)
+        return false;
+    IGI::HUMAN::LEAVE_GROUND(human);
+    return true;
+}
+bool EntityHelpers::setHumanCollision(IGI::Human *human, bool enabled) const {
+    if (!requireLiveGameThread(runtime_) || !human)
+        return false;
+    if (enabled)
+        IGI::HUMAN::ENABLE_COLLISION(human);
+    else
+        IGI::HUMAN::DISABLE_COLLISION(human);
+    return true;
+}
 bool PlayerHelpers::setLookEnabled(bool enabled) const {
     return setPlayerLookEnabled(runtime_, enabled);
 }

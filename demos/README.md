@@ -6,6 +6,10 @@
 
 All public helpers live in `demos/helpers/menu_helpers.hpp`, with their only implementation in `demos/helpers/menu_helpers.cpp`. Construct a helper with the `igi::Runtime` passed to a game-frame/menu callback. A helper returns `false` or `std::nullopt` when it is not executing on the live game callback thread, the game is inactive, or a required retail object is unavailable. Do not call these methods from a DLL worker thread.
 
+### EntityHelpers
+
+`moveHuman(human, position)` uses the engine position-update path for a supplied live player or NPC, so collision placement, view position, slide state, and push state update together. `setHumanYaw` updates the human rotation and animation bones through the game native. `snapHumanToGround` and `leaveHumanGround` attach or detach a live human from ground handling, while `setHumanCollision(human, enabled)` changes that human's retail collision state. Obtain the human from a real game callback, such as `firstNpc`, and keep the position array in game coordinates.
+
 ### PlayerHelpers
 
 `moveScale`, `state`, `team`, `index`, `isDead`, `isCrouching`, `isActive`, and `isPlayer` query the local retail player through the corresponding `IGI::PLAYER` and `IGI::HUMAN` natives. Use their optional result to populate a HUD/status view; do not treat an empty result as a game value.

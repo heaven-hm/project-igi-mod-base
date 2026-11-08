@@ -311,6 +311,28 @@ NATIVE_DECL char IS_CROUCHING(Human *h) {
 NATIVE_DECL char IS_ACTIVE(Human *h) {
     return NATIVE_INVOKE<char>(HASH::HUMAN_IS_ACTIVE, "char Human_IsActive(Human *h)", h);
 }
+NATIVE_DECL void SET_POSITION(Human *h, double *position) {
+    return NATIVE_INVOKE<Void>(HASH::HUMAN_SET_POSITION,
+                               "void Human_SetPosition(Human *h, double *pos)", h, position);
+}
+NATIVE_DECL void SET_YAW(Human *h, float yaw) {
+    return NATIVE_INVOKE<Void>(HASH::HUMAN_SET_YAW, "void Human_SetYaw(Human *h, float yaw)", h,
+                               yaw);
+}
+NATIVE_DECL void SNAP_TO_GROUND(Human *h) {
+    return NATIVE_INVOKE<Void>(HASH::HUMAN_SNAP_TO_GROUND, "void Human_SnapToGround(Human *h)", h);
+}
+NATIVE_DECL void LEAVE_GROUND(Human *h) {
+    return NATIVE_INVOKE<Void>(HASH::HUMAN_LEAVE_GROUND, "void Human_LeaveGround(Human *h)", h);
+}
+NATIVE_DECL void DISABLE_COLLISION(Human *h) {
+    return NATIVE_INVOKE<Void>(HASH::HUMAN_DISABLE_COLLISION,
+                               "void Human_DisableCollision(Human *h)", h);
+}
+NATIVE_DECL void ENABLE_COLLISION(Human *h) {
+    return NATIVE_INVOKE<Void>(HASH::HUMAN_ENABLE_COLLISION, "void Human_EnableCollision(Human *h)",
+                               h);
+}
 NATIVE_DECL void LOCK_INPUT(Human *h) {
     return NATIVE_INVOKE<Void>(HASH::HUMAN_LOCK_INPUT, "void Human_LockInput(Human *h)", h);
 }
