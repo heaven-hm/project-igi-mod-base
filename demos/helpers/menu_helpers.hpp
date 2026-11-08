@@ -137,6 +137,7 @@ class VehicleHelpers {
     std::optional<long double> carTrackFactor(IGI::Car *car, int joint) const;
     bool explodeCar(IGI::Car *car) const;
     bool resetCar(IGI::Car *car) const;
+    bool driveCar(IGI::Car *car, float throttle, bool brake = false) const;
     bool resetControls(void *vehicle) const;
     IGI::Task *heliDoor(IGI::Heli *heli) const;
     bool heliControlInfo(IGI::Heli *heli, int *out) const;

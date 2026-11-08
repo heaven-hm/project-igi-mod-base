@@ -492,6 +492,26 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
             log(LogLevel::Warning,
                 "vehicle explode rejected: selected car was unavailable on current level");
         }
+    } else if (id == "vehicle_drive") {
+        float throttle = 0.0F;
+        bool brake = false;
+        if (value == "Reverse")
+            throttle = -0.25F;
+        else if (value == "Quarter")
+            throttle = 0.25F;
+        else if (value == "Half")
+            throttle = 0.5F;
+        else if (value == "Full")
+            throttle = 1.0F;
+        else if (value == "Brake")
+            brake = true;
+        auto *car = EntityHelpers(runtime).carAt(g_selectedCarSlot);
+        if (VehicleHelpers(runtime).driveCar(car, throttle, brake)) {
+            log(LogLevel::Info, "vehicle drive: applied selected car control");
+        } else {
+            log(LogLevel::Warning,
+                "vehicle drive rejected: selected car was unavailable or its native was rejected");
+        }
     } else if (id == "npc_ensure_weapon") {
         auto *npc = EntityHelpers(runtime).npcAt(g_selectedNpcSlot);
         if (NpcHelpers(runtime).ensureWeapon(npc))
@@ -1198,6 +1218,16 @@ bool VehicleHelpers::resetCar(IGI::Car *car) const {
     float input[4] = {0.0F, -1.0F, -2.0F, -1.0F};
     IGI::CarControlArg reset{0, input};
     IGI::VEHICLE::CAR_CONTROL(car, &reset);
+    return true;
+}
+bool VehicleHelpers::driveCar(IGI::Car *car, float throttle, bool brake) const {
+    if (!requireLiveGameThread(runtime_) || !car || throttle < -0.25F || throttle > 1.0F)
+        return false;
+    if (!isCallableNative(IGI::HASH::CAR_CONTROL, "void Car_Control(Car *o, CarControlArg *arg)"))
+        return false;
+    float input[4] = {0.0F, throttle, 0.0F, brake ? 1.0F : -1.0F};
+    IGI::CarControlArg drive{1, input};
+    IGI::VEHICLE::CAR_CONTROL(car, &drive);
     return true;
 }
 bool VehicleHelpers::resetControls(void *vehicle) const {

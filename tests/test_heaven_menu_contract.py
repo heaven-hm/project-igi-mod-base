@@ -56,6 +56,7 @@ required_native_paths = {
     "weapon_cycle": "WeaponHelpers(runtime).cycle(1)",
     "vehicle_reset": "VehicleHelpers(runtime).resetCar",
     "vehicle_explode": "VehicleHelpers(runtime).explodeCar",
+    "vehicle_drive": "VehicleHelpers(runtime).driveCar",
     "npc_execute": "NpcHelpers(runtime).executeSoldier",
     "npc_ensure_weapon": "NpcHelpers(runtime).ensureWeapon",
     "player_reset_damage": "PlayerHelpers(runtime).resetDamage",

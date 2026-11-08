@@ -50,6 +50,11 @@ bool configureModMenu(igi::MenuConfig &config) {
          {"Car 1", "Car 2", "Car 3", "Car 4", "Car 5", "Car 6", "Car 7", "Car 8"}},
         {"vehicle_reset", igi::ModMenuItemKind::Action, "Reset Selected Car", "", {}},
         {"vehicle_explode", igi::ModMenuItemKind::Action, "Explode Selected Car", "", {}},
+        {"vehicle_drive",
+         igi::ModMenuItemKind::List,
+         "Selected Car Drive",
+         "",
+         {"Stop", "Reverse", "Quarter", "Half", "Full", "Brake"}},
         {"npc_target",
          igi::ModMenuItemKind::List,
          "NPC Target",
@@ -84,13 +89,14 @@ bool configureModMenu(igi::MenuConfig &config) {
     config.items[10].category = "Vehicles";
     config.items[11].category = "Vehicles";
     config.items[12].category = "Vehicles";
-    config.items[13].category = "AI / NPC";
+    config.items[13].category = "Vehicles";
     config.items[14].category = "AI / NPC";
     config.items[15].category = "AI / NPC";
     config.items[16].category = "AI / NPC";
-    config.items[17].category = "World";
-    config.items[18].category = "Player";
+    config.items[17].category = "AI / NPC";
+    config.items[18].category = "World";
     config.items[19].category = "Player";
+    config.items[20].category = "Player";
     return true;
 }
 
