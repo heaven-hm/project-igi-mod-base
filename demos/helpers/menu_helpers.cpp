@@ -33,6 +33,40 @@ constexpr std::size_t kMaxLiveTargets = kMaxMenuListChoices;
 int g_selectedNpcTaskId = -1;
 int g_selectedCarTaskId = -1;
 
+// Level unloads and mission restarts rebuild the game task list, so previously
+// selected NPC/car task ids can never stay valid across those transitions.
+void clearLiveTargetSelections(const std::string &reason) {
+    const bool hadSelection = g_selectedNpcTaskId >= 0 || g_selectedCarTaskId >= 0;
+    g_selectedNpcTaskId = -1;
+    g_selectedCarTaskId = -1;
+    if (hadSelection)
+        log(LogLevel::Info, "live target selections cleared: " + reason);
+}
+
+// Guidance for a click with no target picked yet, plus self-healing for a
+// selection that stopped being live so follow-up clicks stay clean.
+void reportMissingCarTarget(std::string_view action) {
+    if (g_selectedCarTaskId < 0) {
+        log(LogLevel::Info,
+            std::string(action) + ": no car selected; pick a live car target first");
+        return;
+    }
+    g_selectedCarTaskId = -1;
+    log(LogLevel::Warning,
+        std::string(action) + ": selected car is no longer live; pick a live car target again");
+}
+
+void reportMissingNpcTarget(std::string_view action) {
+    if (g_selectedNpcTaskId < 0) {
+        log(LogLevel::Info,
+            std::string(action) + ": no NPC selected; pick a live NPC target first");
+        return;
+    }
+    g_selectedNpcTaskId = -1;
+    log(LogLevel::Warning,
+        std::string(action) + ": selected NPC is no longer live; pick a live NPC target again");
+}
+
 bool isCallableNative(std::uint32_t address, std::string_view signature) {
     auto *caller = igiNativeCaller();
     if (!caller)
@@ -470,10 +504,13 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
                 g_selectedNpcTaskId = *selected;
                 log(LogLevel::Info, "NPC target selected: " + std::string(value));
             } else {
-                log(LogLevel::Warning, "NPC target selection rejected: target is no longer live");
+                g_selectedNpcTaskId = -1;
+                log(LogLevel::Warning,
+                    "NPC target selection rejected: target is no longer live on this level");
             }
         } else {
-            log(LogLevel::Warning, "NPC target selection rejected");
+            g_selectedNpcTaskId = -1;
+            log(LogLevel::Info, "NPC target list empty: no live NPCs to select on this level");
         }
     } else if (id == "vehicle_target") {
         if (const auto selected = targetId(value)) {
@@ -482,10 +519,13 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
                 g_selectedCarTaskId = *selected;
                 log(LogLevel::Info, "car target selected: " + std::string(value));
             } else {
-                log(LogLevel::Warning, "car target selection rejected: target is no longer live");
+                g_selectedCarTaskId = -1;
+                log(LogLevel::Warning,
+                    "car target selection rejected: target is no longer live on this level");
             }
         } else {
-            log(LogLevel::Warning, "car target selection rejected");
+            g_selectedCarTaskId = -1;
+            log(LogLevel::Info, "car target list empty: no live cars to select on this level");
         }
     } else if (id == "weather" || action.find("SetWeather") != std::string::npos) {
         setWeather(runtime, value);
@@ -543,20 +583,22 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
     } else if (id == "vehicle_reset") {
         auto *car =
             reinterpret_cast<IGI::Car *>(findLiveTarget(runtime, g_selectedCarTaskId, isCarTask));
-        if (VehicleHelpers(runtime).resetCar(car)) {
+        if (!car) {
+            reportMissingCarTarget("vehicle reset");
+        } else if (VehicleHelpers(runtime).resetCar(car)) {
             log(LogLevel::Info, "vehicle reset: restored selected car through retail control flow");
         } else {
-            log(LogLevel::Warning,
-                "vehicle reset rejected: selected car was unavailable or its native was rejected");
+            log(LogLevel::Warning, "vehicle reset rejected: Car_Control native was unavailable");
         }
     } else if (id == "vehicle_explode") {
         auto *car =
             reinterpret_cast<IGI::Car *>(findLiveTarget(runtime, g_selectedCarTaskId, isCarTask));
-        if (car && VehicleHelpers(runtime).explodeCar(car)) {
+        if (!car) {
+            reportMissingCarTarget("vehicle explode");
+        } else if (VehicleHelpers(runtime).explodeCar(car)) {
             log(LogLevel::Info, "vehicle explode: triggered explosion for selected car");
         } else {
-            log(LogLevel::Warning,
-                "vehicle explode rejected: selected car was unavailable on current level");
+            log(LogLevel::Warning, "vehicle explode rejected: Car_Explode native was unavailable");
         }
     } else if (id == "vehicle_drive") {
         float throttle = 0.0F;
@@ -573,49 +615,68 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
             brake = true;
         auto *car =
             reinterpret_cast<IGI::Car *>(findLiveTarget(runtime, g_selectedCarTaskId, isCarTask));
-        if (VehicleHelpers(runtime).driveCar(car, throttle, brake)) {
+        if (!car) {
+            reportMissingCarTarget("vehicle drive");
+        } else if (VehicleHelpers(runtime).driveCar(car, throttle, brake)) {
             log(LogLevel::Info, "vehicle drive: applied selected car control");
         } else {
-            log(LogLevel::Warning,
-                "vehicle drive rejected: selected car was unavailable or its native was rejected");
+            log(LogLevel::Warning, "vehicle drive rejected: Car_Control native was unavailable");
         }
     } else if (id == "npc_ensure_weapon") {
         auto *npc =
             reinterpret_cast<IGI::Human *>(findLiveTarget(runtime, g_selectedNpcTaskId, isNpcTask));
-        if (NpcHelpers(runtime).ensureWeapon(npc))
+        if (!npc) {
+            reportMissingNpcTarget("NPC equip");
+        } else if (NpcHelpers(runtime).ensureWeapon(npc)) {
             log(LogLevel::Info, "NPC weapon provisioned through the soldier native");
-        else
-            log(LogLevel::Warning, "NPC weapon request rejected: selected NPC was unavailable");
+        } else {
+            log(LogLevel::Warning,
+                "NPC weapon request rejected: Soldier_EnsureWeapon native was unavailable");
+        }
     } else if (id == "npc_reset_damage") {
         auto *npc =
             reinterpret_cast<IGI::Human *>(findLiveTarget(runtime, g_selectedNpcTaskId, isNpcTask));
-        if (NpcHelpers(runtime).resetDamage(npc))
+        if (!npc) {
+            reportMissingNpcTarget("NPC damage reset");
+        } else if (NpcHelpers(runtime).resetDamage(npc)) {
             log(LogLevel::Info, "NPC damage state reset through the human native");
-        else
-            log(LogLevel::Warning, "NPC damage reset rejected: selected NPC was unavailable");
+        } else {
+            log(LogLevel::Warning,
+                "NPC damage reset rejected: Human_ResetDamage native was unavailable");
+        }
     } else if (id == "npc_snap_ground") {
         auto *npc =
             reinterpret_cast<IGI::Human *>(findLiveTarget(runtime, g_selectedNpcTaskId, isNpcTask));
-        if (NpcHelpers(runtime).snapToGround(npc))
+        if (!npc) {
+            reportMissingNpcTarget("NPC ground recovery");
+        } else if (NpcHelpers(runtime).snapToGround(npc)) {
             log(LogLevel::Info, "NPC snapped to ground through the human native");
-        else
-            log(LogLevel::Warning, "NPC ground recovery rejected: selected NPC was unavailable");
+        } else {
+            log(LogLevel::Warning,
+                "NPC ground recovery rejected: Human_SnapToGround native was unavailable");
+        }
     } else if (id == "npc_collision") {
         auto *npc =
             reinterpret_cast<IGI::Human *>(findLiveTarget(runtime, g_selectedNpcTaskId, isNpcTask));
-        if (NpcHelpers(runtime).setCollisionEnabled(npc, value == "Enabled")) {
+        if (!npc) {
+            reportMissingNpcTarget("NPC collision");
+        } else if (NpcHelpers(runtime).setCollisionEnabled(npc, value == "Enabled")) {
             log(LogLevel::Info, "NPC collision state updated through the human native");
         } else {
-            log(LogLevel::Warning, "NPC collision request rejected: selected NPC was unavailable");
+            log(LogLevel::Warning,
+                "NPC collision request rejected: Human collision native was unavailable");
         }
     } else if (id == "npc_execute") {
         auto *npc =
             reinterpret_cast<IGI::Human *>(findLiveTarget(runtime, g_selectedNpcTaskId, isNpcTask));
-        if (NpcHelpers(runtime).executeSoldier(npc))
+        if (!npc) {
+            reportMissingNpcTarget("soldier execution");
+        } else if (NpcHelpers(runtime).executeSoldier(npc)) {
             log(LogLevel::Info, "selected soldier executed through the retail soldier flow");
-        else
+        } else {
             log(LogLevel::Warning,
-                "soldier execution rejected: select a live standard Soldier target first");
+                "soldier execution rejected: selected target is not a standard Soldier");
+        }
     } else if (id == "display" || action.find("RefreshDisplay") != std::string::npos) {
         IGI::GAME::SET_DISPLAY_MODE();
         log(LogLevel::Info, "display mode refreshed");
@@ -690,6 +751,7 @@ bool changeLevel(Runtime &runtime, int levelId) {
     auto *game = IGI::GAME::GET();
     if (!game)
         return false;
+    clearLiveTargetSelections("level change unloads the current level task list");
     (void)removePrecipitationTask();
     if (!prepareMenuForLevelChange()) {
         log(LogLevel::Error, "level change: injected menu cleanup failed");
@@ -983,6 +1045,11 @@ bool EntityHelpers::snapHumanToGround(IGI::Human *human) const {
         return false;
     if (!isCallableNative(IGI::HASH::HUMAN_SNAP_TO_GROUND, "void Human_SnapToGround(Human *h)"))
         return false;
+    // Log the exact native invocation so a crash inside Human_SnapToGround is
+    // visible in the log instead of a silent drop after the menu action line.
+    log(LogLevel::Info,
+        "snap to ground: invoking Human_SnapToGround for task #" +
+            std::to_string(IGI::TASK::GET_ID(reinterpret_cast<IGI::Task *>(human))));
     IGI::HUMAN::SNAP_TO_GROUND(human);
     return true;
 }
@@ -1137,6 +1204,7 @@ bool WorldHelpers::changeLevel(int level) const {
 bool WorldHelpers::restartMission() const {
     if (!requireLiveGameThread(runtime_) || !IGI::GAME::GET())
         return false;
+    clearLiveTargetSelections("mission restart rebuilds the level task list");
     IGI::GAME::RESTART();
     log(LogLevel::Info, "mission restart requested via IGI::GAME::RESTART");
     return true;
@@ -1356,6 +1424,10 @@ bool VehicleHelpers::resetCar(IGI::Car *car) const {
         return false;
     if (!isCallableNative(IGI::HASH::CAR_CONTROL, "void Car_Control(Car *o, CarControlArg *arg)"))
         return false;
+    // Log the exact native invocation so a crash or hang inside the Car_Control
+    // reset path is visible in the log instead of a silent drop.
+    log(LogLevel::Info, "vehicle reset: invoking Car_Control reset for task #" +
+                            std::to_string(IGI::TASK::GET_ID(reinterpret_cast<IGI::Task *>(car))));
     float input[4] = {0.0F, -1.0F, -2.0F, -1.0F};
     IGI::CarControlArg reset{0, input};
     IGI::VEHICLE::CAR_CONTROL(car, &reset);

@@ -92,6 +92,21 @@ assert "findLiveTarget(runtime, g_selectedCarTaskId, isCarTask)" in HELPERS, (
 assert "findLiveTarget(runtime, g_selectedNpcTaskId, isNpcTask)" in HELPERS, (
     "NPC actions must resolve the selected live NPC by task identity at action time"
 )
+assert 'clearLiveTargetSelections("level change unloads the current level task list")' in HELPERS, (
+    "a level change must drop stale NPC/car selections instead of logging fake warnings"
+)
+assert (
+    'clearLiveTargetSelections("mission restart rebuilds the level task list")' in HELPERS
+), "a mission restart must drop stale NPC/car selections too"
+assert "reportMissingCarTarget(" in HELPERS and "reportMissingNpcTarget(" in HELPERS, (
+    "target-dependent actions must distinguish a missing selection from a stale one"
+)
+assert "invoking Human_SnapToGround for task #" in HELPERS, (
+    "ground recovery must log the native invocation so a crash inside it is traceable"
+)
+assert "invoking Car_Control reset for task #" in HELPERS, (
+    "car resets must log the native invocation so a crash inside it is traceable"
+)
 
 assert 'WeaponEntry{"Binoculars", "WEAPON_ID_BINOCULARS", 0}' in HEAVEN, (
     "binocular pickup must use its retail symbol with no invented ammo count"

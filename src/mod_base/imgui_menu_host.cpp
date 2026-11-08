@@ -632,8 +632,8 @@ void renderImGuiModWindow() {
 
     bool keepOpen = menuVisible;
     if (ImGui::Begin(menuConfig.title.c_str(), &keepOpen, windowFlags)) {
-if ((frameCount.load(std::memory_order_relaxed) % 120U) == 0U)
-refreshLiveMenuItems();
+        if ((frameCount.load(std::memory_order_relaxed) % 120U) == 0U)
+            refreshLiveMenuItems();
         refreshControlValuesFromGame();
         ImGui::Text("IGI Mod Base - ImGui (Direct3D 7)");
         if (menuConfig.imgui.showFps) {
