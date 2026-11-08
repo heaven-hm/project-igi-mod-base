@@ -1,6 +1,9 @@
 #pragma once
 
+#include "ui/menu_commands.hpp"
 #include "ui/menu_values.hpp"
+
+#include <optional>
 
 namespace igi {
 class NativeCaller;
@@ -12,13 +15,17 @@ class MenuScriptBridge final {
     using CloseHandler = std::function<void()>;
     explicit MenuScriptBridge(const MenuConfig &config, SelectionHandler onSelection = {},
                               CloseHandler onClose = {}, bool deferUntilApply = false)
-        : values_(config), onSelection_(std::move(onSelection)), onClose_(std::move(onClose)),
+        : values_(config), commands_(buildMenuCommands(config)),
+          onSelection_(std::move(onSelection)), onClose_(std::move(onClose)),
           deferUntilApply_(deferUntilApply), screenId_(config.screenId) {}
+    // Item index used by the generated script for the flattened command list.
+    static constexpr int kCommandList = -1;
     bool fillList(int item, const std::function<void(std::string_view, int)> &addItem) const;
     // Aligns the script-visible choices with the live menu config. The retail
     // menu host calls this from the frame tick while its screen is attached.
-    bool resync(const MenuConfig &config) {
-        return values_.resync(config);
+    bool resync(const MenuConfig &config);
+    const std::vector<MenuCommand> &commands() const noexcept {
+        return commands_;
     }
     int getList(int item) const noexcept;
     bool setList(int item, int value);
@@ -35,7 +42,12 @@ class MenuScriptBridge final {
     }
 
   private:
+    // Runs the command entry the retail ListBox last selected.
+    bool runSelectedCommand();
+
     MenuValues values_;
+    std::vector<MenuCommand> commands_;
+    std::optional<std::size_t> selectedCommand_;
     SelectionHandler onSelection_;
     CloseHandler onClose_;
     bool deferUntilApply_ = false;

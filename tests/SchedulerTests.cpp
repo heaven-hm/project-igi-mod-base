@@ -28,6 +28,7 @@
 
 void menuManagerModelTest();
 void menuValuesLiveResyncTest();
+void menuCommandListTest();
 
 namespace {
 std::vector<std::string> csvFields(const std::string& line) {
@@ -322,6 +323,7 @@ int main() {
     assert(!igi::validateMenuItemConfig(extendedChoices, &listConfigError));
     assert(listConfigError.find("maximum is 64") != std::string::npos);
     std::string selectedWeather;
+    std::vector<std::pair<std::size_t, std::string>> appliedEvents;
     igi::MenuScriptBridge listBridge(modConfig, [&](std::size_t item, std::string_view value) {
         if (item == 0) selectedWeather = value;
     });
@@ -351,7 +353,6 @@ int main() {
     assert(actionBridge.activate(2) && activatedItem == 2 && activatedValue == "false");
     assert(!actionBridge.activate(-1));
     assert(selectedWeather == "on");
-    std::vector<std::pair<std::size_t, std::string>> appliedEvents;
     bool closedCalled = false;
     igi::MenuScriptBridge deferredBridge(modConfig, [&](std::size_t item, std::string_view value) {
         appliedEvents.emplace_back(item, std::string(value));
@@ -393,8 +394,42 @@ int main() {
     try { failingBridge.setList(0, 1); assert(false); }
     catch (const std::runtime_error&) {}
     assert(failingBridge.getList(0) == 0);
-    assert(!listBridge.setList(0, -1) && !listBridge.setList(-1, 0));
+    assert(!listBridge.setList(0, -1));
+    // The flattened command list is item -1: every configured control becomes a
+    // runnable entry so a control set larger than the retail frame stays usable.
     assert(listBridge.getList(-1) == -1 && !listBridge.fillList(-1, {}));
+    const auto &commands = listBridge.commands();
+    assert(!commands.empty());
+    std::vector<std::string> commandLabels;
+    assert(listBridge.fillList(-1, [&](std::string_view label, int id) {
+        assert(static_cast<std::size_t>(id) == commandLabels.size());
+        commandLabels.emplace_back(label);
+    }));
+    assert(commandLabels.size() == commands.size());
+    assert(commandLabels[0] == "Rain: off");
+    assert(!listBridge.setList(-1, static_cast<int>(commands.size())));
+    assert(listBridge.setList(-1, 1) && listBridge.getList(-1) == 1);
+    assert(selectedWeather == "on");
+    // Cancel drops the pending command so a dismissed screen runs nothing.
+    listBridge.cancel(false);
+    assert(listBridge.getList(-1) == -1);
+    // A deferred frontend keeps the entry until Apply runs it.
+    std::vector<std::pair<std::size_t, std::string>> deferredCommandEvents;
+    igi::MenuScriptBridge deferredCommands(modConfig,
+                                           [&](std::size_t item, std::string_view value) {
+                                               deferredCommandEvents.emplace_back(
+                                                   item, std::string(value));
+                                           },
+                                           [] {}, /*deferUntilApply=*/true);
+    assert(deferredCommands.setList(-1, 0));
+    assert(deferredCommandEvents.empty() && deferredCommands.getList(-1) == 0);
+    deferredCommands.apply();
+    assert(deferredCommandEvents.size() == 1 && deferredCommandEvents[0].first == 0 &&
+           deferredCommandEvents[0].second == "off");
+    // Cancel must drop a pending command so a dismissed screen runs nothing.
+    assert(deferredCommands.setList(-1, 3));
+    deferredCommands.cancel(false);
+    assert(deferredCommands.getList(-1) == -1);
     igi::MenuScriptCallbacks callbacks(listBridge, {fakeScriptGetInt, fakeScriptAddItem});
     igi::IgiScriptSymbol symbol{1, 1, 0, 1, fakeCallback, "test", &callbacks};
     assert(igi::menuScriptSymbolMatches(&symbol, fakeCallback, &callbacks));
@@ -528,6 +563,7 @@ int main() {
     igi::NativeRunner ambiguousRunner(aliasedCatalogue, scheduler);
     assert(ambiguousRunner.queueResolution("SharedName", [](const igi::NativeRecord&) {}) == 0);
     menuValuesLiveResyncTest();
+    menuCommandListTest();
     menuManagerModelTest();
     return 0;
 }

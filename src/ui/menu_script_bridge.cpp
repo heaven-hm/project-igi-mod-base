@@ -12,10 +12,37 @@ bool menuScriptSymbolMatches(const IgiScriptSymbol *symbol, ScriptCallback callb
 
 bool MenuScriptBridge::fillList(int item,
                                 const std::function<void(std::string_view, int)> &addItem) const {
+    if (item == kCommandList) {
+        if (commands_.empty() || !addItem)
+            return false;
+        for (std::size_t index = 0; index < commands_.size(); ++index)
+            addItem(commands_[index].label, static_cast<int>(index));
+        return true;
+    }
     return item >= 0 && values_.fill(static_cast<std::size_t>(item), addItem);
 }
 
+bool MenuScriptBridge::resync(const MenuConfig &config) {
+    const bool valuesChanged = values_.resync(config);
+    auto rebuilt = buildMenuCommands(config);
+    const bool commandsChanged = rebuilt != commands_;
+    commands_ = std::move(rebuilt);
+    if (selectedCommand_ && *selectedCommand_ >= commands_.size())
+        selectedCommand_.reset();
+    return valuesChanged || commandsChanged;
+}
+
+bool MenuScriptBridge::runSelectedCommand() {
+    if (!selectedCommand_ || *selectedCommand_ >= commands_.size() || !onSelection_)
+        return false;
+    const auto &command = commands_[*selectedCommand_];
+    onSelection_(command.itemIndex, command.value);
+    return true;
+}
+
 int MenuScriptBridge::getList(int item) const noexcept {
+    if (item == kCommandList)
+        return selectedCommand_ ? static_cast<int>(*selectedCommand_) : -1;
     if (item < 0)
         return -1;
     const auto value = values_.selected(static_cast<std::size_t>(item));
@@ -48,6 +75,17 @@ bool MenuScriptBridge::setToggle(int item, int value) {
 }
 
 bool MenuScriptBridge::setList(int item, int value) {
+    if (item == kCommandList) {
+        if (value < 0 || static_cast<std::size_t>(value) >= commands_.size())
+            return false;
+        selectedCommand_ = static_cast<std::size_t>(value);
+        // The retail ListBox reports every selection change, so an immediate
+        // frontend runs the entry right away while a deferred one waits for
+        // Apply and keeps the selection visible for the following frame.
+        if (!deferUntilApply_)
+            return runSelectedCommand();
+        return true;
+    }
     if (item < 0 || value < 0)
         return false;
     const auto previous = values_.selected(static_cast<std::size_t>(item));
@@ -105,6 +143,12 @@ void MenuScriptBridge::apply() {
         }
     }
 #endif
+    if (deferUntilApply_ && selectedCommand_ && runSelectedCommand()) {
+        values_.commit();
+        if (onClose_)
+            onClose_();
+        return;
+    }
     if (deferUntilApply_ && onSelection_) {
         const auto count = values_.itemCount();
         for (std::size_t i = 0; i < count; ++i) {
@@ -128,6 +172,7 @@ void MenuScriptBridge::apply() {
 
 void MenuScriptBridge::cancel(bool notifyClose) {
     values_.revert();
+    selectedCommand_.reset();
     if (notifyClose && onClose_)
         onClose_();
 }

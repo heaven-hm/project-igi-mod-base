@@ -1,9 +1,11 @@
 #include "ui/menu_script.hpp"
 #include "config/menu_config.hpp"
+#include "ui/menu_commands.hpp"
 #include "qsc_lexer.h"
 #include "qsc_parser.h"
 #include "qvm_compiler.h"
 
+#include <algorithm>
 #include <ostream>
 #include <sstream>
 #include <string_view>
@@ -51,6 +53,7 @@ bool writeMenuScript(std::ostream &out, const MenuConfig &config, bool standalon
                "\"Resource path\", \"String256\", \"isOwnDisplay\", \"bool8\");\n"
                "Task_New(-1, \"MenuManager\", \"IGI SDK\", "
             << config.screenId << ", \"LOCAL:menusystem/ingamemenu.res\", FALSE, ";
+    const bool commandList = menuNeedsCommandList(config);
     out << "Task_New(" << config.screenId << ", \"MenuScreen\", \"IGI SDK\", \"\", " << config.x
         << ", " << config.y << ", " << config.x + config.width << ", " << config.y + config.height
         << ", \"IGI_SDK_Cancel() - MenuManager_PopScreen(FALSE)\", \"\", \"\", Task_New(-1, "
@@ -62,7 +65,30 @@ bool writeMenuScript(std::ostream &out, const MenuConfig &config, bool standalon
         quoted(out, config.title);
         out << ", \"font3.fnt\", 2, \"\", \"\")";
     }
+    // A control set that no longer fits the retail frame is rendered as one
+    // scrollable ListBox over the flattened command entries. Every configured
+    // option stays reachable instead of being drawn past the frame edge.
+    if (commandList) {
+        out << ", Task_New(-1, \"MenuFrame\", \"commands\", \"\", " << config.x << ", " << config.y
+            << ", " << config.width << ", " << config.height
+            << ", 8, 20, 4, TRUE, "
+               "Task_New(-1, \"MenuText\", \"\", \"Controls\", \"font3.fnt\", 2, \"\", \"\"), "
+               "Task_New("
+            << (config.screenId >= 0 ? config.screenId + 1 : -1)
+            << ", \"ListBox\", \"\", \"slide\", \"font1.fnt\", " << std::max(config.width - 20, 40)
+            << ", ";
+        quoted(out, "IGI_SDK_FillList(-1)");
+        out << ", ";
+        quoted(out, "IGI_SDK_GetList(-1)");
+        out << ", ";
+        quoted(out, "IGI_SDK_SetList(-1,this.nActiveID)");
+        out << ", ";
+        quoted(out, "IGI_SDK_SetList(-1,this.nActiveID)");
+        out << "))";
+    }
     for (const auto &item : config.items) {
+        if (commandList)
+            break;
         const auto index = &item - config.items.data();
         const auto widgetId =
             config.screenId >= 0 ? (config.screenId + 1 + static_cast<int>(index)) : -1;

@@ -25,6 +25,7 @@ static bool refreshLiveMenu(Runtime &runtime, std::string_view effect);
 static bool executeMenuCommand(std::string_view commandScript);
 static bool isNpcTask(IGI::Task *task);
 static bool isCarTask(IGI::Task *task);
+static bool isHeliTask(IGI::Task *task);
 
 namespace {
 constexpr int kModPrecipitationTaskId = 4095;
@@ -32,6 +33,7 @@ constexpr std::size_t kMaxLiveTargets = kMaxMenuListChoices;
 
 int g_selectedNpcTaskId = -1;
 int g_selectedCarTaskId = -1;
+int g_selectedHeliTaskId = -1;
 
 // Reports whether a rebuilt live list changed, and whether the previously
 // selected task survived the rebuild.
@@ -43,9 +45,11 @@ struct RefreshOutcome {
 // Level unloads and mission restarts rebuild the game task list, so previously
 // selected NPC/car task ids can never stay valid across those transitions.
 void clearLiveTargetSelections(const std::string &reason) {
-    const bool hadSelection = g_selectedNpcTaskId >= 0 || g_selectedCarTaskId >= 0;
+    const bool hadSelection =
+        g_selectedNpcTaskId >= 0 || g_selectedCarTaskId >= 0 || g_selectedHeliTaskId >= 0;
     g_selectedNpcTaskId = -1;
     g_selectedCarTaskId = -1;
+    g_selectedHeliTaskId = -1;
     if (hadSelection)
         log(LogLevel::Info, "live target selections cleared: " + reason);
 }
@@ -503,16 +507,20 @@ bool refreshLiveTargetOptions(MenuConfig &config, Runtime &runtime) {
         replaceChoices("npc_target", entities.npcTargets(), "No live NPCs", g_selectedNpcTaskId);
     const auto car = replaceChoices("vehicle_target", entities.carTargets(), "No live cars",
                                     g_selectedCarTaskId);
+    const auto heli = replaceChoices("heli_target", entities.heliTargets(), "No live helicopters",
+                                     g_selectedHeliTaskId);
     // A selection that vanished from the task table is dropped so both menu
     // frontends stop offering actions for a task that no longer exists.
     if (!npc.preservedIsLive)
         g_selectedNpcTaskId = -1;
     if (!car.preservedIsLive)
         g_selectedCarTaskId = -1;
-    if (npc.changed || car.changed) {
+    if (!heli.preservedIsLive)
+        g_selectedHeliTaskId = -1;
+    if (npc.changed || car.changed || heli.changed) {
         log(LogLevel::Info, "live targets refreshed from the active game task list");
     }
-    return npc.changed || car.changed;
+    return npc.changed || car.changed || heli.changed;
 }
 
 void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::size_t item,
@@ -706,6 +714,143 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
             log(LogLevel::Warning,
                 "soldier execution rejected: selected target is not a standard Soldier");
         }
+    } else if (id == "heli_target") {
+        if (const auto selected = targetId(value)) {
+            auto *task = findLiveTarget(runtime, *selected, isHeliTask);
+            if (task) {
+                g_selectedHeliTaskId = *selected;
+                log(LogLevel::Info, "heli target selected: " + std::string(value));
+            } else {
+                g_selectedHeliTaskId = -1;
+                log(LogLevel::Warning,
+                    "heli target selection rejected: target is no longer live on this level");
+            }
+        } else {
+            g_selectedHeliTaskId = -1;
+            log(LogLevel::Info, "heli target list empty: no live helicopters on this level");
+        }
+    } else if (id == "heli_info") {
+        auto *task = reinterpret_cast<IGI::Task *>(
+            findLiveTarget(runtime, g_selectedHeliTaskId, isHeliTask));
+        if (!task) {
+            if (g_selectedHeliTaskId < 0)
+                log(LogLevel::Info, "heli info: no helicopter selected; pick a live heli first");
+            else {
+                g_selectedHeliTaskId = -1;
+                log(LogLevel::Warning, "heli info rejected: selected helicopter is no longer live");
+            }
+        } else if (VehicleHelpers(runtime).reportHeliInfo(reinterpret_cast<IGI::Heli *>(task))) {
+            log(LogLevel::Info, "heli info reported from the retail vehicle natives");
+        } else {
+            log(LogLevel::Warning, "heli info rejected: vehicle native was unavailable");
+        }
+    } else if (id == "vehicle_info") {
+        auto *car =
+            reinterpret_cast<IGI::Car *>(findLiveTarget(runtime, g_selectedCarTaskId, isCarTask));
+        if (!car) {
+            reportMissingCarTarget("vehicle info");
+        } else if (VehicleHelpers(runtime).reportCarInfo(car)) {
+            log(LogLevel::Info, "vehicle info reported from the retail control-info native");
+        } else {
+            log(LogLevel::Warning, "vehicle info rejected: control-info native was unavailable");
+        }
+    } else if (id == "vehicle_controls_reset") {
+        auto *car =
+            reinterpret_cast<IGI::Car *>(findLiveTarget(runtime, g_selectedCarTaskId, isCarTask));
+        if (!car) {
+            reportMissingCarTarget("vehicle controls reset");
+        } else if (VehicleHelpers(runtime).resetVehicleControls(
+                       reinterpret_cast<IGI::Task *>(car))) {
+            log(LogLevel::Info, "vehicle controls reset through the retail vehicle native");
+        } else {
+            log(LogLevel::Warning, "vehicle controls reset rejected: native was unavailable");
+        }
+    } else if (id == "npc_status") {
+        auto *npc =
+            reinterpret_cast<IGI::Human *>(findLiveTarget(runtime, g_selectedNpcTaskId, isNpcTask));
+        if (!npc) {
+            reportMissingNpcTarget("NPC status");
+        } else if (NpcHelpers(runtime).reportStatus(npc)) {
+            log(LogLevel::Info, "NPC status reported from the retail human getters");
+        } else {
+            log(LogLevel::Warning, "NPC status rejected: selected NPC was unavailable");
+        }
+    } else if (id == "npc_stand_down") {
+        auto *npc =
+            reinterpret_cast<IGI::Human *>(findLiveTarget(runtime, g_selectedNpcTaskId, isNpcTask));
+        if (!npc) {
+            reportMissingNpcTarget("soldier stand down");
+        } else if (NpcHelpers(runtime).standDownSoldier(npc)) {
+            log(LogLevel::Info, "selected soldier returned to its retail stand state");
+        } else {
+            log(LogLevel::Warning,
+                "soldier stand down rejected: selected target is not a standard Soldier");
+        }
+    } else if (id == "npc_params") {
+        auto *npc =
+            reinterpret_cast<IGI::Human *>(findLiveTarget(runtime, g_selectedNpcTaskId, isNpcTask));
+        if (!npc) {
+            reportMissingNpcTarget("soldier params");
+        } else if (NpcHelpers(runtime).reportSoldierParams(npc)) {
+            log(LogLevel::Info, "soldier params reported from the retail soldier native");
+        } else {
+            log(LogLevel::Warning, "soldier params rejected: selected NPC was unavailable");
+        }
+    } else if (id == "player_status") {
+        if (PlayerHelpers(runtime).reportStatus())
+            log(LogLevel::Info, "player status reported from the retail human getters");
+        else
+            log(LogLevel::Warning, "player status rejected: player unavailable");
+    } else if (id == "camera_info") {
+        if (CameraHelpers(runtime).reportInfo())
+            log(LogLevel::Info, "camera info reported from the retail camera-info native");
+        else
+            log(LogLevel::Warning, "camera info rejected: player unavailable");
+    } else if (id == "world_level_tick") {
+        if (WorldHelpers(runtime).reportLevelTick())
+            log(LogLevel::Info, "level tick reported");
+        else
+            log(LogLevel::Warning, "level tick readout rejected");
+    } else if (id == "world_flow") {
+        if (WorldHelpers(runtime).reportFlow())
+            log(LogLevel::Info, "flow counters reported");
+        else
+            log(LogLevel::Warning, "flow readout rejected");
+    } else if (id == "world_events") {
+        if (WorldHelpers(runtime).reportEvents())
+            log(LogLevel::Info, "game events reported");
+        else
+            log(LogLevel::Warning, "event readout rejected");
+    } else if (id == "audio_rate") {
+        int rate = 0;
+        const auto parsed = std::from_chars(value.data(), value.data() + value.size(), rate);
+        if (parsed.ec != std::errc{} || rate <= 0) {
+            log(LogLevel::Warning, "audio rate rejected: value is not a valid sample rate");
+        } else if (AudioHelpers(runtime).setRate(rate)) {
+            log(LogLevel::Info, "audio rate applied through the retail audio native");
+        } else {
+            log(LogLevel::Warning, "audio rate rejected: audio native was unavailable");
+        }
+    } else if (id == "audio_info") {
+        if (AudioHelpers(runtime).reportInfo())
+            log(LogLevel::Info, "audio info reported from the retail audio natives");
+        else
+            log(LogLevel::Warning, "audio info rejected");
+    } else if (id == "weapon_draw_anim") {
+        if (WeaponHelpers(runtime).requestAnimation(1))
+            log(LogLevel::Info, "weapon draw animation requested");
+        else
+            log(LogLevel::Warning, "weapon animation rejected: player unavailable");
+    } else if (id == "weapon_category") {
+        if (WeaponHelpers(runtime).selectCategory())
+            log(LogLevel::Info, "weapon category selection requested");
+        else
+            log(LogLevel::Warning, "weapon category selection rejected: player unavailable");
+    } else if (id == "weapon_flash") {
+        if (WeaponHelpers(runtime).reportFlashReset())
+            log(LogLevel::Info, "player hit flash cleared");
+        else
+            log(LogLevel::Warning, "hit flash reset rejected: player unavailable");
     } else if (id == "display" || action.find("RefreshDisplay") != std::string::npos) {
         IGI::GAME::SET_DISPLAY_MODE();
         log(LogLevel::Info, "display mode refreshed");
@@ -834,12 +979,26 @@ static bool isNpcTask(IGI::Task *task) {
            !IGI::HUMAN::IS_PLAYER(reinterpret_cast<IGI::Human *>(task));
 }
 
+// The retail Helicopter type has no public getter binding, and a task-type
+// registration lookup faults when the type table is not populated. Matching the
+// retail type name keeps helicopter detection to a verified name lookup.
+static bool isHeliTaskType(std::uint16_t type) {
+    const char *typeName = IGI::TASK::GET_NAME(type);
+    return typeName && std::string_view(typeName).find("Heli") != std::string_view::npos;
+}
+
 static bool isCarTask(IGI::Task *task) {
     if (!task)
         return false;
     const auto type = reinterpret_cast<const IgiTaskLayout *>(task)->type;
     const auto carType = IGI::VEHICLE::GET_TYPE();
     return type == carType || IGI::TASK::IS_A(type, carType) != 0;
+}
+
+static bool isHeliTask(IGI::Task *task) {
+    if (!task)
+        return false;
+    return isHeliTaskType(reinterpret_cast<const IgiTaskLayout *>(task)->type);
 }
 
 template <typename Predicate>
@@ -1029,6 +1188,36 @@ std::vector<LiveTarget> EntityHelpers::carTargets() const {
     }
     return targets;
 }
+IGI::Heli *EntityHelpers::firstHeli() const {
+    if (!requireLiveGameThread(runtime_))
+        return nullptr;
+    for (int id = 0; id < 4096; ++id) {
+        auto *task = IGI::TASK::FIND_BY_ID(id);
+        if (!task)
+            continue;
+        const auto type = reinterpret_cast<const IgiTaskLayout *>(task)->type;
+        if (isHeliTaskType(type))
+            return reinterpret_cast<IGI::Heli *>(task);
+    }
+    return nullptr;
+}
+
+std::vector<LiveTarget> EntityHelpers::heliTargets() const {
+    std::vector<LiveTarget> targets;
+    if (!requireLiveGameThread(runtime_))
+        return targets;
+    for (int id = 0; id < 4096 && targets.size() < kMaxLiveTargets; ++id) {
+        auto *task = IGI::TASK::FIND_BY_ID(id);
+        if (!task)
+            continue;
+        const auto type = reinterpret_cast<const IgiTaskLayout *>(task)->type;
+        if (!isHeliTaskType(type))
+            continue;
+        targets.push_back({IGI::TASK::GET_ID(task), liveTaskName(task)});
+    }
+    return targets;
+}
+
 IGI::Car *EntityHelpers::nextCar(IGI::Car *current) const {
     if (!requireLiveGameThread(runtime_) || !current)
         return nullptr;
@@ -1119,6 +1308,199 @@ bool EntityHelpers::setHumanCollision(IGI::Human *human, bool enabled) const {
     }
     return true;
 }
+// Player readout: every value comes from a verified human/player getter, so the
+// menu reports live state instead of a helper-owned cache.
+bool PlayerHelpers::reportStatus() const {
+    auto *p = localPlayer(runtime_);
+    if (!p)
+        return false;
+    auto *human = reinterpret_cast<IGI::Human *>(p);
+    std::ostringstream status;
+    status << "Player: team " << IGI::HUMAN::GET_TEAM(human) << " state "
+           << IGI::HUMAN::GET_STATE(human) << " index " << IGI::HUMAN::GET_INDEX(human) << ' '
+           << (IGI::HUMAN::IS_DEAD(human) ? "dead" : "alive") << ' '
+           << (IGI::HUMAN::IS_CROUCHING(human) ? "crouched" : "standing") << " move "
+           << IGI::PLAYER::GET_MOVE_SCALE();
+    log(LogLevel::Info, status.str());
+    IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, status.str().c_str());
+    return true;
+}
+
+// Camera readout from the retail camera-info handler (mode, FOV, eye height).
+bool CameraHelpers::reportInfo() const {
+    auto *player = localPlayer(runtime_);
+    if (!player)
+        return false;
+    IGI::HumanCameraInfo info{};
+    IGI::HUMAN::GET_CAMERA_INFO(reinterpret_cast<IGI::Human *>(player), &info);
+    std::ostringstream status;
+    status << "Camera: " << (info.mode == 2 ? "third person" : "first person") << " mode "
+           << info.mode << " fov " << info.fov << " vfov " << info.verticalFov << " eye "
+           << info.position[0] << ',' << info.position[1] << ',' << info.position[2];
+    log(LogLevel::Info, status.str());
+    IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, status.str().c_str());
+    return true;
+}
+
+bool WorldHelpers::reportLevelTick() const {
+    if (!requireLiveGameThread(runtime_))
+        return false;
+    // Level_GetTick dereferences the active level record, so it is only safe
+    // once the retail level task exists.
+    if (!IGI::LEVEL::GET()) {
+        log(LogLevel::Warning, "level readout rejected: no active level task");
+        return false;
+    }
+    std::ostringstream status;
+    status << "Level: tick " << IGI::LEVEL::GET_TICK() << " tasks " << IGI::TASK::GET_COUNT();
+    log(LogLevel::Info, status.str());
+    IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, status.str().c_str());
+    return true;
+}
+
+bool WorldHelpers::reportFlow() const {
+    if (!requireLiveGameThread(runtime_))
+        return false;
+    std::ostringstream status;
+    status << "Flow: fps " << IGI::OTHER::FLOW_GET_FPS() << " frames "
+           << IGI::OTHER::FLOW_GET_FRAMES() << " renders " << IGI::OTHER::FLOW_GET_RENDERS();
+    log(LogLevel::Info, status.str());
+    IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, status.str().c_str());
+    return true;
+}
+
+bool WorldHelpers::reportEvents() const {
+    if (!requireLiveGameThread(runtime_))
+        return false;
+    std::ostringstream status;
+    status << "Events: " << static_cast<int>(IGI::GAME::GET_EVENT0()) << ','
+           << static_cast<int>(IGI::GAME::GET_EVENT1()) << ','
+           << static_cast<int>(IGI::GAME::GET_EVENT2()) << ','
+           << static_cast<int>(IGI::GAME::GET_EVENT3()) << " world " << IGI::GAME::GET_WORLD();
+    log(LogLevel::Info, status.str());
+    IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, status.str().c_str());
+    return true;
+}
+
+// Car readout through the retail control-info handler.
+bool VehicleHelpers::reportCarInfo(IGI::Car *car) const {
+    if (!requireLiveGameThread(runtime_) || !car)
+        return false;
+    int control[8]{};
+    IGI::VEHICLE::CAR_GET_CONTROL_INFO(car, control);
+    auto *gun = IGI::VEHICLE::GET_MOUNTED_GUN(car);
+    char gunName[128]{};
+    if (gun)
+        IGI::TASK::GET_TASK_NAME(gunName, gun);
+    std::ostringstream status;
+    status << targetLabel(liveTaskName(reinterpret_cast<IGI::Task *>(car)),
+                          IGI::TASK::GET_ID(reinterpret_cast<IGI::Task *>(car)))
+           << ": control " << control[0] << ',' << control[1] << ',' << control[2] << ','
+           << control[3] << " gun " << (gun ? gunName : "none");
+    log(LogLevel::Info, status.str());
+    IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, status.str().c_str());
+    return true;
+}
+
+// Helicopter readout: door task, control info and state size.
+bool VehicleHelpers::reportHeliInfo(IGI::Heli *heli) const {
+    if (!requireLiveGameThread(runtime_) || !heli)
+        return false;
+    int control[8]{};
+    int stateSize = 0;
+    IGI::VEHICLE::HELI_GET_CONTROL_INFO(heli, control);
+    IGI::VEHICLE::GET_STATE_SIZE(heli, &stateSize);
+    auto *door = IGI::VEHICLE::FIND_DOOR(heli);
+    std::ostringstream status;
+    status << targetLabel(liveTaskName(reinterpret_cast<IGI::Task *>(heli)),
+                          IGI::TASK::GET_ID(reinterpret_cast<IGI::Task *>(heli)))
+           << ": control " << control[0] << ',' << control[1] << " state " << stateSize << " door "
+           << (door ? IGI::TASK::GET_ID(door) : -1);
+    log(LogLevel::Info, status.str());
+    IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, status.str().c_str());
+    return true;
+}
+
+bool VehicleHelpers::resetVehicleControls(IGI::Task *vehicle) const {
+    if (!requireLiveGameThread(runtime_) || !vehicle)
+        return false;
+    if (!isCallableNative(IGI::HASH::VEHICLE_RESET_CONTROLS,
+                          "void Vehicle_ResetControls(Vehicle *v)"))
+        return false;
+    log(LogLevel::Info, "vehicle controls: invoking Vehicle_ResetControls for task #" +
+                            std::to_string(IGI::TASK::GET_ID(vehicle)));
+    IGI::VEHICLE::RESET_CONTROLS(vehicle);
+    return true;
+}
+
+bool NpcHelpers::reportStatus(IGI::Human *npc) const {
+    if (!requireLiveGameThread(runtime_) || !npc)
+        return false;
+    char name[128]{};
+    IGI::TASK::GET_TASK_NAME(name, reinterpret_cast<IGI::Task *>(npc));
+    std::ostringstream status;
+    status << targetLabel(name, IGI::TASK::GET_ID(reinterpret_cast<IGI::Task *>(npc))) << ": team "
+           << IGI::HUMAN::GET_TEAM(npc) << " state " << IGI::HUMAN::GET_STATE(npc) << ' '
+           << (IGI::HUMAN::IS_DEAD(npc) ? "dead" : "alive") << ' '
+           << (IGI::HUMAN::IS_CROUCHING(npc) ? "crouched" : "standing") << ' '
+           << (IGI::HUMAN::IS_ACTIVE(npc) ? "active" : "idle");
+    log(LogLevel::Info, status.str());
+    IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, status.str().c_str());
+    return true;
+}
+
+// Brings a live standard Soldier back to its retail stand state. Mirrors the
+// execute path: the soldier state machine lives at the verified +0x2EC offset.
+bool NpcHelpers::standDownSoldier(IGI::Human *npc) const {
+    if (!requireLiveGameThread(runtime_) || !npc)
+        return false;
+    const auto type = reinterpret_cast<const IgiTaskLayout *>(npc)->type;
+    if (type != IGI::SOLDIER::GET_TYPE())
+        return false;
+    if (!isCallableNative(IGI::HASH::SOLDIER_STAND_ENTER,
+                          "void Soldier_StandEnter(SoldierSM *sm, Soldier *h)"))
+        return false;
+    auto *state = reinterpret_cast<void *>(reinterpret_cast<std::uint8_t *>(npc) + 0x2ec);
+    log(LogLevel::Info, "soldier stand down: invoking Soldier_StandEnter for task #" +
+                            std::to_string(IGI::TASK::GET_ID(reinterpret_cast<IGI::Task *>(npc))));
+    IGI::SOLDIER::STAND_ENTER(reinterpret_cast<IGI::SoldierSM *>(state),
+                              reinterpret_cast<IGI::Soldier *>(npc));
+    return true;
+}
+
+bool NpcHelpers::reportSoldierParams(IGI::Human *npc) const {
+    if (!requireLiveGameThread(runtime_) || !npc)
+        return false;
+    void *params = nullptr;
+    IGI::SOLDIER::GET_PARAMS(npc, &params);
+    std::ostringstream status;
+    status << targetLabel(liveTaskName(reinterpret_cast<IGI::Task *>(npc)),
+                          IGI::TASK::GET_ID(reinterpret_cast<IGI::Task *>(npc)))
+           << " params " << params;
+    log(LogLevel::Info, status.str());
+    IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, status.str().c_str());
+    return true;
+}
+
+bool AudioHelpers::setRate(int rate) const {
+    if (!requireLiveGameThread(runtime_) || rate <= 0)
+        return false;
+    IGI::AUDIO::SET_RATE(rate);
+    log(LogLevel::Info, "audio rate set to " + std::to_string(rate));
+    return true;
+}
+
+bool AudioHelpers::reportInfo() const {
+    if (!requireLiveGameThread(runtime_))
+        return false;
+    std::ostringstream status;
+    status << "Audio: ready " << static_cast<int>(IGI::AUDIO::IS_READY()) << " rate "
+           << IGI::AUDIO::GET_RATE() << " voices " << IGI::AUDIO::GET_VOICE_COUNT();
+    log(LogLevel::Info, status.str());
+    IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, status.str().c_str());
+    return true;
+}
+
 bool PlayerHelpers::setLookEnabled(bool enabled) const {
     return setPlayerLookEnabled(runtime_, enabled);
 }
@@ -1207,6 +1589,9 @@ bool WeaponHelpers::requestAnimation(int animation) const {
 }
 bool WeaponHelpers::cycle(int force) const {
     return cyclePlayerWeapon(runtime_, force);
+}
+bool WeaponHelpers::reportFlashReset() const {
+    return restorePlayerVisualFeedback(runtime_);
 }
 bool WeaponHelpers::selectCategory() const {
     auto *p = localPlayer(runtime_);

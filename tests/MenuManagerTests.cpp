@@ -1,6 +1,7 @@
 #include "config/menu_config.hpp"
 #include "ui/menu_manager.hpp"
 #include "ui/menu_script.hpp"
+#include "ui/menu_commands.hpp"
 #include "ui/menu_values.hpp"
 #include "runtime/scheduler.hpp"
 
@@ -310,9 +311,11 @@ void verifiedMenuHelperContractTest() {
     assert(helperSource.find("IGI::AUDIO::SET_SFX_VOLUME") != std::string::npos);
 
     const auto heavenMenu = readDemoSource("demos/heaven/heaven_menu.cpp");
-    for (const char* category : {"Weapons", "Player", "Camera", "World", "Vehicles", "AI / NPC"}) {
+    for (const char* category :
+         {"Weapons", "Player", "Camera", "World", "Vehicles", "AI / NPC", "Audio"}) {
         assert(heavenMenu.find(category) != std::string::npos);
     }
+    assert(heavenMenu.find("Live Heli Target") != std::string::npos);
     assert(heavenMenu.find("weapon_pickup") != std::string::npos);
     assert(heavenMenu.find("vehicle_reset") != std::string::npos);
     assert(heavenMenu.find("vehicle_explode") != std::string::npos);
@@ -380,4 +383,65 @@ void menuValuesLiveResyncTest() {
     config.items.push_back(toggle);
     assert(!values.resync(config));
     assert(values.choiceCount(0) == 3);
+}
+
+// A control set larger than the retail frame must switch to the scrollable
+// command list, or the options past the frame edge become unreachable.
+void menuCommandListTest() {
+    igi::MenuConfig config;
+    config.x = 95;
+    config.y = 185;
+    config.width = 455;
+    config.height = 300;
+    for (int index = 0; index < 3; ++index) {
+        igi::ModMenuItemConfig action;
+        action.id = "action_" + std::to_string(index);
+        action.kind = igi::ModMenuItemKind::Action;
+        action.label = "Action " + std::to_string(index);
+        action.category = "World";
+        config.items.push_back(action);
+    }
+    // A small control set keeps the direct per-control layout.
+    assert(igi::menuRowCapacity(config) >= config.items.size());
+    assert(!igi::menuNeedsCommandList(config));
+    std::ostringstream smallScript;
+    assert(igi::writeIgiMenuScreenScript(smallScript, config));
+    assert(smallScript.str().find("IGI_SDK_FillList(-1)") == std::string::npos);
+    assert(smallScript.str().find("IGI_SDK_Action(0)") != std::string::npos);
+
+    while (config.items.size() <= igi::menuRowCapacity(config)) {
+        igi::ModMenuItemConfig list;
+        list.id = "list_" + std::to_string(config.items.size());
+        list.kind = igi::ModMenuItemKind::List;
+        list.label = "List " + std::to_string(config.items.size());
+        list.category = "Vehicles";
+        list.values = {"First", "Second"};
+        config.items.push_back(list);
+    }
+    assert(igi::menuNeedsCommandList(config));
+
+    const auto commands = igi::buildMenuCommands(config);
+    assert(commands.size() > config.items.size());
+    // List controls expand into one runnable entry per value.
+    assert(commands[0].label == "World: Action 0" && commands[0].value.empty());
+    assert(commands[2].label == "World: Action 2");
+    assert(commands[3].label == "Vehicles: List 3: First" && commands[3].value == "First");
+    assert(commands[4].label == "Vehicles: List 3: Second" && commands[4].value == "Second");
+    assert(commands[3].itemIndex == commands[4].itemIndex);
+
+    std::ostringstream script;
+    assert(igi::writeIgiMenuScreenScript(script, config));
+    const auto generated = script.str();
+    assert(generated.find("\"commands\"") != std::string::npos);
+    assert(generated.find("IGI_SDK_FillList(-1)") != std::string::npos);
+    assert(generated.find("IGI_SDK_SetList(-1,this.nActiveID)") != std::string::npos);
+    assert(generated.find("ListBox") != std::string::npos);
+    // Every control is now inside the command list instead of a frame row.
+    assert(generated.find("IGI_SDK_Action(0)") == std::string::npos);
+
+    // The generated resource must still compile for the retail script runtime.
+    std::vector<std::uint8_t> qvm;
+    std::string error;
+    assert(igi::compileIgiMenuScreenScript(config, qvm, error));
+    assert(!qvm.empty() && error.empty());
 }

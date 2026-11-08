@@ -37,6 +37,8 @@ class EntityHelpers {
     IGI::Task *nextVehicle(IGI::Task *current) const;
     std::vector<LiveTarget> npcTargets() const;
     std::vector<LiveTarget> carTargets() const;
+    IGI::Heli *firstHeli() const;
+    std::vector<LiveTarget> heliTargets() const;
     bool moveHuman(IGI::Human *human, const std::array<double, 3> &position) const;
     bool setHumanYaw(IGI::Human *human, float yaw) const;
     bool snapHumanToGround(IGI::Human *human) const;
@@ -63,6 +65,7 @@ class PlayerHelpers {
     bool startAction(int action) const;
     bool checkDeath() const;
     bool sendPosition() const;
+    bool reportStatus() const;
     bool resetDamage() const;
     bool snapToGround() const;
     bool setCollisionEnabled(bool enabled) const;
@@ -84,6 +87,7 @@ class WeaponHelpers {
     bool requestAnimation(int animation) const;
     bool cycle(int force) const;
     bool selectCategory() const;
+    bool reportFlashReset() const;
     std::optional<int> hasAmmo(void *weaponTask) const;
     IGI::WeaponType *type(void *weaponTask) const;
     std::optional<unsigned> fireEvent() const;
@@ -99,6 +103,7 @@ class CameraHelpers {
   public:
     explicit CameraHelpers(Runtime &runtime) : runtime_(runtime) {}
     bool setViewMode(int mode) const;
+    bool reportInfo() const;
     std::optional<int> mode() const;
     std::optional<bool> isThirdPersonActive() const;
     bool setWeaponTarget(IGI::HumanView *view, float pitch, float yaw, float pitchSpeed,
@@ -125,6 +130,9 @@ class WorldHelpers {
     std::optional<bool> isPaused() const;
     bool refreshDisplay() const;
     bool setFrameCap(int frames) const;
+    bool reportLevelTick() const;
+    bool reportFlow() const;
+    bool reportEvents() const;
     std::optional<unsigned> event(int eventIndex) const;
     std::optional<int> flowFps() const;
     std::optional<int> flowFrames() const;
@@ -146,6 +154,9 @@ class VehicleHelpers {
     std::optional<long double> carTrackFactor(IGI::Car *car, int joint) const;
     bool explodeCar(IGI::Car *car) const;
     bool resetCar(IGI::Car *car) const;
+    bool reportCarInfo(IGI::Car *car) const;
+    bool reportHeliInfo(IGI::Heli *heli) const;
+    bool resetVehicleControls(IGI::Task *vehicle) const;
     bool driveCar(IGI::Car *car, float throttle, bool brake = false) const;
     bool resetControls(void *vehicle) const;
     IGI::Task *heliDoor(IGI::Heli *heli) const;
@@ -165,6 +176,9 @@ class NpcHelpers {
     bool snapToGround(IGI::Human *npc) const;
     bool setCollisionEnabled(IGI::Human *npc, bool enabled) const;
     bool executeSoldier(IGI::Human *npc) const;
+    bool reportStatus(IGI::Human *npc) const;
+    bool standDownSoldier(IGI::Human *npc) const;
+    bool reportSoldierParams(IGI::Human *npc) const;
 
   private:
     Runtime &runtime_;
@@ -201,6 +215,8 @@ class AudioHelpers {
     explicit AudioHelpers(Runtime &runtime) : runtime_(runtime) {}
     bool setMusicVolume(float volume) const;
     bool setSfxVolume(float volume) const;
+    bool setRate(int rate) const;
+    bool reportInfo() const;
 
   private:
     Runtime &runtime_;

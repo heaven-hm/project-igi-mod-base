@@ -1,0 +1,115 @@
+// Proves the shipping Heaven control set produces a complete, compilable retail
+// menu resource. The retail MenuFrame can only draw a handful of rows, so this
+// test pins the command-list layout that keeps every option reachable.
+#include "config/menu_config.hpp"
+#include "ui/menu_commands.hpp"
+#include "ui/menu_script.hpp"
+
+#include <cassert>
+#include <cstdint>
+#include <cstdio>
+#include <sstream>
+#include <string>
+#include <vector>
+
+bool configureModMenu(igi::MenuConfig &config);
+
+namespace igi {
+// The layout test never attaches the retail screen, so the host transition hook
+// is stubbed instead of pulling the platform menu host into this target.
+bool prepareMenuForLevelChange() {
+    return true;
+}
+} // namespace igi
+
+namespace {
+constexpr std::size_t kMinimumControls = 30;
+constexpr std::size_t kMaximumControls = 50;
+
+std::size_t countKind(const igi::MenuConfig &config, igi::ModMenuItemKind kind) {
+    std::size_t count = 0;
+    for (const auto &item : config.items) {
+        if (item.kind == kind)
+            ++count;
+    }
+    return count;
+}
+} // namespace
+
+int main() {
+    igi::MenuConfig config;
+    assert(configureModMenu(config));
+
+    // The shipping menu must cover a real controller set, not a token few.
+    assert(config.items.size() >= kMinimumControls);
+    assert(config.items.size() <= kMaximumControls);
+    assert(countKind(config, igi::ModMenuItemKind::List) > 0);
+    assert(countKind(config, igi::ModMenuItemKind::Action) > 0);
+
+    // Every control must have an id, a label, and a category so no option can
+    // ship unreachable or unlabelled in either menu frontend.
+    std::vector<std::string> categories;
+    for (const auto &item : config.items) {
+        assert(!item.id.empty());
+        assert(!item.label.empty());
+        assert(!item.category.empty());
+        if (item.kind == igi::ModMenuItemKind::List)
+            assert(!item.values.empty());
+        bool known = false;
+        for (const auto &category : categories)
+            known = known || category == item.category;
+        if (!known)
+            categories.push_back(item.category);
+    }
+    assert(categories.size() >= 6);
+    assert(config.refreshLiveItems);
+
+    // The retail frame cannot show this many rows, so the generator must pick
+    // the scrollable command list.
+    assert(igi::menuNeedsCommandList(config));
+    const auto commands = igi::buildMenuCommands(config);
+    assert(!commands.empty());
+    // Every list value becomes its own runnable entry.
+    std::size_t expected = 0;
+    for (const auto &item : config.items) {
+        switch (item.kind) {
+        case igi::ModMenuItemKind::List:
+            expected += item.values.size();
+            break;
+        case igi::ModMenuItemKind::Toggle:
+            expected += 2;
+            break;
+        case igi::ModMenuItemKind::Action:
+            expected += 1;
+            break;
+        case igi::ModMenuItemKind::Slider:
+            expected += 1;
+            break;
+        }
+    }
+    assert(commands.size() >= expected);
+    for (const auto &command : commands) {
+        assert(!command.label.empty());
+        assert(command.itemIndex < config.items.size());
+    }
+
+    std::ostringstream script;
+    assert(igi::writeIgiMenuScreenScript(script, config));
+    const auto text = script.str();
+    assert(text.find("IGI_SDK_FillList(-1)") != std::string::npos);
+    assert(text.find("IGI_SDK_SetList(-1,this.nActiveID)") != std::string::npos);
+    assert(text.find("ListBox") != std::string::npos);
+    assert(text.find("IGI_SDK_Apply()") != std::string::npos);
+
+    // The generated resource must compile for the retail script runtime.
+    std::vector<std::uint8_t> qvm;
+    std::string error;
+    assert(igi::compileIgiMenuScreenScript(config, qvm, error));
+    assert(!qvm.empty());
+    assert(error.empty());
+
+    std::printf("PASS Heaven layout: %zu controls, %zu categories, %zu command entries, "
+                "QVM %zu bytes\n",
+                config.items.size(), categories.size(), commands.size(), qvm.size());
+    return 0;
+}

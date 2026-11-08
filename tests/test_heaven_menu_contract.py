@@ -9,32 +9,37 @@ ROOT = Path(__file__).resolve().parents[1]
 HEAVEN = (ROOT / "demos/heaven/heaven_menu.cpp").read_text(encoding="utf-8")
 HELPERS = (ROOT / "demos/helpers/menu_helpers.cpp").read_text(encoding="utf-8")
 
-ids = re.findall(r'\{"([a-z_]+)",\s*igi::ModMenuItemKind::', HEAVEN)
-assert ids, "Heaven menu has no configured items"
+# Every control is declared once in the definition table:
+#   {"id", igi::ModMenuItemKind::Kind, "Label", "Category", "Action", values},
+defs = re.findall(
+    r'\{"([a-z_]+)",\s*igi::ModMenuItemKind::(\w+),\s*"([^"]+)",\s*"([^"]+)",\s*"([^"]*)"',
+    HEAVEN,
+)
+assert defs, "Heaven menu has no configured items"
+ids = [entry[0] for entry in defs]
 assert len(ids) == len(set(ids)), f"duplicate Heaven item IDs: {ids}"
-assert "input" not in ids and "look" not in ids, (
-    "Heaven must keep its Player category focused on gameplay-impacting controls"
+
+MIN_OPTIONS = 30
+MAX_OPTIONS = 50
+assert MIN_OPTIONS <= len(ids) <= MAX_OPTIONS, (
+    f"Heaven must ship {MIN_OPTIONS}-{MAX_OPTIONS} working controls, found {len(ids)}"
 )
 
-categories = {"Weapons", "Player", "Camera", "World", "Vehicles", "AI / NPC"}
-for category in categories:
-    assert category in HEAVEN, f"missing Heaven category: {category}"
-
-assigned_categories = {
-    int(index): category
-    for index, category in re.findall(
-        r'config\.items\[(\d+)\]\.category\s*=\s*"([^"]+)"', HEAVEN
-    )
-}
-assert set(assigned_categories) == set(range(len(ids))), (
-    "every Heaven control must have exactly one category; "
-    f"got indexes {sorted(assigned_categories)} for {len(ids)} items"
-)
-assert set(assigned_categories.values()) == categories, (
-    "Heaven categories must exactly match the production category set; "
-    f"got {set(assigned_categories.values())}"
+categories = {"Weapons", "Player", "Camera", "World", "Vehicles", "AI / NPC", "Audio"}
+found_categories = {entry[3] for entry in defs}
+assert found_categories == categories, (
+    f"Heaven categories must exactly match the production category set; got {found_categories}"
 )
 
+# Raw input lock stays out of the menu: a player can lock themselves out of the
+# game with it. Look control is a camera control, so it must live in Camera.
+kinds = {entry[0]: (entry[1], entry[3]) for entry in defs}
+assert "input" not in ids, "Heaven must not expose the raw player input lock"
+assert kinds.get("look", (None, None))[1] == "Camera", (
+    "look control is a camera control and must not reappear in Player"
+)
+
+# Camera state must come from the retail camera-info handler, not a helper cache.
 assert "const int mode = active ? 2 : 1;" in HELPERS, (
     "the retail camera path uses mode 1 for first person and mode 2 for third person"
 )
@@ -46,6 +51,9 @@ assert '"void Human_SnapToGround(Human *h)"' in HELPERS, (
 )
 assert '"void Human_EnableCollision(Human *h)"' in HELPERS, (
     "collision controls must refuse an unresolved native instead of reporting a false success"
+)
+assert '"void Vehicle_ResetControls(Vehicle *v)"' in HELPERS, (
+    "vehicle control resets must use the catalogued signature, not a widened pointer"
 )
 
 # weapon_pickup is intentionally resolved by the Heaven adapter so it can bind
@@ -60,18 +68,35 @@ for item_id in ids:
 required_native_paths = {
     "weapon_pickup": "WeaponHelpers(runtime).pickup",
     "weapon_cycle": "WeaponHelpers(runtime).cycle(1)",
+    "weapon_draw_anim": "WeaponHelpers(runtime).requestAnimation",
+    "weapon_category": "WeaponHelpers(runtime).selectCategory",
+    "weapon_flash": "WeaponHelpers(runtime).reportFlashReset",
     "vehicle_reset": "VehicleHelpers(runtime).resetCar",
     "vehicle_explode": "VehicleHelpers(runtime).explodeCar",
     "vehicle_drive": "VehicleHelpers(runtime).driveCar",
+    "vehicle_info": "VehicleHelpers(runtime).reportCarInfo",
+    "vehicle_controls_reset": "VehicleHelpers(runtime).resetVehicleControls",
+    "heli_info": "VehicleHelpers(runtime).reportHeliInfo",
     "npc_execute": "NpcHelpers(runtime).executeSoldier",
     "npc_ensure_weapon": "NpcHelpers(runtime).ensureWeapon",
     "npc_snap_ground": "NpcHelpers(runtime).snapToGround",
     "npc_collision": "NpcHelpers(runtime).setCollisionEnabled",
+    "npc_status": "NpcHelpers(runtime).reportStatus",
+    "npc_params": "NpcHelpers(runtime).reportSoldierParams",
+    "npc_stand_down": "NpcHelpers(runtime).standDownSoldier",
     "player_reset_damage": "PlayerHelpers(runtime).resetDamage",
     "player_snap_ground": "PlayerHelpers(runtime).snapToGround",
     "player_collision": "PlayerHelpers(runtime).setCollisionEnabled",
+    "player_status": "PlayerHelpers(runtime).reportStatus",
+    "camera_info": "CameraHelpers(runtime).reportInfo",
+    "world_level_tick": "WorldHelpers(runtime).reportLevelTick",
+    "world_flow": "WorldHelpers(runtime).reportFlow",
+    "world_events": "WorldHelpers(runtime).reportEvents",
+    "audio_info": "AudioHelpers(runtime).reportInfo",
     "npc_reset_damage": "NpcHelpers(runtime).resetDamage",
     "restart_mission": "WorldHelpers(runtime).restartMission",
+    "music": "setMusicVolume",
+    "sfx": "setSfxVolume",
 }
 for item_id, native_path in required_native_paths.items():
     source = HEAVEN if item_id == "weapon_pickup" else HELPERS
@@ -82,6 +107,9 @@ assert '"Live Car Target"' in HEAVEN and '"Waiting for live car list"' in HEAVEN
 )
 assert '"Live NPC Target"' in HEAVEN and '"Waiting for live NPC list"' in HEAVEN, (
     "Heaven must render names from the active NPC list rather than ordinal slots"
+)
+assert '"Live Heli Target"' in HEAVEN and '"Waiting for live heli list"' in HEAVEN, (
+    "Heaven must render names from the active helicopter list rather than ordinal slots"
 )
 assert "IGI::TASK::GET_TASK_NAME" in HELPERS and "IGI::TASK::GET_ID" in HELPERS, (
     "live targets must use the retail task name and stable task ID natives"
@@ -102,12 +130,15 @@ assert "findLiveTarget(runtime, g_selectedCarTaskId, isCarTask)" in HELPERS, (
 assert "findLiveTarget(runtime, g_selectedNpcTaskId, isNpcTask)" in HELPERS, (
     "NPC actions must resolve the selected live NPC by task identity at action time"
 )
-assert 'clearLiveTargetSelections("level change unloads the current level task list")' in HELPERS, (
-    "a level change must drop stale NPC/car selections instead of logging fake warnings"
+assert "findLiveTarget(runtime, *selected, isHeliTask)" in HELPERS, (
+    "heli actions must resolve the selected live helicopter by task identity at action time"
 )
-assert (
-    'clearLiveTargetSelections("mission restart rebuilds the level task list")' in HELPERS
-), "a mission restart must drop stale NPC/car selections too"
+assert 'clearLiveTargetSelections("level change unloads the current level task list")' in HELPERS, (
+    "a level change must drop stale NPC/car/heli selections instead of logging fake warnings"
+)
+assert 'clearLiveTargetSelections("mission restart rebuilds the level task list")' in HELPERS, (
+    "a mission restart must drop stale NPC/car/heli selections too"
+)
 assert "reportMissingCarTarget(" in HELPERS and "reportMissingNpcTarget(" in HELPERS, (
     "target-dependent actions must distinguish a missing selection from a stale one"
 )
@@ -117,7 +148,6 @@ assert "invoking Human_SnapToGround for task #" in HELPERS, (
 assert "invoking Car_Control reset for task #" in HELPERS, (
     "car resets must log the native invocation so a crash inside it is traceable"
 )
-
 assert "target.taskId == preserved" in HELPERS, (
     "live target lists must preserve the selected task identity, not its old index"
 )
@@ -132,4 +162,14 @@ assert 'WeaponEntry{"Medipack", "WEAPON_ID_MEDIPACK", 50}' in HEAVEN, (
     "medipack pickup must carry the configured 50-charge bundle"
 )
 
-print(f"PASS Heaven routes {len(ids)} production controls across {len(categories)} categories")
+# The retail menu cannot draw more rows than its frame holds, so a larger control
+# set must switch to the scrollable command list or options become unreachable.
+assert "menuNeedsCommandList(config)" in (
+    ROOT / "src/ui/menu_script.cpp"
+).read_text(encoding="utf-8"), (
+    "the generator must switch to the command-list layout when controls outgrow the frame"
+)
+
+print(
+    f"PASS Heaven routes {len(ids)} production controls across {len(categories)} categories"
+)

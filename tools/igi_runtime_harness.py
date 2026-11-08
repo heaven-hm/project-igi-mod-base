@@ -166,6 +166,12 @@ LIVE_OBJECT_NATIVES = frozenset({
     "VEHICLE::GET_SOUND_INFO",
     "SOLDIER::ENSURE_WEAPON",
     "SOLDIER::EXECUTE",
+    # Soldier state-machine entries and parameter reads dereference the live
+    # soldier state owned by that soldier instance, exactly like EXECUTE above.
+    "SOLDIER::STAND_ENTER",
+    "SOLDIER::GET_PARAMS",
+    # Level_GetTick reads the active level record, which only exists in-game.
+    "LEVEL::GET_TICK",
     "AI::REMOVE_ALARM_ACTIONS",
 })
 

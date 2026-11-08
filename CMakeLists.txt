@@ -81,6 +81,7 @@ add_library(mod_base STATIC
     src/ui/menu_manager.cpp
     src/ui/igi_menu_manager.cpp
     src/ui/menu_script.cpp
+    src/ui/menu_commands.cpp
     src/ui/menu_resource.cpp
     src/ui/menu_resource_igi.cpp
     src/ui/menu_script_bridge.cpp
@@ -297,7 +298,21 @@ target_link_libraries(igi_demo_native_contract_tests PRIVATE mod_base)
 target_compile_definitions(igi_demo_native_contract_tests PRIVATE IGI_SDK_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
 enable_testing()
+# The shipping Heaven control set must stay large enough to be useful and must
+# always generate a complete retail menu resource (command list past frame size).
+add_executable(igi_heaven_layout_tests
+    tests/HeavenLayoutTests.cpp
+    demos/heaven/heaven_menu.cpp
+    demos/helpers/menu_helpers.cpp
+)
+target_link_libraries(igi_heaven_layout_tests PRIVATE mod_base)
+target_include_directories(igi_heaven_layout_tests PRIVATE src demos)
+if(WIN32)
+    target_link_options(igi_heaven_layout_tests PRIVATE -static)
+endif()
+
 add_test(NAME igi_sdk_tests COMMAND igi_sdk_tests)
+add_test(NAME igi_heaven_layout COMMAND igi_heaven_layout_tests)
 add_test(NAME igi_heaven_menu_contract
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_heaven_menu_contract.py)
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/data/igi-natives.csv")
