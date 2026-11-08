@@ -1392,7 +1392,7 @@ NATIVE_DECL int PROFILE_GET_LANGUAGE() {
 }
 } // namespace OTHER
 std::size_t NativeBindingCount() noexcept {
-    return 320;
+    return 322;
 }
 } // namespace IGI
 #undef NATIVE_INVOKE

@@ -41,5 +41,21 @@ def test_callback_list_work_is_owned_by_frame_dispatch():
     assert "sdkFrameTick" in frame_dispatch
 
 
+def test_hook_restore_waits_for_an_active_frame_detour_to_return():
+    source = SOURCE.read_text(encoding="utf-8")
+    frame_dispatch = body("displayRunCallbacksDetour")
+    uninstall = re.search(r"bool HookManager::uninstall\(\) noexcept \{(?P<body>[\s\S]*?)\n}\n", source)
+
+    assert uninstall, "missing HookManager::uninstall"
+    assert "runDispatchActive.store(true" in frame_dispatch
+    assert "runDispatchActive.store(false" in frame_dispatch
+    assert "runDispatchActive.load" in uninstall.group("body")
+    assert "frame dispatch did not leave the detour" in uninstall.group("body")
+    assert uninstall.group("body").index("runDispatchActive.load") < uninstall.group("body").index(
+        "MH_DisableHook(reinterpret_cast<void *>(game::displayRunCallbacks))"
+    )
+
+
 if __name__ == "__main__":
     test_callback_list_work_is_owned_by_frame_dispatch()
+    test_hook_restore_waits_for_an_active_frame_detour_to_return()

@@ -476,6 +476,12 @@ if (!catalogue.add({0x004f4600, "Vehicle_ResetControls", "IGI-RE", "entry",
 if (!catalogue.add({0x00489e30, "Human_ResetDamage", "IGI-RE", "entry",
                     "void Human_ResetDamage(Human *h)", NativeVerification::Exposed}))
     return false;
+if (!catalogue.add({0x00463570, "Human_DisableCollision", "IGI-RE", "entry",
+                    "void Human_DisableCollision(Human *h)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00463580, "Human_EnableCollision", "IGI-RE", "entry",
+                    "void Human_EnableCollision(Human *h)", NativeVerification::Exposed}))
+    return false;
 if (!catalogue.add({0x0045fcd0, "Human_GetHumanCameraInfoHandler", "IGI-RE", "entry",
                     "void Human_GetHumanCameraInfoHandler(Human *h, HumanCameraInfo *info)",
                     NativeVerification::Exposed}))

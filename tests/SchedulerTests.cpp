@@ -233,6 +233,12 @@ int main() {
     igi::NativeCatalogue exposed;
     assert(igi::loadIgiVerifiedNativeRegistry(exposed));
     assert(exposed.size() >= 300 && exposed.size() == IGI::NativeBindingCount());
+    const auto *disableCollision = exposed.findByAddress(0x00463570);
+    assert(disableCollision && disableCollision->name == "Human_DisableCollision" &&
+           disableCollision->signature == "void Human_DisableCollision(Human *h)");
+    const auto *enableCollision = exposed.findByAddress(0x00463580);
+    assert(enableCollision && enableCollision->name == "Human_EnableCollision" &&
+           enableCollision->signature == "void Human_EnableCollision(Human *h)");
     if (!catalogueText.str().empty()) {
     assert(catalogue.load(catalogueFile));
     assert(catalogue.size() == 7068);

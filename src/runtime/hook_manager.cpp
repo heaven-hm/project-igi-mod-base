@@ -34,6 +34,7 @@ std::atomic<bool> tickRegistered{false};
 std::atomic<bool> tickRegistrationRequested{false};
 std::atomic<bool> tickRemovalRequested{false};
 std::atomic<bool> tickRemovalCompleted{true};
+std::atomic<bool> runDispatchActive{false};
 std::atomic<DWORD> frameDispatchThreadId{0};
 
 // Display_AddFrameCallback's verified retail prologue:
@@ -195,12 +196,14 @@ extern "C" int __cdecl displayAddFrameCallbackDetour(void *callback) {
 // from ScreenDraw. It suppresses the duplicate list-walk tick, runs the original
 // frame dispatch, then drains the scheduler for the completed frame.
 extern "C" int __cdecl displayRunCallbacksDetour() {
+    runDispatchActive.store(true, std::memory_order_release);
     recordFrameDispatchThread();
     processFrameTickRequests();
     frameTickHandled.store(true, std::memory_order_release);
     const int result = displayRunCallbacksOriginal ? displayRunCallbacksOriginal() : 0;
     frameTickHandled.store(false, std::memory_order_release);
     sdkFrameTick();
+    runDispatchActive.store(false, std::memory_order_release);
     return result;
 }
 
@@ -397,6 +400,21 @@ bool HookManager::uninstall() noexcept {
             "frame tick removal timed out; preserving hooks and SDK state to avoid a cross-thread "
             "callback-list mutation");
         return false;
+    }
+
+    if (!scheduler_.isGameThread()) {
+        constexpr DWORD kDispatchExitTimeoutMs = 5000;
+        const DWORD deadline = GetTickCount() + kDispatchExitTimeoutMs;
+        while (runDispatchActive.load(std::memory_order_acquire) &&
+               static_cast<LONG>(GetTickCount() - deadline) < 0) {
+            Sleep(1);
+        }
+        if (runDispatchActive.load(std::memory_order_acquire)) {
+            log(LogLevel::Error,
+                "frame dispatch did not leave the detour; preserving hooks to avoid restoring code "
+                "under an active game frame");
+            return false;
+        }
     }
 
     bool restored = true;
