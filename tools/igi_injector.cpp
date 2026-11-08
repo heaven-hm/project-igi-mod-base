@@ -123,7 +123,7 @@ int injectInto(DWORD pid, const std::string& dllPath, bool verbose) {
         std::printf("already loaded in pid %lu (module 0x%08lX); restart igi.exe to reload %s\n",
                     static_cast<unsigned long>(pid), static_cast<unsigned long>(*existingModule),
                     dllPath.c_str());
-        return 0;
+        return 10;
     }
 
     const HANDLE process = OpenProcess(
