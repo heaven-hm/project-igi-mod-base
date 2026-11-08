@@ -12,6 +12,9 @@ HELPERS = (ROOT / "demos/helpers/menu_helpers.cpp").read_text(encoding="utf-8")
 ids = re.findall(r'\{"([a-z_]+)",\s*igi::ModMenuItemKind::', HEAVEN)
 assert ids, "Heaven menu has no configured items"
 assert len(ids) == len(set(ids)), f"duplicate Heaven item IDs: {ids}"
+assert "input" not in ids and "look" not in ids, (
+    "Heaven must keep its Player category focused on gameplay-impacting controls"
+)
 
 categories = {"Weapons", "Player", "Camera", "World", "Vehicles", "AI / NPC"}
 for category in categories:
