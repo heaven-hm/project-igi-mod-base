@@ -126,9 +126,9 @@ void MenuScriptBridge::apply() {
         onClose_();
 }
 
-void MenuScriptBridge::cancel() {
+void MenuScriptBridge::cancel(bool notifyClose) {
     values_.revert();
-    if (onClose_)
+    if (notifyClose && onClose_)
         onClose_();
 }
 

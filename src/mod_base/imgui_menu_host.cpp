@@ -825,10 +825,7 @@ extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_External_Initialize() {
         return false;
     }
     initialAttachPending.store(true, std::memory_order_release);
-    runtime.scheduler().enqueueEveryFrame([] {
-        menuFrameWork();
-        igi::renderThirdPersonCrosshair();
-    });
+    runtime.scheduler().enqueueEveryFrame([] { menuFrameWork(); });
 #else
     runtime.scheduler().bindGameThread();
 #endif
@@ -847,7 +844,6 @@ extern "C" IGI_DEMO_EXPORT std::size_t IGI_MenuManager_External_RunFrame() {
     const auto ran = runtime.scheduler().runPending();
 #if defined(_WIN32)
     menuFrameWork();
-    igi::renderThirdPersonCrosshair();
 #endif
     if (count <= 5 || (count % 1000) == 0)
         igi::log(igi::LogLevel::Debug, "external imgui frame: scheduler completed");

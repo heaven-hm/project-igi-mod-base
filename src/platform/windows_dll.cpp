@@ -16,6 +16,7 @@ namespace {
 
 struct MainThreadState {
     std::atomic<bool> running{false};
+    std::atomic<bool> unloadRequested{false};
     std::uint8_t startKey = 0;
     std::uint8_t endKey = 0;
     bool initialized = false;
@@ -27,6 +28,7 @@ struct MainThreadState {
 };
 
 MainThreadState g_state;
+HMODULE g_module = nullptr;
 
 BOOL WINAPI consoleControlHandler(DWORD event) {
     switch (event) {
@@ -186,7 +188,7 @@ bool deactivateMenuRuntime(const igi::DllMenuCallbacks &callbacks) {
 }
 
 DWORD WINAPI igiSdkMainThread(void *rawModule) {
-    (void)rawModule;
+    g_module = static_cast<HMODULE>(rawModule);
     const auto config = igi::loadMenuConfig("project-igi-mod-config.ini");
     igi::setLogFile(config.logFile);
     igi::setLogLevel(config.minimumLogLevel);
@@ -220,9 +222,17 @@ DWORD WINAPI igiSdkMainThread(void *rawModule) {
 
     while (g_state.running.load(std::memory_order_acquire)) {
         mainLoopTick(callbacks, keys);
-        if (g_state.endKey && keys.isPressedOnce(g_state.endKey)) {
+        const bool unloadRequested = g_state.unloadRequested.load(std::memory_order_acquire);
+        if (unloadRequested || (g_state.endKey && keys.isPressedOnce(g_state.endKey))) {
             if (deactivateMenuRuntime(callbacks)) {
                 g_state.running.store(false, std::memory_order_release);
+                if (unloadRequested) {
+                    igi::log(igi::LogLevel::Info,
+                             "safe unload: callbacks stopped; releasing DLL from its host thread");
+                    detachConsole();
+                    igi::closeLogFile();
+                    FreeLibraryAndExitThread(g_module, 0);
+                }
                 igi::log(igi::LogLevel::Info,
                          "internal host stopped by configured end key; start key is disabled until "
                          "the game exits");
@@ -246,5 +256,14 @@ BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID) {
         DisableThreadLibraryCalls(module);
         CreateThread(nullptr, 0, igiSdkMainThread, module, 0, nullptr);
     }
+    return TRUE;
+}
+
+extern "C" __declspec(dllexport) BOOL __cdecl IGI_SDK_RequestSafeUnload() {
+    // This only requests unloading. igiSdkMainThread removes every game callback
+    // before it calls FreeLibraryAndExitThread on itself.
+    if (!g_state.running.load(std::memory_order_acquire))
+        return FALSE;
+    g_state.unloadRequested.store(true, std::memory_order_release);
     return TRUE;
 }

@@ -22,7 +22,9 @@ class MenuScriptBridge final {
     bool setToggle(int item, int value);
     void close();
     void apply();
-    void cancel();
+    // A host completing an already-observed retail close must revert values
+    // without feeding the close callback back into a second transition.
+    void cancel(bool notifyClose = true);
     void snapshot() noexcept {
         values_.snapshot();
     }

@@ -354,6 +354,10 @@ int main() {
     assert(appliedEvents.empty());
 
     closedCalled = false;
+    deferredBridge.cancel(false);
+    assert(!closedCalled);
+
+    closedCalled = false;
     assert(deferredBridge.setToggle(2, 0));
     assert(deferredBridge.setList(0, 1));
     deferredBridge.apply();

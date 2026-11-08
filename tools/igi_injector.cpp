@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cstdint>
 #include <cwchar>
 #include <optional>
 #include <string>
@@ -22,20 +23,71 @@ struct Options {
     std::string dllPath;
     bool list = false;
     bool verbose = false;
+    bool eject = false;
 };
 
 void usage() {
     std::printf(
         "IGI-Injector (x86)\n"
-        "Usage: IGI-Injector [-p pid | -n name] -i <dll> [-v]\n"
+        "Usage: IGI-Injector [-p pid | -n name] -i <dll> [-e] [-v]\n"
         "       IGI-Injector -l [name]\n"
         "\n"
         "  -p <pid>    attach to a process id\n"
         "  -n <name>   match by executable name (default igi.exe)\n"
         "  -i <dll>    absolute path to the 32-bit DLL to load\n"
+        "  -e          request the DLL's coordinated safe unload\n"
         "  -l          list matching processes and exit\n"
         "  -v          verbose output\n"
         "  -h          show this help\n");
+}
+
+std::optional<DWORD> exportRva(const std::wstring& path, const char* name) {
+    const HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
+                                    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE) return std::nullopt;
+    LARGE_INTEGER size{};
+    if (!GetFileSizeEx(file, &size) || size.QuadPart < static_cast<LONGLONG>(sizeof(IMAGE_DOS_HEADER))) {
+        CloseHandle(file);
+        return std::nullopt;
+    }
+    std::vector<BYTE> image(static_cast<std::size_t>(size.QuadPart));
+    DWORD read = 0;
+    const bool ok = ReadFile(file, image.data(), static_cast<DWORD>(image.size()), &read, nullptr) &&
+                    read == image.size();
+    CloseHandle(file);
+    if (!ok) return std::nullopt;
+    const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(image.data());
+    if (dos->e_magic != IMAGE_DOS_SIGNATURE || dos->e_lfanew < 0 ||
+        static_cast<std::size_t>(dos->e_lfanew) + sizeof(IMAGE_NT_HEADERS32) > image.size()) return std::nullopt;
+    const auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS32*>(image.data() + dos->e_lfanew);
+    if (nt->Signature != IMAGE_NT_SIGNATURE || nt->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR32_MAGIC) return std::nullopt;
+    const auto& directory = nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT];
+    if (!directory.VirtualAddress || !directory.Size) return std::nullopt;
+    const auto* section = IMAGE_FIRST_SECTION(nt);
+    const auto rvaToOffset = [&](DWORD rva) -> std::optional<DWORD> {
+        for (WORD i = 0; i < nt->FileHeader.NumberOfSections; ++i) {
+            const DWORD start = section[i].VirtualAddress;
+            const DWORD length = section[i].Misc.VirtualSize ? section[i].Misc.VirtualSize : section[i].SizeOfRawData;
+            if (rva >= start && rva - start < length) return section[i].PointerToRawData + rva - start;
+        }
+        return std::nullopt;
+    };
+    const auto exportOffset = rvaToOffset(directory.VirtualAddress);
+    if (!exportOffset || *exportOffset + sizeof(IMAGE_EXPORT_DIRECTORY) > image.size()) return std::nullopt;
+    const auto* exports = reinterpret_cast<const IMAGE_EXPORT_DIRECTORY*>(image.data() + *exportOffset);
+    const auto namesOffset = rvaToOffset(exports->AddressOfNames);
+    const auto ordinalsOffset = rvaToOffset(exports->AddressOfNameOrdinals);
+    const auto functionsOffset = rvaToOffset(exports->AddressOfFunctions);
+    if (!namesOffset || !ordinalsOffset || !functionsOffset) return std::nullopt;
+    for (DWORD i = 0; i < exports->NumberOfNames; ++i) {
+        const auto nameOffset = rvaToOffset(reinterpret_cast<const DWORD*>(image.data() + *namesOffset)[i]);
+        if (!nameOffset || *nameOffset >= image.size()) continue;
+        if (std::strcmp(reinterpret_cast<const char*>(image.data() + *nameOffset), name) != 0) continue;
+        const WORD ordinal = reinterpret_cast<const WORD*>(image.data() + *ordinalsOffset)[i];
+        if (ordinal >= exports->NumberOfFunctions) return std::nullopt;
+        return reinterpret_cast<const DWORD*>(image.data() + *functionsOffset)[ordinal];
+    }
+    return std::nullopt;
 }
 
 std::wstring toWide(const std::string& text) {
@@ -197,6 +249,54 @@ int injectInto(DWORD pid, const std::string& dllPath, bool verbose) {
     }
     return 0;
 }
+
+int requestSafeEject(DWORD pid, const std::string& dllPath, bool verbose) {
+    const std::wstring widePath = toWide(dllPath);
+    const auto module = findLoadedModule(pid, widePath);
+    if (!module.has_value() || *module == 0) {
+        std::printf("error: DLL is not loaded in pid %lu\n", static_cast<unsigned long>(pid));
+        return 4;
+    }
+    const auto rva = exportRva(widePath, "IGI_SDK_RequestSafeUnload");
+    if (!rva) {
+        std::printf("error: DLL does not export coordinated unload support\n");
+        return 4;
+    }
+    const HANDLE process = OpenProcess(PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION, FALSE, pid);
+    if (!process) {
+        std::printf("error: OpenProcess(%lu) failed: %lu\n", static_cast<unsigned long>(pid), GetLastError());
+        return 4;
+    }
+    const auto entry = reinterpret_cast<LPTHREAD_START_ROUTINE>(static_cast<std::uintptr_t>(*module + *rva));
+    const HANDLE thread = CreateRemoteThread(process, nullptr, 0, entry, nullptr, 0, nullptr);
+    if (!thread) {
+        std::printf("error: unable to request coordinated unload: %lu\n", GetLastError());
+        CloseHandle(process);
+        return 7;
+    }
+    const DWORD waited = WaitForSingleObject(thread, 15000);
+    DWORD accepted = 0;
+    GetExitCodeThread(thread, &accepted);
+    CloseHandle(thread);
+    if (waited != WAIT_OBJECT_0 || accepted == 0) {
+        std::printf("error: DLL rejected coordinated unload; it remains loaded\n");
+        CloseHandle(process);
+        return 8;
+    }
+    for (unsigned attempt = 0; attempt != 300; ++attempt) {
+        const auto current = findLoadedModule(pid, widePath);
+        if (current.has_value() && *current == 0) {
+            std::printf(verbose ? "safely unloaded from pid %lu\n" : "safely unloaded\n",
+                        static_cast<unsigned long>(pid));
+            CloseHandle(process);
+            return 0;
+        }
+        Sleep(50);
+    }
+    CloseHandle(process);
+    std::printf("error: timed out waiting for coordinated unload; DLL remains loaded\n");
+    return 8;
+}
 }
 
 int main(int argc, char** argv) {
@@ -213,6 +313,7 @@ int main(int argc, char** argv) {
             continue;
         }
         if (std::strcmp(arg, "-v") == 0) { options.verbose = true; continue; }
+        if (std::strcmp(arg, "-e") == 0 || std::strcmp(arg, "--eject") == 0) { options.eject = true; continue; }
         if (std::strcmp(arg, "-p") == 0 && i + 1 < argc) { options.pid = static_cast<DWORD>(std::strtoul(argv[++i], nullptr, 10)); continue; }
         if (std::strcmp(arg, "-n") == 0 && i + 1 < argc) { options.processName = argv[++i]; continue; }
         if (std::strcmp(arg, "-i") == 0 && i + 1 < argc) { options.dllPath = argv[++i]; continue; }
@@ -228,7 +329,9 @@ int main(int argc, char** argv) {
         return 2;
     }
 
-    if (options.pid != 0) return injectInto(options.pid, options.dllPath, options.verbose);
+    if (options.pid != 0)
+        return options.eject ? requestSafeEject(options.pid, options.dllPath, options.verbose)
+                             : injectInto(options.pid, options.dllPath, options.verbose);
 
     const std::wstring wanted = toWide(options.processName);
     DWORD found = 0;
@@ -245,5 +348,6 @@ int main(int argc, char** argv) {
         std::printf("error: no process named '%s'\n", options.processName.c_str());
         return 3;
     }
-    return injectInto(found, options.dllPath, options.verbose);
+    return options.eject ? requestSafeEject(found, options.dllPath, options.verbose)
+                         : injectInto(found, options.dllPath, options.verbose);
 }

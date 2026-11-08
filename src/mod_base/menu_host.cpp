@@ -217,8 +217,8 @@ void completeCloseTransition() {
     pendingTransition = MenuTransition::None;
     menuScreenAttached = false;
     if (menuBridge)
-        menuBridge->cancel();
-    else if (!igi::resumeFromMenu(runtime))
+        menuBridge->cancel(false);
+    if (!igi::resumeFromMenu(runtime))
         igi::log(igi::LogLevel::Warning, "internal menu close: unable to resume game");
     if (shutdownPending.load(std::memory_order_acquire)) {
         completeShutdownOnGameThread();
@@ -535,10 +535,7 @@ extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_Internal_Initialize() {
     }
     initialAttachPending.store(true, std::memory_order_release);
     igi::log(igi::LogLevel::Info, "internal startup stage: enqueue begin");
-    runtime.scheduler().enqueueEveryFrame([] {
-        menuFrameWork();
-        igi::renderThirdPersonCrosshair();
-    });
+    runtime.scheduler().enqueueEveryFrame([] { menuFrameWork(); });
     igi::log(igi::LogLevel::Info, "internal startup stage: enqueue complete");
 #else
     runtime.scheduler().bindGameThread();
@@ -570,7 +567,6 @@ extern "C" IGI_DEMO_EXPORT std::size_t IGI_MenuManager_Internal_RunFrame() {
     // External callers that already own the game thread can drive the same
     // work the Display_AddFrameCallback tick performs.
     menuFrameWork();
-    igi::renderThirdPersonCrosshair();
 #endif
     if (count <= 5 || (count % 1000) == 0)
         igi::log(igi::LogLevel::Debug, "internal frame: scheduler completed");
