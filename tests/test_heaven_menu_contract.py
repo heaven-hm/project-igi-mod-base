@@ -46,6 +46,8 @@ required_native_paths = {
     "vehicle_reset": "VehicleHelpers(runtime).resetControls",
     "vehicle_explode": "VehicleHelpers(runtime).explodeCar",
     "npc_ensure_weapon": "NpcHelpers(runtime).ensureWeapon",
+    "player_reset_damage": "PlayerHelpers(runtime).resetDamage",
+    "npc_reset_damage": "NpcHelpers(runtime).resetDamage",
     "restart_mission": "WorldHelpers(runtime).restartMission",
 }
 for item_id, native_path in required_native_paths.items():

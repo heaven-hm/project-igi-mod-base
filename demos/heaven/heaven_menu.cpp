@@ -36,6 +36,7 @@ bool configureModMenu(igi::MenuConfig &config) {
         {"view", igi::ModMenuItemKind::List, "Camera Mode", "", {"First Person", "Third Person"}},
         {"input", igi::ModMenuItemKind::List, "Player Input", "", {"Enabled", "Disabled"}},
         {"look", igi::ModMenuItemKind::List, "Player Look", "", {"Enabled", "Disabled"}},
+        {"player_reset_damage", igi::ModMenuItemKind::Action, "Reset Player Damage", "", {}},
         {"pause", igi::ModMenuItemKind::List, "Game Pause", "", {"Running", "Paused"}},
         {"weather", igi::ModMenuItemKind::List, "Weather", "", {"Off", "Rain", "Snow"}},
         {"fps", igi::ModMenuItemKind::List, "Frame Cap", "", {"30", "60", "120"}},
@@ -44,6 +45,7 @@ bool configureModMenu(igi::MenuConfig &config) {
         {"vehicle_reset", igi::ModMenuItemKind::Action, "Reset First Car Controls", "", {}},
         {"vehicle_explode", igi::ModMenuItemKind::Action, "Explode First Car", "", {}},
         {"npc_ensure_weapon", igi::ModMenuItemKind::Action, "Equip First NPC", "", {}},
+        {"npc_reset_damage", igi::ModMenuItemKind::Action, "Reset First NPC Damage", "", {}},
         {"level",
          igi::ModMenuItemKind::List,
          "Mission",
@@ -57,15 +59,17 @@ bool configureModMenu(igi::MenuConfig &config) {
     config.items[3].category = "Camera";
     config.items[4].category = "Player";
     config.items[5].category = "Player";
-    config.items[6].category = "World";
+    config.items[6].category = "Player";
     config.items[7].category = "World";
     config.items[8].category = "World";
     config.items[9].category = "World";
     config.items[10].category = "World";
-    config.items[11].category = "Vehicles";
+    config.items[11].category = "World";
     config.items[12].category = "Vehicles";
-    config.items[13].category = "AI / NPC";
-    config.items[14].category = "World";
+    config.items[13].category = "Vehicles";
+    config.items[14].category = "AI / NPC";
+    config.items[15].category = "AI / NPC";
+    config.items[16].category = "World";
     return true;
 }
 

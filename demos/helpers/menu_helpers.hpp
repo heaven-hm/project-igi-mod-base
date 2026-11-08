@@ -44,6 +44,7 @@ class PlayerHelpers {
     bool startAction(int action) const;
     bool checkDeath() const;
     bool sendPosition() const;
+    bool resetDamage() const;
     bool restoreVisualFeedback() const;
     bool setFlagD44() const;
     bool clearFlagD44() const;
@@ -135,6 +136,7 @@ class NpcHelpers {
   public:
     explicit NpcHelpers(Runtime &runtime) : runtime_(runtime) {}
     bool ensureWeapon(IGI::Human *npc) const;
+    bool resetDamage(IGI::Human *npc) const;
 
   private:
     Runtime &runtime_;

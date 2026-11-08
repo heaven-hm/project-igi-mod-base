@@ -278,6 +278,9 @@ NATIVE_DECL void SET_AI(Human *h, HumanAI *ai) {
     return NATIVE_INVOKE<Void>(HASH::HUMAN_SET_AI, "void Human_SetAI(Human *h, HumanAI *ai)", h,
                                ai);
 }
+NATIVE_DECL void RESET_DAMAGE(Human *h) {
+    return NATIVE_INVOKE<Void>(HASH::HUMAN_RESET_DAMAGE, "void Human_ResetDamage(Human *h)", h);
+}
 NATIVE_DECL int GET_STATE(Human *h) {
     return NATIVE_INVOKE<int>(HASH::HUMAN_GET_STATE, "int Human_GetState(Human *h)", h);
 }
@@ -1350,7 +1353,7 @@ NATIVE_DECL int PROFILE_GET_LANGUAGE() {
 }
 } // namespace OTHER
 std::size_t NativeBindingCount() noexcept {
-    return 316;
+    return 317;
 }
 } // namespace IGI
 #undef NATIVE_INVOKE

@@ -16,6 +16,8 @@ All public helpers live in `demos/helpers/menu_helpers.hpp`, with their only imp
 
 `restoreVisualFeedback` removes the retail hit/flash overlays. `setFlagD44`, `clearFlagD44`, `setFlagD68`, and `clearFlagD68` expose the named player-controller flag natives for an advanced game-thread mod that has a verified reason to change them.
 
+`resetDamage` calls retail `Human_ResetDamage` on the live local player. It clears the current damage total and restores the configured multipliers for all damage zones; Heaven exposes it as a recovery action only while a live player exists.
+
 ### WeaponHelpers
 
 `pickup(weaponId, ammo)` resolves a retail `WEAPON_ID_*` symbol and gives it to the local player; `enableUnlimitedAmmo()` calls the retail unlimited-ammo behavior; `cycle(force)`, `selectCategory()`, `setAnimation(animation)`, and `requestAnimation(animation)` invoke the player’s verified weapon controls. Use these for visible weapon gameplay effects, with IDs from the retail data rather than guessed constants.
@@ -43,6 +45,8 @@ The old third-person crosshair API is deliberately absent. It had a helper-owned
 ### AiHelpers
 
 `NpcHelpers::ensureWeapon` invokes the retail soldier weapon-creation path for a supplied non-player human. Heaven resolves the first real NPC before it calls this method and rejects the action if the level has none. `AiHelpers` forwards the verified retail AI script natives: alarm-action removal, view/alarm range and alpha/gamma setters, event priority, invulnerability, instant death, death animation, alarm trigger/control/access, gunner ID, animation interval, current event type, and random value. Each method takes an `AiScriptContext` supplied by a real IGI script callback (`out`, `data`, and `args`); it is not valid to fabricate this context from a menu button.
+
+`NpcHelpers::resetDamage` applies that same retail damage reset to a supplied live NPC. It deliberately requires the caller to resolve a real non-player human first; Heaven uses `firstNpc` and refuses the action when there is no valid target.
 
 ### AudioHelpers and menu adapter
 

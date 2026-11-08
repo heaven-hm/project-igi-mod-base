@@ -467,6 +467,9 @@ if (!catalogue.add({0x00433000, "Heli_GetSoundInfo", "IGI-RE", "entry",
 if (!catalogue.add({0x004f4600, "Vehicle_ResetControls", "IGI-RE", "entry",
                     "void Vehicle_ResetControls(Vehicle *v)", NativeVerification::Exposed}))
     return false;
+if (!catalogue.add({0x00489e30, "Human_ResetDamage", "IGI-RE", "entry",
+                    "void Human_ResetDamage(Human *h)", NativeVerification::Exposed}))
+    return false;
 if (!catalogue.add({0x004f9200, "Graph_GetParamTable", "IGI-RE", "entry",
                     "void *Graph_GetParamTable(void)", NativeVerification::Exposed}))
     return false;

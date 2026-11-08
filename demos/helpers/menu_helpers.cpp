@@ -390,6 +390,8 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
         enableUnlimitedAmmo(runtime);
     } else if (id == "weapon_cycle") {
         WeaponHelpers(runtime).cycle(0);
+    } else if (id == "player_reset_damage") {
+        PlayerHelpers(runtime).resetDamage();
     } else if (id == "input") {
         PlayerHelpers(runtime).setInputEnabled(value == "Enabled");
     } else if (id == "look") {
@@ -441,6 +443,10 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
         auto *npc = EntityHelpers(runtime).firstNpc();
         if (!NpcHelpers(runtime).ensureWeapon(npc))
             log(LogLevel::Warning, "NPC weapon request rejected: no live NPC task was found");
+    } else if (id == "npc_reset_damage") {
+        auto *npc = EntityHelpers(runtime).firstNpc();
+        if (!NpcHelpers(runtime).resetDamage(npc))
+            log(LogLevel::Warning, "NPC damage reset rejected: no live NPC task was found");
     } else if (id == "display" || action.find("RefreshDisplay") != std::string::npos) {
         IGI::GAME::SET_DISPLAY_MODE();
         log(LogLevel::Info, "display mode refreshed");
@@ -580,6 +586,13 @@ bool PlayerHelpers::sendPosition() const {
     if (!p)
         return false;
     IGI::PLAYER::SEND_POSITION(p);
+    return true;
+}
+bool PlayerHelpers::resetDamage() const {
+    auto *p = localPlayer(runtime_);
+    if (!p)
+        return false;
+    IGI::HUMAN::RESET_DAMAGE(reinterpret_cast<IGI::Human *>(p));
     return true;
 }
 bool PlayerHelpers::startAction(int action) const {
@@ -887,6 +900,12 @@ bool NpcHelpers::ensureWeapon(IGI::Human *npc) const {
     if (!requireLiveGameThread(runtime_) || !npc || IGI::HUMAN::IS_PLAYER(npc))
         return false;
     IGI::SOLDIER::ENSURE_WEAPON(npc);
+    return true;
+}
+bool NpcHelpers::resetDamage(IGI::Human *npc) const {
+    if (!requireLiveGameThread(runtime_) || !npc)
+        return false;
+    IGI::HUMAN::RESET_DAMAGE(npc);
     return true;
 }
 IGI::Task *VehicleHelpers::heliDoor(IGI::Heli *h) const {
