@@ -99,6 +99,58 @@ LIVE_GAME_ONLY_NATIVES = frozenset({
     "SCRIPT::EVAL_CONST",
 })
 
+# These bindings require a live player, menu, camera, or vehicle object. The
+# source scanner has no valid instance to pass in its synthetic emulator state,
+# so executing their retail bodies would only prove that a null object faults.
+# The dedicated menu-helper flow emulates Game_SetRaining with its required
+# singleton seeded, so the generic scan defers it and keeps that dedicated test.
+LIVE_OBJECT_NATIVES = frozenset({
+    "GAME::SET_RAINING",
+    "MENU::REFRESH",
+    "GAME::RESTART",
+    "PLAYER::CYCLE_WEAPON",
+    "PLAYER::REQUEST_WEAPON_ANIM",
+    "PLAYER::CHECK_DEATH",
+    "PLAYER::SEND_POSITION",
+    "PLAYER::START_ACTION",
+    "PLAYER::SET_FLAG_D44",
+    "PLAYER::CLEAR_FLAG_D44",
+    "PLAYER::SET_FLAG_D68",
+    "PLAYER::CLEAR_FLAG_D68",
+    "PLAYER::SET_WEAPON_ANIM",
+    "PLAYER::SELECT_WEAPON_CATEGORY",
+    "WEAPON::HAS_AMMO",
+    "HUMAN::UNLOCK_INPUT",
+    "HUMAN::LOCK_INPUT",
+    "HUMAN::ENABLE_LOOK",
+    "HUMAN::DISABLE_LOOK",
+    "HUMAN::GET_STATE",
+    "HUMAN::GET_INDEX",
+    "HUMAN::IS_CROUCHING",
+    "HUMAN::IS_ACTIVE",
+    "CAMERA::SET_WEAPON_TARGET",
+    "CAMERA::SET_WEAPON_ANGLES",
+    "CAMERA::SET_CAMERA",
+    "CAMERA::SET_TARGET",
+    "CAMERA::SET_DIP",
+    "CAMERA::SET_ZOOMED",
+    "CAMERA::GET_EYE",
+    "CAMERA::GET_FORWARD",
+    "CAMERA::GET_MATRIX",
+    "VEHICLE::CAR_GET_CONTROL_INFO",
+    "VEHICLE::GET_FRAME",
+    "VEHICLE::GET_LIGHT",
+    "VEHICLE::GET_GUNNER_POS",
+    "VEHICLE::GET_TRACK_FACTOR",
+    "VEHICLE::CAR_EXPLODE",
+    "VEHICLE::RESET_CONTROLS",
+    "VEHICLE::HELI_GET_CONTROL_INFO",
+    "VEHICLE::GET_STATE_SIZE",
+    "VEHICLE::GET_CONFIG_SIZE",
+    "VEHICLE::GET_SOUND_INFO",
+    "SOLDIER::ENSURE_WEAPON",
+})
+
 
 def skip(reason: str) -> None:
     print(f"SKIP: {reason}")
@@ -900,9 +952,9 @@ def run_source_scan(args, emu_module) -> int:
         if entry is None:
             missing.append(native)
             continue
-        if native in LIVE_GAME_ONLY_NATIVES:
+        if native in LIVE_GAME_ONLY_NATIVES or native in LIVE_OBJECT_NATIVES:
             runtime.emu.read(entry["address"], 1)
-            deferred.append(f"{native} @ 0x{entry['address']:08x}: requires live game state")
+            deferred.append(f"{native} @ 0x{entry['address']:08x}: requires live game object")
             continue
         result = runtime.run_native(entry)
         if result["ok"]:
