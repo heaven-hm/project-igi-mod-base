@@ -26,7 +26,7 @@ All public helpers live in `demos/helpers/menu_helpers.hpp`, with their only imp
 
 ### CameraHelpers
 
-`setViewMode(mode)` calls the retail `Human_ViewCam` setter for the local player; use the game’s camera mode values (the Heaven menu exposes first- and third-person). There is intentionally no `isThirdPersonActive()` helper: the retail catalog currently verifies a setter, not a safe state getter.
+`setViewMode(mode)` calls the retail `Human_ViewCam` setter for the local player and accepts mode `1` for first person or `3` for third person; the Heaven menu exposes both. There is intentionally no `isThirdPersonActive()` helper: the retail catalog currently verifies a setter, not a safe state getter.
 
 `setWeaponTarget`, `setWeaponAngles`, `setCamera`, `setTarget`, `setDip`, and `setZoomed` manipulate a supplied live `IGI::HumanView`. `eye`, `forward`, and `matrix` read that same live view into caller-owned storage. Obtain the view from a verified game callback/owner before use; these methods never manufacture pointers.
 

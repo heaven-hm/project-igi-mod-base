@@ -32,6 +32,10 @@ assert set(assigned_categories.values()) == categories, (
     f"got {set(assigned_categories.values())}"
 )
 
+assert "const int mode = active ? 3 : 1;" in HELPERS, (
+    "the retail camera path uses mode 1 for first person and mode 3 for third person"
+)
+
 # weapon_pickup is intentionally resolved by the Heaven adapter so it can bind
 # the selected retail weapon symbol and ammo value together.
 special_routes = {"weapon_pickup"}
