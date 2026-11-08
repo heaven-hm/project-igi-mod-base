@@ -1,77 +1,53 @@
-# Demo menus
+# Project I.G.I. real mod menus
 
-## Branch Architecture
-
-- **`develop` branch**: Dedicated to the native in-game menu (`demos/internal/`), rendered by Project I.G.I.'s retail QVM `MenuManager` and game-thread runtime.
-- **`feature/imgui-mod` branch**: Dedicated to the Dear ImGui external overlay mod menu (`demos/external/`), rendered via Direct3D 7 using [AndenDev/D3D7Imgui](https://github.com/AndenDev/D3D7Imgui).
-
-## Internal Menus (`demos/internal/`)
-
-The `internal/` directory contains basic, simple and advanced in-game menus. Their shared host lives in `src/mod_base/menu_host.cpp`. Build the Windows x86 targets:
-- `igi_basic_mod_menu` -> `binaries/igi-basic-mod-internal.dll`
-- `igi_simple_mod_menu` -> `binaries/igi-simple-mod-internal.dll`
-- `igi_advanced_mod_menu` -> `binaries/igi-advanced-mod-internal.dll`
-
-## External Menus (`demos/external/` on `feature/imgui-mod`)
-
-On the `feature/imgui-mod` branch, `demos/external/` implements matching Dear ImGui Direct3D 7 mod menus sharing the same configuration and native action bindings. Build the Windows x86 targets:
-- `igi_basic_mod_menu_external` -> `binaries/igi-basic-mod-external.dll`
-- `igi_simple_mod_menu_external` -> `binaries/igi-simple-mod-external.dll`
-- `igi_advanced_mod_menu_external` -> `binaries/igi-advanced-mod-external.dll`
+`demos/heaven/` is the production gameplay menu: `igi_heaven_mod_menu` builds the retail-QVM internal menu and `igi_heaven_mod_menu_external` builds the Direct3D 7 ImGui menu. Both are Windows x86 DLLs and share the same native-backed actions. Build outputs remain in `build-win32-release/`; repository `binaries/` is intentionally unused.
 
 ## Public helper API
 
-Public gameplay helpers are declared in `demos/helpers/menu_helpers.hpp` and
-implemented only in `demos/helpers/menu_helpers.cpp`. Demo sources call this
-API; they do not define their own gameplay-helper functions or write game
-memory directly. Every helper must be called from the game's frame/menu
-callback through the supplied `igi::Runtime`.
+All public helpers live in `demos/helpers/menu_helpers.hpp`, with their only implementation in `demos/helpers/menu_helpers.cpp`. Construct a helper with the `igi::Runtime` passed to a game-frame/menu callback. A helper returns `false` or `std::nullopt` when it is not executing on the live game callback thread, the game is inactive, or a required retail object is unavailable. Do not call these methods from a DLL worker thread.
 
-The stable public surface is:
+### PlayerHelpers
 
-- `executeMenuNativeAction(config, runtime, item, value)` adapts a configured
-  generic menu item to the verified helper/native path.
-- `changeLevel(runtime, levelId)` selects retail missions 1 through 14.
-- `setWeather(runtime, "Off" | "Rain" | "Snow")` manages the retail
-  `RainEffect` task.
-- `setFps(runtime, "30" | "60" | "120")` sets the retail frame cap.
-- `enableUnlimitedAmmo(runtime)` enables the game's one-way unlimited-ammo
-  native.
-- `pickupPlayerWeapon(runtime, weaponId, ammo)` resolves a retail
-  `WEAPON_ID_*` symbol and gives the local player that weapon.
-- `cyclePlayerWeapon(runtime, force)` and
-  `requestPlayerWeaponAnimation(runtime, animationId)` issue the matching
-  player-controller requests. `force` and `animationId` must come from
-  verified weapon/mod data; the helpers do not invent values.
-- `restorePlayerVisualFeedback(runtime)` clears the player's retail hit/flash
-  overlays.
-- `setPlayerInputEnabled(runtime, enabled)` and
-  `setPlayerLookEnabled(runtime, enabled)` control the local human player.
-- `setMusicVolume(runtime, volume)` and `setSfxVolume(runtime, volume)` clamp
-  a slider value to `0.0F..1.0F` before calling the audio natives.
-- `logFlowDiagnostics(runtime)` writes retail FPS/frame/render counters to the
-  mod log.
-- `logPlayerState(runtime)` logs and displays the local player's verified team
-  and life state.
-- `setPlayerThirdPersonView(runtime, active)` switches between retail camera
-  modes 1 and 2. `isThirdPersonActive()` reports the last mode selected through
-  this helper.
-- `renderThirdPersonCrosshair()` is for the display render callback. It returns
-  `true` only when it issued the verified retail status-screen sprite draw.
+`moveScale`, `state`, `team`, `index`, `isDead`, `isCrouching`, `isActive`, and `isPlayer` query the local retail player through the corresponding `IGI::PLAYER` and `IGI::HUMAN` natives. Use their optional result to populate a HUD/status view; do not treat an empty result as a game value.
 
-For example, a demo action should use helpers rather than inline native chains:
+`setInputEnabled` and `setLookEnabled` lock or unlock the local human’s retail controls. Use them for a temporary mod state and always restore both controls before closing that state.
 
-```cpp
-if (item.id == "view") {
-    (void)igi::setPlayerThirdPersonView(runtime, value == "Third Person");
-} else if (item.id == "sfx") {
-    const float volume = value == "Mute" ? 0.0F : 1.0F;
-    (void)igi::setSfxVolume(runtime, volume);
-}
-```
+`startAction`, `checkDeath`, and `sendPosition` dispatch the matching player-controller operation. Use only values and timings already validated by the game’s own action data; these methods deliberately do not invent action IDs.
 
-`isThirdPersonActive()` intentionally tracks helper-owned camera transitions;
-it does not read an undocumented camera-memory offset. The crosshair renderer
-uses the retail status-screen sprite path observed in IGI 1, but live rendering
-still requires a real Windows x86 game session; a DLL build or emulator alone
-does not prove on-screen visibility.
+`restoreVisualFeedback` removes the retail hit/flash overlays. `setFlagD44`, `clearFlagD44`, `setFlagD68`, and `clearFlagD68` expose the named player-controller flag natives for an advanced game-thread mod that has a verified reason to change them.
+
+### WeaponHelpers
+
+`pickup(weaponId, ammo)` resolves a retail `WEAPON_ID_*` symbol and gives it to the local player; `enableUnlimitedAmmo()` calls the retail unlimited-ammo behavior; `cycle(force)`, `selectCategory()`, `setAnimation(animation)`, and `requestAnimation(animation)` invoke the player’s verified weapon controls. Use these for visible weapon gameplay effects, with IDs from the retail data rather than guessed constants.
+
+`hasAmmo(task)` and `type(task)` inspect an existing retail weapon task. `fireEvent`, `typeEvent`, `triggerEvent`, `stateEvent`, and `moveEvent` return the game’s weapon event identifiers, for use only by code already handling the matching weapon task/event path.
+
+### CameraHelpers
+
+`setViewMode(mode)` calls the retail `Human_ViewCam` setter for the local player; use the game’s camera mode values (the Heaven menu exposes first- and third-person). There is intentionally no `isThirdPersonActive()` helper: the retail catalog currently verifies a setter, not a safe state getter.
+
+`setWeaponTarget`, `setWeaponAngles`, `setCamera`, `setTarget`, `setDip`, and `setZoomed` manipulate a supplied live `IGI::HumanView`. `eye`, `forward`, and `matrix` read that same live view into caller-owned storage. Obtain the view from a verified game callback/owner before use; these methods never manufacture pointers.
+
+The old third-person crosshair API is deliberately absent. It had a helper-owned atomic flag rather than a retail state query, so it could claim a mode that the game had not selected. It will return only after the retail draw predicate and sprite ownership are independently recovered and live-tested on Windows x86.
+
+### WorldHelpers
+
+`changeLevel(levelId)` selects retail missions 1 through 14 through the menu/game task lifecycle, `restartMission()` invokes the retail current-mission restart path, and `setWeather("Off" | "Rain" | "Snow")` creates or removes the retail `RainEffect` task. Use these as game-thread menu actions; level changes clean up the injected menu before a level teardown.
+
+`setPaused`, `isPaused`, `refreshDisplay`, and `setFrameCap` operate on verified game/display natives. `event`, `flowFps`, `flowFrames`, `flowRenders`, `taskCount`, and `logFlowDiagnostics` provide current game counters for a real mod status page.
+
+### VehicleHelpers
+
+`carControlInfo`, `carFrame`, `carLight`, `carMountedGun`, `carGunnerPose`, and `carTrackFactor` read data from a supplied live `IGI::Car`. `heliDoor`, `heliControlInfo`, `heliStateSize`, `heliConfigSize`, and `heliSoundInfo` do the corresponding operation for supplied live helicopter/task objects. These are public for vehicle mods that already obtain a vehicle from a verified retail task path; the Heaven menu does not fake a “nearest vehicle” selector.
+
+### AiHelpers
+
+`AiHelpers` forwards the verified retail AI script natives: view/alarm range and alpha/gamma setters, event priority, invulnerability, instant death, death animation, alarm trigger/control/access, current event type, and random value. Each method takes an `AiScriptContext` supplied by a real IGI script callback (`out`, `data`, and `args`); it is not valid to fabricate this context from a menu button.
+
+### AudioHelpers and menu adapter
+
+`setMusicVolume` and `setSfxVolume` clamp a user volume to `0.0F..1.0F` and call the retail audio natives. `executeMenuNativeAction(config, runtime, item, value)` is the single adapter used by the internal and external menus; it routes only configured menu actions to these helpers.
+
+## Safe unload
+
+Never force-eject a loaded mod DLL. Build `igi_injector` and request a coordinated unload with `IGI-Injector.exe -p <igi-pid> -i <absolute-dll-path> -e`. The DLL first removes its game-thread hooks, menu callbacks, and ImGui/QVM resources; only its own host thread then calls `FreeLibraryAndExitThread`. `run-igi-wine.sh` supports the same path with `IGI_SAFE_EJECT=true`.

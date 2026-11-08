@@ -16,6 +16,9 @@ if (!catalogue.add({0x00416110, "Game_SetRaining", "IGI-RE", "entry",
 if (!catalogue.add({0x00416010, "Game_SetDisplayMode", "IGI-RE", "entry",
                     "void Game_SetDisplayMode(void)", NativeVerification::Exposed}))
     return false;
+if (!catalogue.add({0x00416fe0, "Game_Restart", "IGI-RE", "entry", "void Game_Restart(void)",
+                    NativeVerification::Exposed}))
+    return false;
 if (!catalogue.add({0x004167d0, "Game_GetEvent0", "IGI-RE", "entry", "uint8_t Game_GetEvent0(void)",
                     NativeVerification::Exposed}))
     return false;

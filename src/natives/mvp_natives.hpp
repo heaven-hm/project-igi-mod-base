@@ -51,6 +51,7 @@ inline constexpr std::uint32_t FRAMES_SET = 0x00402820;
 inline constexpr std::uint32_t GAME_SET_RAINING = 0x00416110;
 inline constexpr std::uint32_t HUMAN_PLAYER_SET_UNLIMITED_AMMO = 0x00410360;
 inline constexpr std::uint32_t GAME_SET_DISPLAY_MODE = 0x00416010;
+inline constexpr std::uint32_t GAME_RESTART = 0x00416FE0;
 inline constexpr std::uint32_t MUSIC_SET_VOLUME = 0x00495e70;
 inline constexpr std::uint32_t GAME_GET_EVENT0 = 0x004167d0;
 inline constexpr std::uint32_t GAME_GET_EVENT1 = 0x004167e0;
@@ -368,6 +369,7 @@ NATIVE_DECL StatusMessage *STATUS_MESSAGE_SHOW(void *owner, const char *text,
 namespace GAME {
 NATIVE_DECL void SET_RAINING(const char *weather);
 NATIVE_DECL void SET_DISPLAY_MODE();
+NATIVE_DECL void RESTART();
 NATIVE_DECL uint8_t GET_EVENT0();
 NATIVE_DECL uint8_t GET_EVENT1();
 NATIVE_DECL uint8_t GET_EVENT2();

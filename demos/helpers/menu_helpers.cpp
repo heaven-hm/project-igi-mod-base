@@ -9,7 +9,6 @@
 #include "ui/menu_script.hpp"
 
 #include <algorithm>
-#include <atomic>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -21,14 +20,12 @@ static bool executeMenuCommandFor(IGI::Task *manager, std::string_view commandSc
 static bool requireLiveGameThread(Runtime &runtime);
 static bool refreshLiveMenu(Runtime &runtime, std::string_view effect);
 static bool executeMenuCommand(std::string_view commandScript);
-static void setThirdPersonView(bool active);
 
 namespace {
 constexpr int kModPrecipitationTaskId = 4095;
 
 IGI::Game *g_precipitationGame = nullptr;
 bool g_precipitationActive = false;
-std::atomic<bool> g_thirdPersonActive{false};
 
 std::uint16_t findRainEffectType() {
 #if defined(_WIN32)
@@ -123,6 +120,12 @@ static bool requireLiveGameThread(Runtime &runtime) {
         return true;
     log(LogLevel::Error, "live menu action rejected: runtime/game thread unavailable");
     return false;
+}
+
+static IGI::HumanPlayer *localPlayer(Runtime &runtime) {
+    if (!requireLiveGameThread(runtime))
+        return nullptr;
+    return reinterpret_cast<IGI::HumanPlayer *>(IGI::GAME::GET_PLAYER(0));
 }
 
 static bool refreshLiveMenu(Runtime &runtime, std::string_view effect) {
@@ -349,7 +352,6 @@ bool setPlayerThirdPersonView(Runtime &runtime, bool active) {
         return false;
     const int mode = active ? 2 : 1;
     IGI::HUMAN::VIEW_CAM(reinterpret_cast<IGI::Human *>(player), mode);
-    setThirdPersonView(active);
     log(LogLevel::Info,
         std::string("camera view set to ") + (active ? "third person" : "first person"));
     (void)refreshLiveMenu(runtime, "camera view");
@@ -373,6 +375,14 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
         setFps(runtime, value);
     } else if (id == "ammo" || action.find("UnlimitedAmmo") != std::string::npos) {
         enableUnlimitedAmmo(runtime);
+    } else if (id == "weapon_cycle") {
+        WeaponHelpers(runtime).cycle(0);
+    } else if (id == "input") {
+        PlayerHelpers(runtime).setInputEnabled(value == "Enabled");
+    } else if (id == "look") {
+        PlayerHelpers(runtime).setLookEnabled(value == "Enabled");
+    } else if (id == "pause") {
+        WorldHelpers(runtime).setPaused(value == "Paused");
     } else if (id == "music" || action.find("MusicVolume") != std::string::npos) {
         float volume = 1.0F;
         if (value == "mute" || value == "Mute")
@@ -402,7 +412,10 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
                 levelNum = 1;
             }
         }
-        runtime.scheduler().enqueueOnce([&runtime, levelNum] { changeLevel(runtime, levelNum); });
+        runtime.scheduler().enqueueOnce(
+            [&runtime, levelNum] { WorldHelpers(runtime).changeLevel(levelNum); });
+    } else if (id == "restart_mission") {
+        WorldHelpers(runtime).restartMission();
     } else if (id == "display" || action.find("RefreshDisplay") != std::string::npos) {
         IGI::GAME::SET_DISPLAY_MODE();
         log(LogLevel::Info, "display mode refreshed");
@@ -493,85 +506,365 @@ bool changeLevel(Runtime &runtime, int levelId) {
     return true;
 }
 
-static void setThirdPersonView(bool active) {
-    g_thirdPersonActive.store(active, std::memory_order_release);
+bool PlayerHelpers::setInputEnabled(bool enabled) const {
+    return setPlayerInputEnabled(runtime_, enabled);
 }
-
-bool isThirdPersonActive() {
-    return g_thirdPersonActive.load(std::memory_order_acquire);
+bool PlayerHelpers::setLookEnabled(bool enabled) const {
+    return setPlayerLookEnabled(runtime_, enabled);
 }
-
-bool renderThirdPersonCrosshair() {
-#if defined(_WIN32)
-    if (!isThirdPersonActive())
+bool PlayerHelpers::checkDeath() const {
+    auto *p = localPlayer(runtime_);
+    if (!p)
         return false;
-
-    auto *game = IGI::GAME::GET();
-    if (!game)
-        return false;
-
-    if (IGI::GAME::IS_PAUSED && IGI::GAME::IS_PAUSED())
-        return false;
-
-    auto *player = IGI::GAME::GET_PLAYER(0);
-    if (!player)
-        return false;
-
-    using StatusScreenGetFn = void *(__cdecl *)();
-    const auto statusScreenGet =
-        reinterpret_cast<StatusScreenGetFn>(igi::re::HASH::StatusScreen_Get);
-    if (!statusScreenGet)
-        return false;
-
-    auto *status = statusScreenGet();
-    if (!status)
-        return false;
-
-    void *cross = reinterpret_cast<char *>(status) + 0x74;
-
-    using DisplayGetModeFn = int *(__cdecl *)();
-    const auto displayGetMode = reinterpret_cast<DisplayGetModeFn>(igi::re::HASH::Display_GetMode);
-    if (!displayGetMode)
-        return false;
-
-    auto *mode = displayGetMode();
-    if (!mode)
-        return false;
-
-    const int width = mode[1];
-    const int height = mode[2];
-    if (width <= 0 || height <= 0)
-        return false;
-
-    using SpriteDimFn = int(__cdecl *)(void *);
-    const auto spriteWidth = reinterpret_cast<SpriteDimFn>(igi::re::HASH::Sprite_Width);
-    const auto spriteHeight = reinterpret_cast<SpriteDimFn>(igi::re::HASH::Sprite_Height);
-    if (!spriteWidth || !spriteHeight)
-        return false;
-
-    const int sw = spriteWidth(cross);
-    const int sh = spriteHeight(cross);
-    if (sw <= 0 || sh <= 0)
-        return false;
-
-    const float cx = static_cast<float>(width) * 0.5f;
-    const float cy = static_cast<float>(height) * 0.5f;
-    const float hw = static_cast<float>(sw) * 0.5f;
-    const float hh = static_cast<float>(sh) * 0.5f;
-
-    const float x = cx - std::round(hw);
-    const float y = cy - std::round(hh);
-    constexpr float kGray = 128.0f;
-
-    using DrawSpriteZFn =
-        void(__cdecl *)(const void *, float, float, float, float, float, int, int, int, float);
-    const auto drawSpriteZ = reinterpret_cast<DrawSpriteZFn>(igi::re::HASH::Draw_SpriteZ);
-    if (!drawSpriteZ)
-        return false;
-    drawSpriteZ(cross, x, y, kGray, kGray, kGray, 0, 0, 0, 1.0f);
+    IGI::PLAYER::CHECK_DEATH(p);
     return true;
-#else
-    return false;
-#endif
 }
+bool PlayerHelpers::sendPosition() const {
+    auto *p = localPlayer(runtime_);
+    if (!p)
+        return false;
+    IGI::PLAYER::SEND_POSITION(p);
+    return true;
+}
+bool PlayerHelpers::startAction(int action) const {
+    auto *p = localPlayer(runtime_);
+    if (!p)
+        return false;
+    IGI::PLAYER::START_ACTION(p, action);
+    return true;
+}
+bool PlayerHelpers::setFlagD44() const {
+    auto *p = localPlayer(runtime_);
+    if (!p)
+        return false;
+    IGI::PLAYER::SET_FLAG_D44(p);
+    return true;
+}
+bool PlayerHelpers::clearFlagD44() const {
+    auto *p = localPlayer(runtime_);
+    if (!p)
+        return false;
+    IGI::PLAYER::CLEAR_FLAG_D44(p);
+    return true;
+}
+bool PlayerHelpers::setFlagD68() const {
+    auto *p = localPlayer(runtime_);
+    if (!p)
+        return false;
+    IGI::PLAYER::SET_FLAG_D68(p);
+    return true;
+}
+bool PlayerHelpers::clearFlagD68() const {
+    auto *p = localPlayer(runtime_);
+    if (!p)
+        return false;
+    IGI::PLAYER::CLEAR_FLAG_D68(p);
+    return true;
+}
+bool PlayerHelpers::restoreVisualFeedback() const {
+    return restorePlayerVisualFeedback(runtime_);
+}
+bool WeaponHelpers::pickup(std::string_view id, int ammo) const {
+    return pickupPlayerWeapon(runtime_, id, ammo);
+}
+bool WeaponHelpers::enableUnlimitedAmmo() const {
+    return igi::enableUnlimitedAmmo(runtime_);
+}
+bool WeaponHelpers::setAnimation(int animation) const {
+    auto *p = localPlayer(runtime_);
+    if (!p)
+        return false;
+    IGI::PLAYER::SET_WEAPON_ANIM(p, animation);
+    return true;
+}
+bool WeaponHelpers::requestAnimation(int animation) const {
+    return requestPlayerWeaponAnimation(runtime_, animation);
+}
+bool WeaponHelpers::cycle(int force) const {
+    return cyclePlayerWeapon(runtime_, force);
+}
+bool WeaponHelpers::selectCategory() const {
+    auto *p = localPlayer(runtime_);
+    if (!p)
+        return false;
+    IGI::PLAYER::SELECT_WEAPON_CATEGORY(p);
+    return true;
+}
+std::optional<int> WeaponHelpers::hasAmmo(void *task) const {
+    if (!requireLiveGameThread(runtime_) || !task)
+        return std::nullopt;
+    return IGI::WEAPON::HAS_AMMO(task);
+}
+IGI::WeaponType *WeaponHelpers::type(void *task) const {
+    return requireLiveGameThread(runtime_) && task ? IGI::WEAPON::WEAPON_GET_TYPE(task) : nullptr;
+}
+bool CameraHelpers::setViewMode(int mode) const {
+    return setPlayerThirdPersonView(runtime_, mode == 2);
+}
+bool WorldHelpers::changeLevel(int level) const {
+    return igi::changeLevel(runtime_, level);
+}
+bool WorldHelpers::restartMission() const {
+    if (!requireLiveGameThread(runtime_) || !IGI::GAME::GET())
+        return false;
+    IGI::GAME::RESTART();
+    log(LogLevel::Info, "mission restart requested via IGI::GAME::RESTART");
+    return true;
+}
+bool WorldHelpers::setWeather(std::string_view weather) const {
+    return igi::setWeather(runtime_, weather);
+}
+bool WorldHelpers::setFrameCap(int fps) const {
+    return igi::setFps(runtime_, std::to_string(fps));
+}
+bool WorldHelpers::logFlowDiagnostics() const {
+    return igi::logFlowDiagnostics(runtime_);
+}
+bool AudioHelpers::setMusicVolume(float volume) const {
+    return igi::setMusicVolume(runtime_, volume);
+}
+bool AudioHelpers::setSfxVolume(float volume) const {
+    return igi::setSfxVolume(runtime_, volume);
+}
+
+std::optional<float> PlayerHelpers::moveScale() const {
+    if (!requireLiveGameThread(runtime_))
+        return std::nullopt;
+    return IGI::PLAYER::GET_MOVE_SCALE();
+}
+std::optional<int> PlayerHelpers::state() const {
+    auto *p = localPlayer(runtime_);
+    return p ? std::optional<int>(IGI::HUMAN::GET_STATE(reinterpret_cast<IGI::Human *>(p)))
+             : std::nullopt;
+}
+std::optional<int> PlayerHelpers::team() const {
+    auto *p = localPlayer(runtime_);
+    return p ? std::optional<int>(IGI::HUMAN::GET_TEAM(reinterpret_cast<IGI::Human *>(p)))
+             : std::nullopt;
+}
+std::optional<int> PlayerHelpers::index() const {
+    auto *p = localPlayer(runtime_);
+    return p ? std::optional<int>(IGI::HUMAN::GET_INDEX(reinterpret_cast<IGI::Human *>(p)))
+             : std::nullopt;
+}
+std::optional<bool> PlayerHelpers::isDead() const {
+    auto *p = localPlayer(runtime_);
+    return p ? std::optional<bool>(IGI::HUMAN::IS_DEAD(reinterpret_cast<IGI::Human *>(p)) != 0)
+             : std::nullopt;
+}
+std::optional<bool> PlayerHelpers::isCrouching() const {
+    auto *p = localPlayer(runtime_);
+    return p ? std::optional<bool>(IGI::HUMAN::IS_CROUCHING(reinterpret_cast<IGI::Human *>(p)) != 0)
+             : std::nullopt;
+}
+std::optional<bool> PlayerHelpers::isActive() const {
+    auto *p = localPlayer(runtime_);
+    return p ? std::optional<bool>(IGI::HUMAN::IS_ACTIVE(reinterpret_cast<IGI::Human *>(p)) != 0)
+             : std::nullopt;
+}
+std::optional<bool> PlayerHelpers::isPlayer() const {
+    auto *p = localPlayer(runtime_);
+    return p ? std::optional<bool>(IGI::HUMAN::IS_PLAYER(reinterpret_cast<IGI::Human *>(p)) != 0)
+             : std::nullopt;
+}
+std::optional<unsigned> WeaponHelpers::fireEvent() const {
+    return requireLiveGameThread(runtime_) ? std::optional<unsigned>(IGI::WEAPON::GET_FIRE_EVENT())
+                                           : std::nullopt;
+}
+std::optional<unsigned> WeaponHelpers::typeEvent() const {
+    return requireLiveGameThread(runtime_) ? std::optional<unsigned>(IGI::WEAPON::GET_TYPE_EVENT())
+                                           : std::nullopt;
+}
+std::optional<bool> WeaponHelpers::triggerEvent() const {
+    return requireLiveGameThread(runtime_)
+               ? std::optional<bool>(IGI::WEAPON::GET_TRIGGER_EVENT() != 0)
+               : std::nullopt;
+}
+std::optional<bool> WeaponHelpers::stateEvent() const {
+    return requireLiveGameThread(runtime_)
+               ? std::optional<bool>(IGI::WEAPON::GET_STATE_EVENT() != 0)
+               : std::nullopt;
+}
+std::optional<bool> WeaponHelpers::moveEvent() const {
+    return requireLiveGameThread(runtime_) ? std::optional<bool>(IGI::WEAPON::GET_MOVE_EVENT() != 0)
+                                           : std::nullopt;
+}
+bool WorldHelpers::setPaused(bool paused) const {
+    if (!requireLiveGameThread(runtime_))
+        return false;
+    IGI::GAME::SET_PAUSED(paused ? 1 : 0);
+    return true;
+}
+std::optional<bool> WorldHelpers::isPaused() const {
+    return requireLiveGameThread(runtime_) ? std::optional<bool>(IGI::GAME::IS_PAUSED() != 0)
+                                           : std::nullopt;
+}
+bool WorldHelpers::refreshDisplay() const {
+    if (!requireLiveGameThread(runtime_))
+        return false;
+    IGI::GAME::SET_DISPLAY_MODE();
+    return true;
+}
+std::optional<unsigned> WorldHelpers::event(int i) const {
+    if (!requireLiveGameThread(runtime_) || i < 0 || i > 3)
+        return std::nullopt;
+    const unsigned e[] = {IGI::GAME::GET_EVENT0(), IGI::GAME::GET_EVENT1(), IGI::GAME::GET_EVENT2(),
+                          IGI::GAME::GET_EVENT3()};
+    return e[i];
+}
+std::optional<int> WorldHelpers::flowFps() const {
+    return requireLiveGameThread(runtime_) ? std::optional<int>(IGI::OTHER::FLOW_GET_FPS())
+                                           : std::nullopt;
+}
+std::optional<int> WorldHelpers::flowFrames() const {
+    return requireLiveGameThread(runtime_) ? std::optional<int>(IGI::OTHER::FLOW_GET_FRAMES())
+                                           : std::nullopt;
+}
+std::optional<int> WorldHelpers::flowRenders() const {
+    return requireLiveGameThread(runtime_) ? std::optional<int>(IGI::OTHER::FLOW_GET_RENDERS())
+                                           : std::nullopt;
+}
+std::optional<int> WorldHelpers::taskCount() const {
+    return requireLiveGameThread(runtime_) ? std::optional<int>(IGI::TASK::GET_COUNT())
+                                           : std::nullopt;
+}
+bool CameraHelpers::setWeaponTarget(IGI::HumanView *v, float p, float y, float ps, float ys) const {
+    if (!requireLiveGameThread(runtime_) || !v)
+        return false;
+    IGI::CAMERA::SET_WEAPON_TARGET(v, p, y, ps, ys);
+    return true;
+}
+bool CameraHelpers::setWeaponAngles(IGI::HumanView *v, float p, float y) const {
+    if (!requireLiveGameThread(runtime_) || !v)
+        return false;
+    IGI::CAMERA::SET_WEAPON_ANGLES(v, p, y);
+    return true;
+}
+bool CameraHelpers::setCamera(IGI::HumanView *v, const double *position,
+                              const IGI::Matrix *rotation) const {
+    if (!requireLiveGameThread(runtime_) || !v || !position || !rotation)
+        return false;
+    IGI::CAMERA::SET_CAMERA(v, position, rotation);
+    return true;
+}
+bool CameraHelpers::setTarget(IGI::HumanView *v, const int *target, bool enabled) const {
+    if (!requireLiveGameThread(runtime_) || !v || !target)
+        return false;
+    IGI::CAMERA::SET_TARGET(v, target, enabled ? 1 : 0);
+    return true;
+}
+bool CameraHelpers::setDip(IGI::HumanView *v, float d) const {
+    if (!requireLiveGameThread(runtime_) || !v)
+        return false;
+    IGI::CAMERA::SET_DIP(v, d);
+    return true;
+}
+bool CameraHelpers::setZoomed(IGI::HumanView *v) const {
+    if (!requireLiveGameThread(runtime_) || !v)
+        return false;
+    IGI::CAMERA::SET_ZOOMED(v);
+    return true;
+}
+bool CameraHelpers::eye(IGI::HumanView *v, double *out) const {
+    if (!requireLiveGameThread(runtime_) || !v || !out)
+        return false;
+    IGI::CAMERA::GET_EYE(out, v);
+    return true;
+}
+bool CameraHelpers::forward(IGI::HumanView *v, float *out) const {
+    if (!requireLiveGameThread(runtime_) || !v || !out)
+        return false;
+    IGI::CAMERA::GET_FORWARD(out, v);
+    return true;
+}
+bool CameraHelpers::matrix(IGI::HumanView *v, IGI::Matrix *out) const {
+    if (!requireLiveGameThread(runtime_) || !v || !out)
+        return false;
+    IGI::CAMERA::GET_MATRIX(out, v);
+    return true;
+}
+bool VehicleHelpers::carControlInfo(IGI::Car *c, int *o) const {
+    if (!requireLiveGameThread(runtime_) || !c || !o)
+        return false;
+    IGI::VEHICLE::CAR_GET_CONTROL_INFO(c, o);
+    return true;
+}
+bool VehicleHelpers::carFrame(IGI::Car *c, void **out) const {
+    if (!requireLiveGameThread(runtime_) || !c || !out)
+        return false;
+    IGI::VEHICLE::GET_FRAME(c, out);
+    return true;
+}
+bool VehicleHelpers::carLight(IGI::Car *c, void **out) const {
+    if (!requireLiveGameThread(runtime_) || !c || !out)
+        return false;
+    IGI::VEHICLE::GET_LIGHT(c, out);
+    return true;
+}
+IGI::Task *VehicleHelpers::carMountedGun(IGI::Car *c) const {
+    return requireLiveGameThread(runtime_) && c ? IGI::VEHICLE::GET_MOUNTED_GUN(c) : nullptr;
+}
+bool VehicleHelpers::carGunnerPose(IGI::Car *c, IGI::Vec3d *position, IGI::Matrix *matrix) const {
+    if (!requireLiveGameThread(runtime_) || !c || !position || !matrix)
+        return false;
+    IGI::VEHICLE::GET_GUNNER_POS(c, position, matrix);
+    return true;
+}
+std::optional<long double> VehicleHelpers::carTrackFactor(IGI::Car *c, int j) const {
+    return requireLiveGameThread(runtime_) && c
+               ? std::optional<long double>(IGI::VEHICLE::GET_TRACK_FACTOR(c, j))
+               : std::nullopt;
+}
+IGI::Task *VehicleHelpers::heliDoor(IGI::Heli *h) const {
+    return requireLiveGameThread(runtime_) && h ? IGI::VEHICLE::FIND_DOOR(h) : nullptr;
+}
+bool VehicleHelpers::heliControlInfo(IGI::Heli *h, int *o) const {
+    if (!requireLiveGameThread(runtime_) || !h || !o)
+        return false;
+    IGI::VEHICLE::HELI_GET_CONTROL_INFO(h, o);
+    return true;
+}
+bool VehicleHelpers::heliStateSize(IGI::Heli *h, int *out) const {
+    if (!requireLiveGameThread(runtime_) || !h || !out)
+        return false;
+    IGI::VEHICLE::GET_STATE_SIZE(h, out);
+    return true;
+}
+bool VehicleHelpers::heliConfigSize(IGI::Task *task, int *out) const {
+    if (!requireLiveGameThread(runtime_) || !task || !out)
+        return false;
+    IGI::VEHICLE::GET_CONFIG_SIZE(task, out);
+    return true;
+}
+bool VehicleHelpers::heliSoundInfo(IGI::Heli *h, void **out) const {
+    if (!requireLiveGameThread(runtime_) || !h || !out)
+        return false;
+    IGI::VEHICLE::GET_SOUND_INFO(h, out);
+    return true;
+}
+#define AI_HELPER(method, native)                                                                  \
+    bool AiHelpers::method(const AiScriptContext &c) const {                                       \
+        if (!requireLiveGameThread(runtime_) || !c.out || !c.data || !c.args)                      \
+            return false;                                                                          \
+        IGI::AI::native(c.out, c.data, c.args);                                                    \
+        return true;                                                                               \
+    }
+AI_HELPER(setViewLength, SET_VIEW_LENGTH)
+AI_HELPER(setAlarmViewLength, SET_ALARM_VIEW_LENGTH)
+AI_HELPER(setViewAlpha, SET_VIEW_ALPHA)
+AI_HELPER(setViewGamma, SET_VIEW_GAMMA)
+AI_HELPER(setSecondaryViewLength, SET_SECONDARY_VIEW_LENGTH)
+AI_HELPER(setSecondaryAlarmViewLength, SET_SECONDARY_ALARM_VIEW_LENGTH)
+AI_HELPER(setSecondaryViewAlpha, SET_SECONDARY_VIEW_ALPHA)
+AI_HELPER(setSecondaryViewGamma, SET_SECONDARY_VIEW_GAMMA)
+AI_HELPER(setEventPriority, SET_EVENT_PRIORITY)
+AI_HELPER(setInvulnerability, SET_INVULNERABILITY)
+AI_HELPER(setInstantDeath, SET_INSTANT_DEATH)
+AI_HELPER(setDeathAnimation, SET_DEATH_ANIMATION)
+AI_HELPER(setAlarmTriggerId, SET_ALARM_TRIGGER_ID)
+AI_HELPER(setAlarmControlId, SET_ALARM_CONTROL_ID)
+AI_HELPER(setAlarmAccess, SET_ALARM_ACCESS)
+AI_HELPER(currentEventType, GET_CURRENT_EVENT_TYPE)
+AI_HELPER(randomValue, GET_RANDOM_VALUE)
+#undef AI_HELPER
 } // namespace igi

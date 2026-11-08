@@ -86,6 +86,8 @@ case "$target" in
     igi_simple_mod_menu) artifact=${IGI_DLL_NAME:-igi-simple-mod-internal.dll} ;;
     igi_basic_mod_menu) artifact=${IGI_DLL_NAME:-igi-basic-mod-internal.dll} ;;
     igi_advanced_mod_menu_external) artifact=${IGI_DLL_NAME:-igi-advanced-mod-external.dll} ;;
+    igi_heaven_mod_menu) artifact=${IGI_DLL_NAME:-igi-heaven-mod-internal.dll} ;;
+    igi_heaven_mod_menu_external) artifact=${IGI_DLL_NAME:-igi-heaven-mod-external.dll} ;;
     igi_simple_mod_menu_external) artifact=${IGI_DLL_NAME:-igi-simple-mod-external.dll} ;;
     igi_basic_mod_menu_external) artifact=${IGI_DLL_NAME:-igi-basic-mod-external.dll} ;;
     igi_injector) artifact=IGI-Injector.exe ;;

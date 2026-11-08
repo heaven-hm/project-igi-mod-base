@@ -76,6 +76,9 @@ NATIVE_DECL void SET_RAINING(const char *weather) {
 NATIVE_DECL void SET_DISPLAY_MODE() {
     return NATIVE_INVOKE<Void>(HASH::GAME_SET_DISPLAY_MODE, "void Game_SetDisplayMode(void)");
 }
+NATIVE_DECL void RESTART() {
+    return NATIVE_INVOKE<Void>(HASH::GAME_RESTART, "void Game_Restart(void)");
+}
 NATIVE_DECL uint8_t GET_EVENT0() {
     return NATIVE_INVOKE<uint8_t>(HASH::GAME_GET_EVENT0, "uint8_t Game_GetEvent0(void)");
 }
