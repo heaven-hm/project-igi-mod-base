@@ -68,5 +68,8 @@ for item_id, native_path in required_native_paths.items():
 assert 'WeaponEntry{"Binoculars", "WEAPON_ID_BINOCULARS", 0}' in HEAVEN, (
     "binocular pickup must use its retail symbol with no invented ammo count"
 )
+assert 'WeaponEntry{"Medipack", "WEAPON_ID_MEDIPACK", 50}' in HEAVEN, (
+    "medipack pickup must carry the configured 50-charge bundle"
+)
 
 print(f"PASS Heaven routes {len(ids)} production controls across {len(categories)} categories")
