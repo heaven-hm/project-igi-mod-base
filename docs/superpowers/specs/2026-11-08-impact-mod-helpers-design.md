@@ -26,10 +26,11 @@ The public classes are:
 | `AiHelpers` | Explicit-context AI script operations; no fabricated generic enemy API |
 | `AudioHelpers` | Existing audio helpers retained but secondary to gameplay helpers |
 
-The target is approximately fifty public methods across these classes. A method
-may be a query only when it exposes state needed to build or validate a mod;
-otherwise it must have a meaningful gameplay, world, weapon, vehicle, camera,
-or AI effect.
+The target is approximately fifty public methods across these classes. The
+priority order is player movement/action, weapons, enemy behavior, camera,
+mission/world flow, and vehicles. A method may be a query only when it exposes
+state needed to build or validate one of those mod features; otherwise it must
+have a meaningful gameplay effect.
 
 ## Verified-native boundary
 
@@ -46,6 +47,13 @@ This prevents calls with invented `data` or `args` pointers.
 Vehicle helpers require a typed `IGI::Car*` or `IGI::Heli*` returned from a
 verified caller/native. They do not search object memory or reinterpret a
 player pointer as a vehicle.
+
+The current verified catalog exposes AI perception, alarm, invulnerability,
+instant-death, death-animation, and event-priority operations through that
+script context. It does not expose a verified direct NPC-speed, NPC-health,
+vehicle-speed, vehicle-steering, or vehicle-health setter. Those methods are
+not invented. The public API instead makes the supported high-impact calls
+clear and leaves a documented extension point for new IGI-RE evidence.
 
 ## Camera and crosshair
 
