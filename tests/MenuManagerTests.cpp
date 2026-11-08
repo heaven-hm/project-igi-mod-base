@@ -307,4 +307,18 @@ void verifiedMenuHelperContractTest() {
     assert(helperSource.find("IGI::HUMAN::LOCK_INPUT") != std::string::npos);
     assert(helperSource.find("IGI::HUMAN::ENABLE_LOOK") != std::string::npos);
     assert(helperSource.find("IGI::AUDIO::SET_SFX_VOLUME") != std::string::npos);
+
+    const auto heavenMenu = readDemoSource("demos/heaven/heaven_menu.cpp");
+    for (const char* category : {"Weapons", "Player", "Camera", "World", "Vehicles", "AI / NPC"}) {
+        assert(heavenMenu.find(category) != std::string::npos);
+    }
+    assert(heavenMenu.find("weapon_pickup") != std::string::npos);
+    assert(heavenMenu.find("vehicle_reset") != std::string::npos);
+    assert(heavenMenu.find("vehicle_explode") != std::string::npos);
+    assert(heavenMenu.find("npc_ensure_weapon") != std::string::npos);
+
+    assert(helperSource.find("EntityHelpers::firstNpc") != std::string::npos);
+    assert(helperSource.find("VehicleHelpers::explodeCar") != std::string::npos);
+    assert(helperSource.find("NpcHelpers::ensureWeapon") != std::string::npos);
+    assert(helperSource.find("AiHelpers::removeAlarmActions") != std::string::npos);
 }
