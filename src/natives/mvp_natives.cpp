@@ -568,6 +568,9 @@ NATIVE_DECL long double GET_TRACK_FACTOR(Car *c, int joint) {
     return NATIVE_INVOKE<long double>(
         HASH::CAR_GET_TRACK_FACTOR, "long double Car_GetTrackFactor(Car *c, int joint)", c, joint);
 }
+NATIVE_DECL void CAR_EXPLODE(Car *car) {
+    return NATIVE_INVOKE<Void>(HASH::CAR_EXPLODE, "void Car_Explode(Car *car)", car);
+}
 NATIVE_DECL Task *FIND_DOOR(Heli *h) {
     return NATIVE_INVOKE<Task *>(HASH::HELI_FIND_DOOR, "Task *Heli_FindDoor(Heli *h)", h);
 }
@@ -594,6 +597,10 @@ NATIVE_DECL void GET_CONFIG_SIZE(Task *t, int *out) {
 NATIVE_DECL void GET_SOUND_INFO(Heli *h, void **out) {
     return NATIVE_INVOKE<Void>(HASH::HELI_GET_SOUND_INFO,
                                "void Heli_GetSoundInfo(Heli *h, void **out)", h, out);
+}
+NATIVE_DECL void RESET_CONTROLS(void *vehicle) {
+    return NATIVE_INVOKE<Void>(HASH::VEHICLE_RESET_CONTROLS,
+                               "void Vehicle_ResetControls(Vehicle *vehicle)", vehicle);
 }
 } // namespace VEHICLE
 namespace GRAPH {

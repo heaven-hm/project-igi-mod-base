@@ -16,6 +16,9 @@ bool configureModMenu(igi::MenuConfig &config) {
         {"fps", igi::ModMenuItemKind::List, "Frame Cap", "", {"30", "60", "120"}},
         {"display", igi::ModMenuItemKind::Action, "Refresh Display", "", {}},
         {"restart_mission", igi::ModMenuItemKind::Action, "Restart Mission", "", {}},
+        {"vehicle_reset", igi::ModMenuItemKind::Action, "Reset First Car Controls", "", {}},
+        {"vehicle_explode", igi::ModMenuItemKind::Action, "Explode First Car", "", {}},
+        {"npc_ensure_weapon", igi::ModMenuItemKind::Action, "Equip First NPC", "", {}},
         {"level",
          igi::ModMenuItemKind::List,
          "Mission",
@@ -34,6 +37,9 @@ bool configureModMenu(igi::MenuConfig &config) {
     config.items[8].category = "World";
     config.items[9].category = "World";
     config.items[10].category = "World";
+    config.items[11].category = "Vehicles";
+    config.items[12].category = "Vehicles";
+    config.items[13].category = "AI / NPC";
     return true;
 }
 

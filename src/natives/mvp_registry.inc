@@ -440,6 +440,9 @@ if (!catalogue.add({0x004304b0, "Car_GetTrackFactor", "IGI-RE", "entry",
                     "long double Car_GetTrackFactor(Car *c, int joint)",
                     NativeVerification::Exposed}))
     return false;
+if (!catalogue.add({0x0042fc40, "Car_Explode", "IGI-RE", "entry", "void Car_Explode(Car *car)",
+                    NativeVerification::Exposed}))
+    return false;
 if (!catalogue.add({0x00431ac0, "Heli_FindDoor", "IGI-RE", "entry", "Task *Heli_FindDoor(Heli *h)",
                     NativeVerification::Exposed}))
     return false;
@@ -460,6 +463,9 @@ if (!catalogue.add({0x00432f80, "Heli_GetConfigSize", "IGI-RE", "entry",
     return false;
 if (!catalogue.add({0x00433000, "Heli_GetSoundInfo", "IGI-RE", "entry",
                     "void Heli_GetSoundInfo(Heli *h, void **out)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f4600, "Vehicle_ResetControls", "IGI-RE", "entry",
+                    "void Vehicle_ResetControls(Vehicle *vehicle)", NativeVerification::Exposed}))
     return false;
 if (!catalogue.add({0x004f9200, "Graph_GetParamTable", "IGI-RE", "entry",
                     "void *Graph_GetParamTable(void)", NativeVerification::Exposed}))

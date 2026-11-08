@@ -128,6 +128,19 @@ static IGI::HumanPlayer *localPlayer(Runtime &runtime) {
     return reinterpret_cast<IGI::HumanPlayer *>(IGI::GAME::GET_PLAYER(0));
 }
 
+static IGI::Task *gameRoot(Runtime &runtime) {
+    if (!requireLiveGameThread(runtime))
+        return nullptr;
+    auto *game = IGI::GAME::GET();
+    if (!game)
+        return nullptr;
+    struct GameRootLayout {
+        std::uint8_t prefix[0x44];
+        void *root;
+    };
+    return static_cast<IGI::Task *>(static_cast<GameRootLayout *>(static_cast<void *>(game))->root);
+}
+
 static bool refreshLiveMenu(Runtime &runtime, std::string_view effect) {
     if (!requireLiveGameThread(runtime))
         return false;
@@ -416,6 +429,18 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
             [&runtime, levelNum] { WorldHelpers(runtime).changeLevel(levelNum); });
     } else if (id == "restart_mission") {
         WorldHelpers(runtime).restartMission();
+    } else if (id == "vehicle_reset") {
+        auto *car = EntityHelpers(runtime).firstCar();
+        if (!VehicleHelpers(runtime).resetControls(car))
+            log(LogLevel::Warning, "vehicle reset rejected: no live car task was found");
+    } else if (id == "vehicle_explode") {
+        auto *car = EntityHelpers(runtime).firstCar();
+        if (!VehicleHelpers(runtime).explodeCar(car))
+            log(LogLevel::Warning, "vehicle explode rejected: no live car task was found");
+    } else if (id == "npc_ensure_weapon") {
+        auto *npc = EntityHelpers(runtime).firstNpc();
+        if (!NpcHelpers(runtime).ensureWeapon(npc))
+            log(LogLevel::Warning, "NPC weapon request rejected: no live NPC task was found");
     } else if (id == "display" || action.find("RefreshDisplay") != std::string::npos) {
         IGI::GAME::SET_DISPLAY_MODE();
         log(LogLevel::Info, "display mode refreshed");
@@ -508,6 +533,37 @@ bool changeLevel(Runtime &runtime, int levelId) {
 
 bool PlayerHelpers::setInputEnabled(bool enabled) const {
     return setPlayerInputEnabled(runtime_, enabled);
+}
+IGI::Human *EntityHelpers::firstHuman() const {
+    auto *root = gameRoot(runtime_);
+    return root
+               ? reinterpret_cast<IGI::Human *>(IGI::TASK::FIND_CHILD(root, IGI::HUMAN::GET_TYPE()))
+               : nullptr;
+}
+IGI::Human *EntityHelpers::nextHuman(IGI::Human *current) const {
+    if (!requireLiveGameThread(runtime_) || !current)
+        return nullptr;
+    return reinterpret_cast<IGI::Human *>(
+        IGI::TASK::FIND_NEXT(reinterpret_cast<IGI::Task *>(current), IGI::HUMAN::GET_TYPE()));
+}
+IGI::Human *EntityHelpers::firstNpc() const {
+    for (auto *human = firstHuman(); human; human = nextHuman(human)) {
+        if (!IGI::HUMAN::IS_PLAYER(human))
+            return human;
+    }
+    return nullptr;
+}
+IGI::Car *EntityHelpers::firstCar() const {
+    auto *root = gameRoot(runtime_);
+    return root
+               ? reinterpret_cast<IGI::Car *>(IGI::TASK::FIND_CHILD(root, IGI::VEHICLE::GET_TYPE()))
+               : nullptr;
+}
+IGI::Car *EntityHelpers::nextCar(IGI::Car *current) const {
+    if (!requireLiveGameThread(runtime_) || !current)
+        return nullptr;
+    return reinterpret_cast<IGI::Car *>(
+        IGI::TASK::FIND_NEXT(reinterpret_cast<IGI::Task *>(current), IGI::VEHICLE::GET_TYPE()));
 }
 bool PlayerHelpers::setLookEnabled(bool enabled) const {
     return setPlayerLookEnabled(runtime_, enabled);
@@ -814,6 +870,24 @@ std::optional<long double> VehicleHelpers::carTrackFactor(IGI::Car *c, int j) co
     return requireLiveGameThread(runtime_) && c
                ? std::optional<long double>(IGI::VEHICLE::GET_TRACK_FACTOR(c, j))
                : std::nullopt;
+}
+bool VehicleHelpers::explodeCar(IGI::Car *car) const {
+    if (!requireLiveGameThread(runtime_) || !car)
+        return false;
+    IGI::VEHICLE::CAR_EXPLODE(car);
+    return true;
+}
+bool VehicleHelpers::resetControls(void *vehicle) const {
+    if (!requireLiveGameThread(runtime_) || !vehicle)
+        return false;
+    IGI::VEHICLE::RESET_CONTROLS(vehicle);
+    return true;
+}
+bool NpcHelpers::ensureWeapon(IGI::Human *npc) const {
+    if (!requireLiveGameThread(runtime_) || !npc || IGI::HUMAN::IS_PLAYER(npc))
+        return false;
+    IGI::SOLDIER::ENSURE_WEAPON(npc);
+    return true;
 }
 IGI::Task *VehicleHelpers::heliDoor(IGI::Heli *h) const {
     return requireLiveGameThread(runtime_) && h ? IGI::VEHICLE::FIND_DOOR(h) : nullptr;

@@ -38,11 +38,11 @@ The old third-person crosshair API is deliberately absent. It had a helper-owned
 
 ### VehicleHelpers
 
-`carControlInfo`, `carFrame`, `carLight`, `carMountedGun`, `carGunnerPose`, and `carTrackFactor` read data from a supplied live `IGI::Car`. `heliDoor`, `heliControlInfo`, `heliStateSize`, `heliConfigSize`, and `heliSoundInfo` do the corresponding operation for supplied live helicopter/task objects. These are public for vehicle mods that already obtain a vehicle from a verified retail task path; the Heaven menu does not fake a “nearest vehicle” selector.
+`EntityHelpers::firstHuman`, `nextHuman`, `firstCar`, and `nextCar` resolve live retail task objects by their registered task type; a null result means the active level has none. `carControlInfo`, `carFrame`, `carLight`, `carMountedGun`, `carGunnerPose`, and `carTrackFactor` read a supplied live `IGI::Car`; `resetControls` and `explodeCar` perform the corresponding verified vehicle operation. `heliDoor`, `heliControlInfo`, `heliStateSize`, `heliConfigSize`, and `heliSoundInfo` operate on supplied live helicopter/task objects. Heaven uses `firstCar` for its visible vehicle actions and reports a failure instead of manufacturing a target when the level has no car.
 
 ### AiHelpers
 
-`AiHelpers` forwards the verified retail AI script natives: view/alarm range and alpha/gamma setters, event priority, invulnerability, instant death, death animation, alarm trigger/control/access, current event type, and random value. Each method takes an `AiScriptContext` supplied by a real IGI script callback (`out`, `data`, and `args`); it is not valid to fabricate this context from a menu button.
+`NpcHelpers::ensureWeapon` invokes the retail soldier weapon-creation path for a supplied non-player human. Heaven resolves the first real NPC before it calls this method and rejects the action if the level has none. `AiHelpers` forwards the verified retail AI script natives: view/alarm range and alpha/gamma setters, event priority, invulnerability, instant death, death animation, alarm trigger/control/access, current event type, and random value. Each method takes an `AiScriptContext` supplied by a real IGI script callback (`out`, `data`, and `args`); it is not valid to fabricate this context from a menu button.
 
 ### AudioHelpers and menu adapter
 

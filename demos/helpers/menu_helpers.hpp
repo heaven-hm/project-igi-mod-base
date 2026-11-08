@@ -15,6 +15,19 @@ struct AiScriptContext {
     void *args;
 };
 
+class EntityHelpers {
+  public:
+    explicit EntityHelpers(Runtime &runtime) : runtime_(runtime) {}
+    IGI::Human *firstHuman() const;
+    IGI::Human *nextHuman(IGI::Human *current) const;
+    IGI::Human *firstNpc() const;
+    IGI::Car *firstCar() const;
+    IGI::Car *nextCar(IGI::Car *current) const;
+
+  private:
+    Runtime &runtime_;
+};
+
 class PlayerHelpers {
   public:
     explicit PlayerHelpers(Runtime &runtime) : runtime_(runtime) {}
@@ -107,11 +120,21 @@ class VehicleHelpers {
     IGI::Task *carMountedGun(IGI::Car *car) const;
     bool carGunnerPose(IGI::Car *car, IGI::Vec3d *position, IGI::Matrix *matrix) const;
     std::optional<long double> carTrackFactor(IGI::Car *car, int joint) const;
+    bool explodeCar(IGI::Car *car) const;
+    bool resetControls(void *vehicle) const;
     IGI::Task *heliDoor(IGI::Heli *heli) const;
     bool heliControlInfo(IGI::Heli *heli, int *out) const;
     bool heliStateSize(IGI::Heli *heli, int *out) const;
     bool heliConfigSize(IGI::Task *task, int *out) const;
     bool heliSoundInfo(IGI::Heli *heli, void **out) const;
+
+  private:
+    Runtime &runtime_;
+};
+class NpcHelpers {
+  public:
+    explicit NpcHelpers(Runtime &runtime) : runtime_(runtime) {}
+    bool ensureWeapon(IGI::Human *npc) const;
 
   private:
     Runtime &runtime_;
