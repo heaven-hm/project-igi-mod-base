@@ -41,6 +41,12 @@ assert "const int mode = active ? 2 : 1;" in HELPERS, (
 assert "IGI::HUMAN::GET_CAMERA_INFO" in HELPERS, (
     "camera state must come from the retail camera-info handler, not a helper-owned cache"
 )
+assert '"void Human_SnapToGround(Human *h)"' in HELPERS, (
+    "ground recovery must refuse an unresolved native instead of reporting a false success"
+)
+assert '"void Human_EnableCollision(Human *h)"' in HELPERS, (
+    "collision controls must refuse an unresolved native instead of reporting a false success"
+)
 
 # weapon_pickup is intentionally resolved by the Heaven adapter so it can bind
 # the selected retail weapon symbol and ammo value together.
@@ -71,17 +77,20 @@ for item_id, native_path in required_native_paths.items():
     source = HEAVEN if item_id == "weapon_pickup" else HELPERS
     assert native_path in source, f"{item_id} lacks its verified helper path"
 
-assert '"Car Target"' in HEAVEN and '"Car 8"' in HEAVEN, (
-    "Heaven must retain its selectable car target slots"
+assert '"Live Car Target"' in HEAVEN and '"Waiting for live car list"' in HEAVEN, (
+    "Heaven must render names from the active car list rather than ordinal slots"
 )
-assert '"NPC Target"' in HEAVEN and '"NPC 8"' in HEAVEN, (
-    "Heaven must retain its selectable NPC target slots"
+assert '"Live NPC Target"' in HEAVEN and '"Waiting for live NPC list"' in HEAVEN, (
+    "Heaven must render names from the active NPC list rather than ordinal slots"
 )
-assert "EntityHelpers(runtime).carAt(g_selectedCarSlot)" in HELPERS, (
-    "vehicle actions must resolve the selected live car at action time"
+assert "IGI::TASK::GET_TASK_NAME" in HELPERS and "IGI::TASK::GET_ID" in HELPERS, (
+    "live targets must use the retail task name and stable task ID natives"
 )
-assert "EntityHelpers(runtime).npcAt(g_selectedNpcSlot)" in HELPERS, (
-    "NPC actions must resolve the selected live NPC at action time"
+assert "findLiveTarget(runtime, g_selectedCarTaskId, isCarTask)" in HELPERS, (
+    "vehicle actions must resolve the selected live car by task identity at action time"
+)
+assert "findLiveTarget(runtime, g_selectedNpcTaskId, isNpcTask)" in HELPERS, (
+    "NPC actions must resolve the selected live NPC by task identity at action time"
 )
 
 assert 'WeaponEntry{"Binoculars", "WEAPON_ID_BINOCULARS", 0}' in HEAVEN, (

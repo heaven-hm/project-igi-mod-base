@@ -482,6 +482,18 @@ if (!catalogue.add({0x00463570, "Human_DisableCollision", "IGI-RE", "entry",
 if (!catalogue.add({0x00463580, "Human_EnableCollision", "IGI-RE", "entry",
                     "void Human_EnableCollision(Human *h)", NativeVerification::Exposed}))
     return false;
+if (!catalogue.add({0x004f1050, "Task_GetId", "IGI-RE", "entry", "int Task_GetId(Task *task)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f1270, "Task_GetName", "IGI-RE", "entry",
+                    "void Task_GetName(char *out, Task *task)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00463260, "Human_SnapToGround", "IGI-RE", "entry",
+                    "void Human_SnapToGround(Human *h)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004632d0, "Human_LeaveGround", "IGI-RE", "entry",
+                    "void Human_LeaveGround(Human *h)", NativeVerification::Exposed}))
+    return false;
 if (!catalogue.add({0x0045fcd0, "Human_GetHumanCameraInfoHandler", "IGI-RE", "entry",
                     "void Human_GetHumanCameraInfoHandler(Human *h, HumanCameraInfo *info)",
                     NativeVerification::Exposed}))

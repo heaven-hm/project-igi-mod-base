@@ -1197,6 +1197,13 @@ NATIVE_DECL Task *RUN_SCRIPT(Task *parent, const char *path, char insertHead) {
 NATIVE_DECL Task *FIND_BY_ID(int id) {
     return NATIVE_INVOKE<Task *>(HASH::TASK_FIND_BY_ID, "Task *Task_FindById(int id)", id);
 }
+NATIVE_DECL int GET_ID(Task *task) {
+    return NATIVE_INVOKE<int>(HASH::TASK_GET_ID, "int Task_GetId(Task *task)", task);
+}
+NATIVE_DECL void GET_TASK_NAME(char *out, Task *task) {
+    return NATIVE_INVOKE<Void>(HASH::TASK_GET_NAME, "void Task_GetName(char *out, Task *task)", out,
+                               task);
+}
 NATIVE_DECL void DELETE_TASK(Task *task) {
     NATIVE_INVOKE<void>(HASH::TASK_DELETE, "void Task_Delete(Task *task)", task);
 }
@@ -1392,7 +1399,7 @@ NATIVE_DECL int PROFILE_GET_LANGUAGE() {
 }
 } // namespace OTHER
 std::size_t NativeBindingCount() noexcept {
-    return 322;
+    return 326;
 }
 } // namespace IGI
 #undef NATIVE_INVOKE

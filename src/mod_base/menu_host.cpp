@@ -373,6 +373,10 @@ void menuFrameWork() {
                  "internal menu screen: game is paused; waiting for active gameplay");
         return;
     }
+    if (menuConfig.refreshLiveItems && menuConfig.refreshLiveItems(menuConfig, runtime) &&
+        !rebuildMenuResources()) {
+        return;
+    }
     if (!selectFreeMenuScreenId())
         return;
     igi::log(igi::LogLevel::Info,

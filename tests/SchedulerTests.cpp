@@ -239,6 +239,18 @@ int main() {
     const auto *enableCollision = exposed.findByAddress(0x00463580);
     assert(enableCollision && enableCollision->name == "Human_EnableCollision" &&
            enableCollision->signature == "void Human_EnableCollision(Human *h)");
+    const auto *snapToGround = exposed.findByAddress(0x00463260);
+    assert(snapToGround && snapToGround->name == "Human_SnapToGround" &&
+           snapToGround->signature == "void Human_SnapToGround(Human *h)");
+    const auto *leaveGround = exposed.findByAddress(0x004632d0);
+    assert(leaveGround && leaveGround->name == "Human_LeaveGround" &&
+           leaveGround->signature == "void Human_LeaveGround(Human *h)");
+    const auto *taskGetId = exposed.findByAddress(0x004f1050);
+    assert(taskGetId && taskGetId->name == "Task_GetId" &&
+           taskGetId->signature == "int Task_GetId(Task *task)");
+    const auto *taskGetName = exposed.findByAddress(0x004f1270);
+    assert(taskGetName && taskGetName->name == "Task_GetName" &&
+           taskGetName->signature == "void Task_GetName(char *out, Task *task)");
     if (!catalogueText.str().empty()) {
     assert(catalogue.load(catalogueFile));
     assert(catalogue.size() == 7068);

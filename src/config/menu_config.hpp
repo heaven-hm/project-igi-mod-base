@@ -14,12 +14,14 @@
 
 namespace igi {
 class Runtime;
+struct MenuConfig;
 
 enum class ModMenuItemKind { Action, Toggle, List, Slider };
 enum class ImGuiTheme { Dark, Light, Classic };
 
 inline constexpr std::size_t kMaxMenuListChoices = 64;
 using MenuCurrentValueReader = std::function<std::optional<std::string>(Runtime &)>;
+using MenuLiveItemRefresher = std::function<bool(MenuConfig &, Runtime &)>;
 
 struct ModMenuItemConfig {
     std::string id;
@@ -96,6 +98,9 @@ struct MenuConfig {
     // detour registers the SDK tick into the game's per-frame callback list.
     game::TickHook hook = game::TickHook::DisplayAddFrameCallback;
     std::vector<ModMenuItemConfig> items;
+    // Optional game-thread callback for a demo to replace runtime-backed list
+    // choices (for example, live task targets) before a menu is displayed.
+    MenuLiveItemRefresher refreshLiveItems;
 };
 
 // Reads the SDK-owned config file. Missing or malformed values keep the safe

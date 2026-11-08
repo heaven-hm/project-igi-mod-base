@@ -7,13 +7,20 @@
 #include <array>
 #include <cstddef>
 #include <optional>
+#include <string>
 #include <string_view>
+#include <vector>
 
 namespace igi {
 struct AiScriptContext {
     IGI::ScriptValue *out;
     void *data;
     void *args;
+};
+
+struct LiveTarget {
+    int taskId = -1;
+    std::string name;
 };
 
 class EntityHelpers {
@@ -28,6 +35,8 @@ class EntityHelpers {
     IGI::Car *nextCar(IGI::Car *current) const;
     IGI::Task *firstVehicle() const;
     IGI::Task *nextVehicle(IGI::Task *current) const;
+    std::vector<LiveTarget> npcTargets() const;
+    std::vector<LiveTarget> carTargets() const;
     bool moveHuman(IGI::Human *human, const std::array<double, 3> &position) const;
     bool setHumanYaw(IGI::Human *human, float yaw) const;
     bool snapHumanToGround(IGI::Human *human) const;
@@ -199,6 +208,7 @@ class AudioHelpers {
 
 void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::size_t item,
                              std::string_view value);
+bool refreshLiveTargetOptions(MenuConfig &config, Runtime &runtime);
 
 bool setWeather(Runtime &runtime, std::string_view weather);
 bool setFps(Runtime &runtime, std::string_view value);

@@ -23,13 +23,15 @@ static bool executeMenuCommandFor(IGI::Task *manager, std::string_view commandSc
 static bool requireLiveGameThread(Runtime &runtime);
 static bool refreshLiveMenu(Runtime &runtime, std::string_view effect);
 static bool executeMenuCommand(std::string_view commandScript);
+static bool isNpcTask(IGI::Task *task);
+static bool isCarTask(IGI::Task *task);
 
 namespace {
 constexpr int kModPrecipitationTaskId = 4095;
-constexpr std::size_t kMaxTargetSlots = 8;
+constexpr std::size_t kMaxLiveTargets = kMaxMenuListChoices;
 
-std::size_t g_selectedNpcSlot = 0;
-std::size_t g_selectedCarSlot = 0;
+int g_selectedNpcTaskId = -1;
+int g_selectedCarTaskId = -1;
 
 bool isCallableNative(std::uint32_t address, std::string_view signature) {
     auto *caller = igiNativeCaller();
@@ -39,16 +41,37 @@ bool isCallableNative(std::uint32_t address, std::string_view signature) {
     return caller->resolveByAddress(address, signature, resolved) == NativeCallStatus::Success;
 }
 
-std::optional<std::size_t> targetSlot(std::string_view value, std::string_view label) {
-    if (!value.starts_with(label) || value.size() <= label.size() + 1 || value[label.size()] != ' ')
+std::optional<int> targetId(std::string_view value) {
+    constexpr std::string_view kIdPrefix = " [#";
+    const auto marker = value.rfind(kIdPrefix);
+    if (marker == std::string_view::npos || !value.ends_with(']'))
         return std::nullopt;
     int number = 0;
-    const auto suffix = value.substr(label.size() + 1);
+    const auto suffix =
+        value.substr(marker + kIdPrefix.size(), value.size() - marker - kIdPrefix.size() - 1);
     const auto [end, error] = std::from_chars(suffix.data(), suffix.data() + suffix.size(), number);
-    if (error != std::errc{} || end != suffix.data() + suffix.size() || number < 1 ||
-        number > static_cast<int>(kMaxTargetSlots))
+    if (error != std::errc{} || end != suffix.data() + suffix.size() || number < 0)
         return std::nullopt;
-    return static_cast<std::size_t>(number - 1);
+    return number;
+}
+
+std::string targetLabel(std::string name, int id) {
+    constexpr std::size_t kMaxNameLength = 30;
+    if (name.empty())
+        name = "Unnamed";
+    if (name.size() > kMaxNameLength)
+        name.resize(kMaxNameLength);
+    return name + " [#" + std::to_string(id) + "]";
+}
+
+template <typename Predicate>
+IGI::Task *findLiveTarget(Runtime &runtime, int id, Predicate &&predicate) {
+    if (!requireLiveGameThread(runtime) || id < 0)
+        return nullptr;
+    auto *task = IGI::TASK::FIND_BY_ID(id);
+    if (!task)
+        return nullptr;
+    return predicate(task) ? task : nullptr;
 }
 
 IGI::Game *g_precipitationGame = nullptr;
@@ -398,6 +421,37 @@ bool setPlayerThirdPersonView(Runtime &runtime, bool active) {
     return true;
 }
 
+bool refreshLiveTargetOptions(MenuConfig &config, Runtime &runtime) {
+    if (!requireLiveGameThread(runtime) || !IGI::GAME::GET())
+        return false;
+    const auto replaceChoices = [&config](std::string_view id,
+                                          const std::vector<LiveTarget> &targets,
+                                          std::string_view emptyLabel) {
+        const auto item = std::find_if(config.items.begin(), config.items.end(),
+                                       [id](const auto &candidate) { return candidate.id == id; });
+        if (item == config.items.end())
+            return false;
+        std::vector<std::string> choices;
+        choices.reserve(targets.size());
+        for (const auto &target : targets)
+            choices.push_back(targetLabel(target.name, target.taskId));
+        if (choices.empty())
+            choices.emplace_back(emptyLabel);
+        const bool changed = item->values != choices;
+        item->values = std::move(choices);
+        item->defaultSelection = 0;
+        return changed;
+    };
+
+    EntityHelpers entities(runtime);
+    const bool npcChanged = replaceChoices("npc_target", entities.npcTargets(), "No live NPCs");
+    const bool carChanged = replaceChoices("vehicle_target", entities.carTargets(), "No live cars");
+    if (npcChanged || carChanged) {
+        log(LogLevel::Info, "live targets refreshed from the active game task list");
+    }
+    return npcChanged || carChanged;
+}
+
 void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::size_t item,
                              std::string_view value) {
     if (item >= config.items.size())
@@ -410,16 +464,26 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
         "menu action: id=" + id + " action=" + action + " value=" + std::string(value));
 
     if (id == "npc_target") {
-        if (const auto slot = targetSlot(value, "NPC")) {
-            g_selectedNpcSlot = *slot;
-            log(LogLevel::Info, "NPC target selected: slot " + std::to_string(*slot + 1));
+        if (const auto selected = targetId(value)) {
+            auto *task = findLiveTarget(runtime, *selected, isNpcTask);
+            if (task) {
+                g_selectedNpcTaskId = *selected;
+                log(LogLevel::Info, "NPC target selected: " + std::string(value));
+            } else {
+                log(LogLevel::Warning, "NPC target selection rejected: target is no longer live");
+            }
         } else {
             log(LogLevel::Warning, "NPC target selection rejected");
         }
     } else if (id == "vehicle_target") {
-        if (const auto slot = targetSlot(value, "Car")) {
-            g_selectedCarSlot = *slot;
-            log(LogLevel::Info, "car target selected: slot " + std::to_string(*slot + 1));
+        if (const auto selected = targetId(value)) {
+            auto *task = findLiveTarget(runtime, *selected, isCarTask);
+            if (task) {
+                g_selectedCarTaskId = *selected;
+                log(LogLevel::Info, "car target selected: " + std::string(value));
+            } else {
+                log(LogLevel::Warning, "car target selection rejected: target is no longer live");
+            }
         } else {
             log(LogLevel::Warning, "car target selection rejected");
         }
@@ -477,7 +541,8 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
     } else if (id == "restart_mission") {
         WorldHelpers(runtime).restartMission();
     } else if (id == "vehicle_reset") {
-        auto *car = EntityHelpers(runtime).carAt(g_selectedCarSlot);
+        auto *car =
+            reinterpret_cast<IGI::Car *>(findLiveTarget(runtime, g_selectedCarTaskId, isCarTask));
         if (VehicleHelpers(runtime).resetCar(car)) {
             log(LogLevel::Info, "vehicle reset: restored selected car through retail control flow");
         } else {
@@ -485,7 +550,8 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
                 "vehicle reset rejected: selected car was unavailable or its native was rejected");
         }
     } else if (id == "vehicle_explode") {
-        auto *car = EntityHelpers(runtime).carAt(g_selectedCarSlot);
+        auto *car =
+            reinterpret_cast<IGI::Car *>(findLiveTarget(runtime, g_selectedCarTaskId, isCarTask));
         if (car && VehicleHelpers(runtime).explodeCar(car)) {
             log(LogLevel::Info, "vehicle explode: triggered explosion for selected car");
         } else {
@@ -505,7 +571,8 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
             throttle = 1.0F;
         else if (value == "Brake")
             brake = true;
-        auto *car = EntityHelpers(runtime).carAt(g_selectedCarSlot);
+        auto *car =
+            reinterpret_cast<IGI::Car *>(findLiveTarget(runtime, g_selectedCarTaskId, isCarTask));
         if (VehicleHelpers(runtime).driveCar(car, throttle, brake)) {
             log(LogLevel::Info, "vehicle drive: applied selected car control");
         } else {
@@ -513,32 +580,37 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
                 "vehicle drive rejected: selected car was unavailable or its native was rejected");
         }
     } else if (id == "npc_ensure_weapon") {
-        auto *npc = EntityHelpers(runtime).npcAt(g_selectedNpcSlot);
+        auto *npc =
+            reinterpret_cast<IGI::Human *>(findLiveTarget(runtime, g_selectedNpcTaskId, isNpcTask));
         if (NpcHelpers(runtime).ensureWeapon(npc))
             log(LogLevel::Info, "NPC weapon provisioned through the soldier native");
         else
             log(LogLevel::Warning, "NPC weapon request rejected: selected NPC was unavailable");
     } else if (id == "npc_reset_damage") {
-        auto *npc = EntityHelpers(runtime).npcAt(g_selectedNpcSlot);
+        auto *npc =
+            reinterpret_cast<IGI::Human *>(findLiveTarget(runtime, g_selectedNpcTaskId, isNpcTask));
         if (NpcHelpers(runtime).resetDamage(npc))
             log(LogLevel::Info, "NPC damage state reset through the human native");
         else
             log(LogLevel::Warning, "NPC damage reset rejected: selected NPC was unavailable");
     } else if (id == "npc_snap_ground") {
-        auto *npc = EntityHelpers(runtime).npcAt(g_selectedNpcSlot);
+        auto *npc =
+            reinterpret_cast<IGI::Human *>(findLiveTarget(runtime, g_selectedNpcTaskId, isNpcTask));
         if (NpcHelpers(runtime).snapToGround(npc))
             log(LogLevel::Info, "NPC snapped to ground through the human native");
         else
             log(LogLevel::Warning, "NPC ground recovery rejected: selected NPC was unavailable");
     } else if (id == "npc_collision") {
-        auto *npc = EntityHelpers(runtime).npcAt(g_selectedNpcSlot);
+        auto *npc =
+            reinterpret_cast<IGI::Human *>(findLiveTarget(runtime, g_selectedNpcTaskId, isNpcTask));
         if (NpcHelpers(runtime).setCollisionEnabled(npc, value == "Enabled")) {
             log(LogLevel::Info, "NPC collision state updated through the human native");
         } else {
             log(LogLevel::Warning, "NPC collision request rejected: selected NPC was unavailable");
         }
     } else if (id == "npc_execute") {
-        auto *npc = EntityHelpers(runtime).npcAt(g_selectedNpcSlot);
+        auto *npc =
+            reinterpret_cast<IGI::Human *>(findLiveTarget(runtime, g_selectedNpcTaskId, isNpcTask));
         if (NpcHelpers(runtime).executeSoldier(npc))
             log(LogLevel::Info, "selected soldier executed through the retail soldier flow");
         else
@@ -661,6 +733,23 @@ struct IgiTaskLayout {
     char unk1F;
 };
 #pragma pack(pop)
+
+static bool isNpcTask(IGI::Task *task) {
+    if (!task)
+        return false;
+    const auto type = reinterpret_cast<const IgiTaskLayout *>(task)->type;
+    const auto humanType = IGI::HUMAN::GET_TYPE();
+    return (type == humanType || IGI::TASK::IS_A(type, humanType) != 0) &&
+           !IGI::HUMAN::IS_PLAYER(reinterpret_cast<IGI::Human *>(task));
+}
+
+static bool isCarTask(IGI::Task *task) {
+    if (!task)
+        return false;
+    const auto type = reinterpret_cast<const IgiTaskLayout *>(task)->type;
+    const auto carType = IGI::VEHICLE::GET_TYPE();
+    return type == carType || IGI::TASK::IS_A(type, carType) != 0;
+}
 
 template <typename Predicate>
 static IGI::Task *findTaskInHierarchy(IGI::Task *root, Predicate &&pred, int depth = 10) {
@@ -808,6 +897,34 @@ IGI::Car *EntityHelpers::carAt(std::size_t slot) const {
     }
     return nullptr;
 }
+std::vector<LiveTarget> EntityHelpers::npcTargets() const {
+    std::vector<LiveTarget> targets;
+    if (!requireLiveGameThread(runtime_))
+        return targets;
+    for (int id = 0; id < 4096 && targets.size() < kMaxLiveTargets; ++id) {
+        auto *task = IGI::TASK::FIND_BY_ID(id);
+        if (!isNpcTask(task))
+            continue;
+        char name[128]{};
+        IGI::TASK::GET_TASK_NAME(name, task);
+        targets.push_back({IGI::TASK::GET_ID(task), name});
+    }
+    return targets;
+}
+std::vector<LiveTarget> EntityHelpers::carTargets() const {
+    std::vector<LiveTarget> targets;
+    if (!requireLiveGameThread(runtime_))
+        return targets;
+    for (int id = 0; id < 4096 && targets.size() < kMaxLiveTargets; ++id) {
+        auto *task = IGI::TASK::FIND_BY_ID(id);
+        if (!isCarTask(task))
+            continue;
+        char name[128]{};
+        IGI::TASK::GET_TASK_NAME(name, task);
+        targets.push_back({IGI::TASK::GET_ID(task), name});
+    }
+    return targets;
+}
 IGI::Car *EntityHelpers::nextCar(IGI::Car *current) const {
     if (!requireLiveGameThread(runtime_) || !current)
         return nullptr;
@@ -864,11 +981,15 @@ bool EntityHelpers::setHumanYaw(IGI::Human *human, float yaw) const {
 bool EntityHelpers::snapHumanToGround(IGI::Human *human) const {
     if (!requireLiveGameThread(runtime_) || !human)
         return false;
+    if (!isCallableNative(IGI::HASH::HUMAN_SNAP_TO_GROUND, "void Human_SnapToGround(Human *h)"))
+        return false;
     IGI::HUMAN::SNAP_TO_GROUND(human);
     return true;
 }
 bool EntityHelpers::leaveHumanGround(IGI::Human *human) const {
     if (!requireLiveGameThread(runtime_) || !human)
+        return false;
+    if (!isCallableNative(IGI::HASH::HUMAN_LEAVE_GROUND, "void Human_LeaveGround(Human *h)"))
         return false;
     IGI::HUMAN::LEAVE_GROUND(human);
     return true;
@@ -876,10 +997,17 @@ bool EntityHelpers::leaveHumanGround(IGI::Human *human) const {
 bool EntityHelpers::setHumanCollision(IGI::Human *human, bool enabled) const {
     if (!requireLiveGameThread(runtime_) || !human)
         return false;
-    if (enabled)
+    if (enabled) {
+        if (!isCallableNative(IGI::HASH::HUMAN_ENABLE_COLLISION,
+                              "void Human_EnableCollision(Human *h)"))
+            return false;
         IGI::HUMAN::ENABLE_COLLISION(human);
-    else
+    } else {
+        if (!isCallableNative(IGI::HASH::HUMAN_DISABLE_COLLISION,
+                              "void Human_DisableCollision(Human *h)"))
+            return false;
         IGI::HUMAN::DISABLE_COLLISION(human);
+    }
     return true;
 }
 bool PlayerHelpers::setLookEnabled(bool enabled) const {

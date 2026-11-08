@@ -45,9 +45,9 @@ bool configureModMenu(igi::MenuConfig &config) {
         {"restart_mission", igi::ModMenuItemKind::Action, "Restart Mission", "", {}},
         {"vehicle_target",
          igi::ModMenuItemKind::List,
-         "Car Target",
+         "Live Car Target",
          "",
-         {"Car 1", "Car 2", "Car 3", "Car 4", "Car 5", "Car 6", "Car 7", "Car 8"}},
+         {"Waiting for live car list"}},
         {"vehicle_reset", igi::ModMenuItemKind::Action, "Reset Selected Car", "", {}},
         {"vehicle_explode", igi::ModMenuItemKind::Action, "Explode Selected Car", "", {}},
         {"vehicle_drive",
@@ -57,9 +57,9 @@ bool configureModMenu(igi::MenuConfig &config) {
          {"Stop", "Reverse", "Quarter", "Half", "Full", "Brake"}},
         {"npc_target",
          igi::ModMenuItemKind::List,
-         "NPC Target",
+         "Live NPC Target",
          "",
-         {"NPC 1", "NPC 2", "NPC 3", "NPC 4", "NPC 5", "NPC 6", "NPC 7", "NPC 8"}},
+         {"Waiting for live NPC list"}},
         {"npc_ensure_weapon", igi::ModMenuItemKind::Action, "Equip Selected NPC", "", {}},
         {"npc_reset_damage", igi::ModMenuItemKind::Action, "Reset Selected NPC Damage", "", {}},
         {"npc_snap_ground", igi::ModMenuItemKind::Action, "Snap Selected NPC To Ground", "", {}},
@@ -105,6 +105,9 @@ bool configureModMenu(igi::MenuConfig &config) {
     config.items[20].category = "World";
     config.items[21].category = "Player";
     config.items[22].category = "Player";
+    config.refreshLiveItems = [](igi::MenuConfig &liveConfig, igi::Runtime &runtime) {
+        return igi::refreshLiveTargetOptions(liveConfig, runtime);
+    };
     return true;
 }
 

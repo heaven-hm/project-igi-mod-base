@@ -137,6 +137,20 @@ void initializeMenuStateBuffers() {
     lastStatusMessage = "Ready";
 }
 
+void refreshLiveMenuItems() {
+    if (!menuConfig.refreshLiveItems || !menuConfig.refreshLiveItems(menuConfig, runtime))
+        return;
+    for (std::size_t index = 0; index < menuConfig.items.size() && index < listSelections.size();
+         ++index) {
+        const auto &item = menuConfig.items[index];
+        if (item.kind == igi::ModMenuItemKind::List &&
+            (listSelections[index] < 0 ||
+             static_cast<std::size_t>(listSelections[index]) >= item.values.size())) {
+            listSelections[index] = 0;
+        }
+    }
+}
+
 bool parseInteger(std::string_view value, int &result) {
     char *end = nullptr;
     const std::string copied(value);
@@ -548,6 +562,7 @@ bool openImGuiMenu() {
                  "external imgui menu: IGI::GAME::GET returned null; waiting for active gameplay");
         return false;
     }
+    refreshLiveMenuItems();
     ensureEndFrameCallbackRegistered();
     if (!ensureImGuiBackend()) {
         igi::log(igi::LogLevel::Warning,
@@ -617,6 +632,8 @@ void renderImGuiModWindow() {
 
     bool keepOpen = menuVisible;
     if (ImGui::Begin(menuConfig.title.c_str(), &keepOpen, windowFlags)) {
+if ((frameCount.load(std::memory_order_relaxed) % 120U) == 0U)
+refreshLiveMenuItems();
         refreshControlValuesFromGame();
         ImGui::Text("IGI Mod Base - ImGui (Direct3D 7)");
         if (menuConfig.imgui.showFps) {

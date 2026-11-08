@@ -173,6 +173,8 @@ inline constexpr std::uint32_t LEVEL_SET_TASK_ID = 0x004f1090;
 inline constexpr std::uint32_t MENU_MANAGER_GET_TYPE = 0x00418af0;
 inline constexpr std::uint32_t SCRIPT_SET_BREAK_ENABLED = 0x004b8a10;
 inline constexpr std::uint32_t TASK_TYPE_GET_NAME = 0x00401b90;
+inline constexpr std::uint32_t TASK_GET_ID = 0x004f1050;
+inline constexpr std::uint32_t TASK_GET_NAME = 0x004f1270;
 inline constexpr std::uint32_t CONFIG_GET_SOUND_OPTIONS = 0x00404a70;
 inline constexpr std::uint32_t FLOW_GET = 0x00402880;
 inline constexpr std::uint32_t GAME_GET_EVENT7 = 0x00416830;
@@ -707,6 +709,8 @@ NATIVE_DECL ScriptValue *BOOL8_VALUE(ScriptValue *out, char *var);
 namespace TASK {
 NATIVE_DECL Task *RUN_SCRIPT(Task *parent, const char *path, char insertHead);
 NATIVE_DECL Task *FIND_BY_ID(int id);
+NATIVE_DECL int GET_ID(Task *task);
+NATIVE_DECL void GET_TASK_NAME(char *out, Task *task);
 NATIVE_DECL void DELETE_TASK(Task *task);
 NATIVE_DECL uint16_t GET_MASK(uint16_t type);
 NATIVE_DECL uint16_t GET_ROOT_TYPE();
