@@ -437,32 +437,19 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
         WorldHelpers(runtime).restartMission();
     } else if (id == "vehicle_reset") {
         auto *car = EntityHelpers(runtime).firstCar();
-        void *targetVehicle = car;
-        if (!targetVehicle)
-            targetVehicle = EntityHelpers(runtime).firstVehicle();
-        if (targetVehicle && VehicleHelpers(runtime).resetControls(targetVehicle)) {
-            log(LogLevel::Info, car ? "vehicle reset: controls reset for first car"
-                                    : "vehicle reset: controls reset for live vehicle");
+        if (VehicleHelpers(runtime).resetCar(car)) {
+            log(LogLevel::Info, "vehicle reset: restored first car through retail control flow");
         } else {
             log(LogLevel::Warning,
-                "vehicle reset rejected: no live car or vehicle task was found on current level");
+                "vehicle reset rejected: no live car task was found on current level");
         }
     } else if (id == "vehicle_explode") {
         auto *car = EntityHelpers(runtime).firstCar();
         if (car && VehicleHelpers(runtime).explodeCar(car)) {
             log(LogLevel::Info, "vehicle explode: triggered explosion for first car");
-        } else if (auto *veh = EntityHelpers(runtime).firstVehicle()) {
-            if (VehicleHelpers(runtime).explodeVehicle(veh)) {
-                log(LogLevel::Info, "vehicle explode: triggered explosion for live vehicle");
-            } else {
-                log(LogLevel::Warning,
-                    "vehicle explode rejected: vehicle found but this vehicle type cannot explode "
-                    "(only Car and Heli can explode)");
-            }
         } else {
             log(LogLevel::Warning,
-                "vehicle explode rejected: no live car or vehicle task was found on current level "
-                "(Car tasks only exist on Level 1 and Level 2 in retail campaign)");
+                "vehicle explode rejected: no live car task was found on current level");
         }
     } else if (id == "npc_ensure_weapon") {
         auto *npc = EntityHelpers(runtime).firstNpc();
@@ -1118,24 +1105,13 @@ bool VehicleHelpers::explodeCar(IGI::Car *car) const {
     IGI::VEHICLE::CAR_EXPLODE(car);
     return true;
 }
-bool VehicleHelpers::explodeVehicle(IGI::Task *vehicle) const {
-    if (!requireLiveGameThread(runtime_) || !vehicle)
+bool VehicleHelpers::resetCar(IGI::Car *car) const {
+    if (!requireLiveGameThread(runtime_) || !car)
         return false;
-    const auto type = reinterpret_cast<const IgiTaskLayout *>(vehicle)->type;
-    const auto carType = IGI::VEHICLE::GET_TYPE();
-    if (type == carType || IGI::TASK::IS_A(type, carType)) {
-        IGI::VEHICLE::CAR_EXPLODE(reinterpret_cast<IGI::Car *>(vehicle));
-        return true;
-    }
-    // Check if it's a Heli (gHeliType at 0x0053BE58)
-    const auto *heliTypePtr = reinterpret_cast<const std::uint16_t *>(0x0053BE58);
-    if (heliTypePtr && (type == *heliTypePtr || IGI::TASK::IS_A(type, *heliTypePtr))) {
-        auto *heliBytes = reinterpret_cast<char *>(vehicle);
-        heliBytes[0x750] = 1;
-        *reinterpret_cast<int *>(heliBytes + 0x754) = -1;
-        return true;
-    }
-    return false;
+    float input[4] = {0.0F, -1.0F, -2.0F, -1.0F};
+    IGI::CarControlArg reset{0, input};
+    IGI::VEHICLE::CAR_CONTROL(car, &reset);
+    return true;
 }
 bool VehicleHelpers::resetControls(void *vehicle) const {
     if (!requireLiveGameThread(runtime_) || !vehicle)

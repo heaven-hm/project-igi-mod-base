@@ -46,7 +46,7 @@ The old third-person crosshair API is deliberately absent. It had a helper-owned
 
 ### VehicleHelpers
 
-`EntityHelpers::firstHuman`, `nextHuman`, `firstCar`, and `nextCar` resolve live retail task objects by their registered task type; a null result means the active level has none. `carControlInfo`, `carFrame`, `carLight`, `carMountedGun`, `carGunnerPose`, and `carTrackFactor` read a supplied live `IGI::Car`; `resetControls` and `explodeCar` perform the corresponding verified vehicle operation. `heliDoor`, `heliControlInfo`, `heliStateSize`, `heliConfigSize`, and `heliSoundInfo` operate on supplied live helicopter/task objects. Heaven uses `firstCar` for its visible vehicle actions and reports a failure instead of manufacturing a target when the level has no car.
+`EntityHelpers::firstHuman`, `nextHuman`, `firstCar`, and `nextCar` resolve live retail task objects by their registered task type; a null result means the active level has none. `carControlInfo`, `carFrame`, `carLight`, `carMountedGun`, `carGunnerPose`, and `carTrackFactor` read a supplied live `IGI::Car`; `resetCar` invokes the car’s own reset branch through its control native, while `resetControls` and `explodeCar` perform their corresponding vehicle operations. `heliDoor`, `heliControlInfo`, `heliStateSize`, `heliConfigSize`, and `heliSoundInfo` operate on supplied live helicopter/task objects. Heaven uses `firstCar` for its visible vehicle actions and reports a failure instead of manufacturing a target when the level has no car.
 
 ### AiHelpers
 

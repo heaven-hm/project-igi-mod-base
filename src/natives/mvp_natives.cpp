@@ -577,6 +577,10 @@ NATIVE_DECL void CAR_GET_CONTROL_INFO(Car *c, int *arg) {
     return NATIVE_INVOKE<Void>(HASH::CAR_GET_CONTROL_INFO,
                                "void Car_GetControlInfo(Car *c, int *arg)", c, arg);
 }
+NATIVE_DECL void CAR_CONTROL(Car *c, CarControlArg *arg) {
+    return NATIVE_INVOKE<Void>(HASH::CAR_CONTROL, "void Car_Control(Car *o, CarControlArg *arg)", c,
+                               arg);
+}
 NATIVE_DECL void GET_FRAME(Car *c, void **out) {
     return NATIVE_INVOKE<Void>(HASH::CAR_GET_FRAME, "void Car_GetFrame(Car *c, void **out)", c,
                                out);

@@ -28,6 +28,11 @@ struct HumanCameraInfo {
     float verticalFov;
     int mode;
 };
+
+struct CarControlArg {
+    int reset;
+    float *input;
+};
 #pragma pack(pop)
 static_assert(sizeof(HumanCameraInfo) == 0x74);
 struct HumanAI;
@@ -138,6 +143,7 @@ inline constexpr std::uint32_t SOLDIER_FOOTSTEP = 0x0045a7f0;
 inline constexpr std::uint32_t WEAPON_GET_UNUSED_POINTS_EVENT = 0x00413b60;
 inline constexpr std::uint32_t HUMAN_VIEW_GET_MATRIX = 0x00465880;
 inline constexpr std::uint32_t CAR_GET_CONTROL_INFO = 0x0042f870;
+inline constexpr std::uint32_t CAR_CONTROL = 0x0042ea10;
 inline constexpr std::uint32_t GRAPH_GET_SAVE_EVENT = 0x004f9230;
 inline constexpr std::uint32_t AI_FUNCTION_SET_VIEW_GAMMA = 0x0044dd90;
 inline constexpr std::uint32_t AI_FUNCTION_REMOVE_ALARM_ACTIONS = 0x0044dbc0;
@@ -541,6 +547,7 @@ NATIVE_DECL void GET_DEF_SIZE(void *unused, int *size);
 NATIVE_DECL void CAR_GET_PARAM_TABLE(Car *o, void **out);
 NATIVE_DECL void CAR_GET_SOUND_PARAMS(Car *c, void **out);
 NATIVE_DECL void CAR_GET_CONTROL_INFO(Car *c, int *arg);
+NATIVE_DECL void CAR_CONTROL(Car *c, CarControlArg *arg);
 NATIVE_DECL void GET_FRAME(Car *c, void **out);
 NATIVE_DECL void GET_LIGHT(Car *c, void **out);
 NATIVE_DECL uint16_t GET_TYPE();

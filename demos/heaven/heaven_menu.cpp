@@ -43,7 +43,7 @@ bool configureModMenu(igi::MenuConfig &config) {
         {"fps", igi::ModMenuItemKind::List, "Frame Cap", "", {"30", "60", "120"}},
         {"display", igi::ModMenuItemKind::Action, "Refresh Display", "", {}},
         {"restart_mission", igi::ModMenuItemKind::Action, "Restart Mission", "", {}},
-        {"vehicle_reset", igi::ModMenuItemKind::Action, "Reset First Car Controls", "", {}},
+        {"vehicle_reset", igi::ModMenuItemKind::Action, "Reset First Car", "", {}},
         {"vehicle_explode", igi::ModMenuItemKind::Action, "Explode First Car", "", {}},
         {"npc_ensure_weapon", igi::ModMenuItemKind::Action, "Equip First NPC", "", {}},
         {"npc_reset_damage", igi::ModMenuItemKind::Action, "Reset First NPC Damage", "", {}},
