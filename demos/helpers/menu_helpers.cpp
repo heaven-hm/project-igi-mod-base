@@ -466,11 +466,15 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
         }
     } else if (id == "npc_ensure_weapon") {
         auto *npc = EntityHelpers(runtime).firstNpc();
-        if (!NpcHelpers(runtime).ensureWeapon(npc))
+        if (NpcHelpers(runtime).ensureWeapon(npc))
+            log(LogLevel::Info, "NPC weapon provisioned through the soldier native");
+        else
             log(LogLevel::Warning, "NPC weapon request rejected: no live NPC task was found");
     } else if (id == "npc_reset_damage") {
         auto *npc = EntityHelpers(runtime).firstNpc();
-        if (!NpcHelpers(runtime).resetDamage(npc))
+        if (NpcHelpers(runtime).resetDamage(npc))
+            log(LogLevel::Info, "NPC damage state reset through the human native");
+        else
             log(LogLevel::Warning, "NPC damage reset rejected: no live NPC task was found");
     } else if (id == "display" || action.find("RefreshDisplay") != std::string::npos) {
         IGI::GAME::SET_DISPLAY_MODE();
