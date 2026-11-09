@@ -22,11 +22,37 @@ Heaven's Mod is the flagship gameplay menu for Project I.G.I., featuring 50 veri
 
 ### Heaven Advanced Mod Menu
 
-Built for advanced experimentation and spatial manipulation (`igi-heaven-mod-advanced-internal.dll` and `igi-heaven-mod-advanced-external.dll`):
-- **Live NPC Movement**: Move selected NPCs Forward (+5m), Backward (-5m), Left (-5m), Right (+5m), Elevate (+2m), and Snap to Ground using game-thread coordinate transformations.
-- **NPC Ground States**: Toggle selected NPC between `Ground` and `Air` (levitation) via native `Human_SnapToGround` and `Human_LeaveGround`.
-- **Player Ground States**: Toggle player between `Ground` and `Air`.
-- **Helicopter Reset**: Reset selected helicopter to initial setup using retail `tick = 0` control branch.
+Built for advanced experimentation, fleet management, and spatial manipulation (`igi-heaven-mod-advanced-internal.dll` and `igi-heaven-mod-advanced-external.dll`):
+
+![Heaven Mod Advanced AI and NPC Controls](assets/heaven-mod-npc-controls.png)
+
+#### Live NPC & AI Controls
+- **Live NPC Target Selection**: Dynamically enumerates all active NPCs in the level with real-time task identifiers (e.g., `HumanSoldier_424 [#424]`).
+- **Tactical Soldier Management**: Query status and parameters, equip weapons, reset damage, and toggle collision.
+- **Behavioral Control**: Force soldier stand-down to reset alert states, or trigger instant execution via retail death state-machines.
+- **3D Spatial Movement (Heaven Advanced)**: Move selected NPCs Forward (+5m), Backward (-5m), Left (-5m), Right (+5m), Elevate (+2m), and Snap to Ground.
+- **Ground Attachment & Levitation**: Switch NPC and player between `Ground` (gravity-bound terrain probe) and `Air` (suspended levitation) via `Human_SnapToGround` and `Human_LeaveGround`.
+- **Visible 3rd-Person Crosshair**: Centered crosshair reticle rendered natively through the retail HUD sprite pipeline.
+
+![Heaven Mod Advanced Vehicle and Helicopter Controls](assets/heaven-mod-vehicle-controls.png)
+
+#### Vehicle & Helicopter Fleet Controls
+- **Live Ground Fleet Targeting**: Target active cars and tanks by task name and ID.
+- **Interactive Driving**: Send throttle, steering, and braking commands directly into the retail car physics controller.
+- **Vehicle Maintenance & Destruction**: Reset car positions and control inputs, or trigger vehicle explosions on demand.
+- **Global Fleet Commands**: Execute level-wide `Explode All Cars` or `Reset All Cars` operations across all active vehicle tasks.
+- **Live Helicopter Telemetry**: Select active helicopters (e.g., `Heli_866 [#866]`) to inspect mounted gun configs, door status, and state sizes.
+- **Helicopter Engine Reset**: Restore selected helicopters back to initial insertion parameters using the retail `tick = 0` control branch.
+
+![Heaven Mod Advanced World and Performance Controls](assets/heaven-mod-world-controls.png)
+
+#### World, Weather & Performance Controls
+- **Instant Mission Warping**: Direct mission selection covering all 14 campaign levels (Level 1 Trainyard to Level 14 Headquarters) with proper menu resource cleanup.
+- **Clean Mission Restart**: Instant mission restarts through the native engine reload flow.
+- **Dynamic Weather System**: Switch between real-time Rain, Snow, or Off by parenting the retail `RainEffect` task and broadcasting parameter change events.
+- **Decoupled Game Pause**: Toggle game freeze independently of menu visibility (`Running` / `Paused`).
+- **High-Refresh Frame Limiter**: Switch between 30, 60, 120, 144, and 240 FPS presets for fluid gameplay on modern high-refresh monitors.
+- **Real-Time Engine Telemetry**: Instant diagnostic readouts for Level Tick, Flow Counters (FPS, frames, renders), and internal Game Events.
 
 ![Simple mod menu running in Project I.G.I.](assets/simple-mod-menu.png)
 
