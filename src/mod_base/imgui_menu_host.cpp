@@ -883,6 +883,12 @@ void drawCrosshairOverlay() {
 extern "C" void __cdecl onDisplayEndFrame() noexcept {
     if (!runtime.initialized())
         return;
+    if (!IGI::GAME::GET()) {
+        // Level teardown: the Game task is gone, so no per-frame helper may run.
+        if (menuConfig.frameUpdate)
+            menuConfig.frameUpdate(runtime);
+        return;
+    }
     if (menuConfig.frameUpdate)
         menuConfig.frameUpdate(runtime);
     if (!menuVisible) {

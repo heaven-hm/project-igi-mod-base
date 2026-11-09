@@ -554,9 +554,14 @@ constexpr std::size_t kHumanViewOffset = 0x4EC;
 // HumanPlayerSM offsets (IGI-RE humanplayertypes.h): Human.sm at 0x2EC, and
 // inside HumanPlayerSM: update 0x0, states 0x4, input 0x8, prev 0xC, state 0x10.
 constexpr std::size_t kHumanSmOffset = 0x2EC;
+// HumanPlayerSM (IGI-RE humanplayertypes.h): update 0x0, states 0x4, input 0x8,
+// prev 0xC, state 0x10, run 0x14.
+constexpr std::size_t kSmStatesOffset = 0x4;
 constexpr std::size_t kSmInputOffset = 0x8;
 constexpr std::size_t kSmStateOffset = 0x10;
+constexpr std::size_t kSmRunOffset = 0x14;
 // Player body states (IGI-RE humanplayer.c): BODY_LEAN 0x2C .. BODY_FLY 0x30.
+constexpr int kBodyStateIdle = 0;
 constexpr int kBodyStateFly = 0x30;
 // Input bits (IGI-RE humanplayer.c common_input): the ten move controls start at
 // INPUT_LEFT; HumanPlayer_BodyFlyRun reads 0x20 left, 0x40 right, 0x80 forward,
@@ -588,6 +593,21 @@ int *smState(IGI::Human *human) {
     return reinterpret_cast<int *>(reinterpret_cast<std::uint8_t *>(human) + kHumanSmOffset +
                                    kSmStateOffset);
 }
+
+// Retail sm_set (IGI-RE humanplayer.c): writing the state alone does nothing -
+// the run pointer must switch to the new state's handler and the enter function
+// runs immediately (BODY_FLY enter plays the fly animation and leaves ground).
+void smGo(IGI::Human *human, int state) {
+    auto *base = reinterpret_cast<std::uint8_t *>(human) + kHumanSmOffset;
+    auto **states = *reinterpret_cast<void(***)>(base + kSmStatesOffset);
+    if (!states || !states[state])
+        return;
+    *reinterpret_cast<int *>(base + kSmStateOffset) = state;
+    *reinterpret_cast<void (**)(void)>(base + kSmRunOffset) =
+        reinterpret_cast<void (*)(void)>(states[state]);
+    using StateFn = void (*)(void *, void *);
+    reinterpret_cast<StateFn>(states[state])(base, human);
+}
 } // namespace
 
 // Retail fly mode: the player body state machine has a real BODY_FLY state
@@ -615,6 +635,10 @@ bool setFreecamEnabled(Runtime &runtime, bool enabled) {
             log(LogLevel::Info, "fly mode already active");
             return true;
         }
+        // Retail exit: BODY_FLY run clears velocity and sm_set(0). Input unlocks so
+        // the normal body controls resume.
+        (void)unlockHumanInput();
+        smGo(player, kBodyStateIdle);
         log(LogLevel::Info, "fly mode disabled: the player resumes normal body control");
         return true;
     }
@@ -622,11 +646,14 @@ bool setFreecamEnabled(Runtime &runtime, bool enabled) {
         log(LogLevel::Info, "fly mode already disabled");
         return true;
     }
-    (void)lockHumanInput();
-    *input |= 4; // movement/anim-done bit the state run expects
-    *state = kBodyStateFly;
-    log(LogLevel::Info, "fly mode enabled: the player body flies; use the game's own movement keys "
-                        "(WASD by default), Shift for 4x speed, and the menu control to disable");
+    // IMPORTANT: input stays unlocked. BODY_FLY movement comes from the same
+    // input channels the normal controls use, and HumanPlayer_InputHandler
+    // ignores keys while input is locked - locking made WASD dead.
+    (void)unlockHumanInput();
+    smGo(player, kBodyStateFly);
+    log(LogLevel::Info, "fly mode enabled: the player body flies; use the game's own movement "
+                        "keys (WASD by default), Shift for 4x speed, and the menu control to "
+                        "disable");
     return true;
 }
 
@@ -690,7 +717,7 @@ bool teleportPlayerToPosition(Runtime &runtime, const std::array<double, 3> &pos
 
 bool thirdPersonCrosshairActive(Runtime &runtime) {
     if (!g_thirdPersonCrosshairEnabled.load(std::memory_order_acquire) ||
-        !requireLiveGameThread(runtime))
+        !requireLiveGameThread(runtime) || !IGI::GAME::GET())
         return false;
     auto *player = reinterpret_cast<IGI::Human *>(IGI::GAME::GET_PLAYER(0));
     if (!player)
@@ -711,7 +738,7 @@ bool thirdPersonCrosshairActive(Runtime &runtime) {
 
 bool renderThirdPersonCrosshair(Runtime &runtime) {
     if (!g_thirdPersonCrosshairEnabled.load(std::memory_order_acquire) ||
-        !requireLiveGameThread(runtime))
+        !requireLiveGameThread(runtime) || !IGI::GAME::GET())
         return false;
     auto *player = reinterpret_cast<IGI::Human *>(IGI::GAME::GET_PLAYER(0));
     if (!player) {
@@ -1397,6 +1424,10 @@ bool changeLevel(Runtime &runtime, int levelId) {
     if (!game)
         return false;
     clearLiveTargetSelections("level change unloads the current level task list");
+    // Fly mode writes body state through the player SM; the crosshair draws
+    // through the player view. Both must be off before the Game task dies.
+    (void)setFreecamEnabled(runtime, false);
+    g_thirdPersonCrosshairEnabled.store(false, std::memory_order_release);
     (void)removePrecipitationTask();
     if (!prepareMenuForLevelChange()) {
         log(LogLevel::Error, "level change: injected menu cleanup failed");

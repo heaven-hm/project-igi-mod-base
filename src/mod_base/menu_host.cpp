@@ -168,6 +168,14 @@ void unregisterEndFrameCallback() noexcept {
 extern "C" void __cdecl onInternalDisplayEndFrame() noexcept {
     if (!runtime.initialized())
         return;
+    // A level change deletes the Game task before the next frame arrives; every
+    // per-frame helper dereferences it, so nothing mod-side may run until the
+    // new level's Game task exists.
+    if (!IGI::GAME::GET()) {
+        if (menuConfig.frameUpdate)
+            menuConfig.frameUpdate(runtime); // fly state machine is inert here
+        return;
+    }
     // Continuous mod features (free camera) must run even while the menu is open.
     if (menuConfig.frameUpdate)
         menuConfig.frameUpdate(runtime);
@@ -375,6 +383,12 @@ void completeCloseTransition() {
         if (startPageSwitch())
             return;
     }
+    // The retail pop only takes the screen off the stack; the task and the
+    // created flag must go too, or the next start-key press takes the fragile
+    // reopen path (request a screen that was popped, miss the transition, then
+    // attach anyway - the "menu opens twice" report).
+    releaseInjectedMenuScreen();
+    menuScreenCreated = false;
     if (menuBridge)
         menuBridge->cancel(false);
     if (!igi::resumeFromMenu(runtime))

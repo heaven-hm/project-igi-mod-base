@@ -88,13 +88,18 @@ bool writeMenuScript(std::ostream &out, const MenuConfig &config, bool standalon
                                   : std::string(config.title));
             pageOut << ", \"font3.fnt\", 2, \"\", \"\")";
         }
+        const int rowPitch = static_cast<int>(kRowHeight + kRowSpacing);
+        const auto rowY = [frameY, rowPitch](std::size_t row) {
+            return frameY + static_cast<int>(row) * rowPitch;
+        };
         for (std::size_t index = firstRow; index < lastRow; ++index) {
             const auto &item = config.items[index];
             const auto widgetId = pageScreenId + 1 + static_cast<int>(index - firstRow);
+            const int y = rowY(index - firstRow);
             if (item.kind == ModMenuItemKind::List || item.kind == ModMenuItemKind::Input) {
                 pageOut << ", Task_New(-1, \"MenuFrame\", ";
                 quoted(pageOut, item.id);
-                pageOut << ", \"\", " << config.x << ", " << frameY << ", " << config.width
+                pageOut << ", \"\", " << config.x << ", " << y << ", " << config.width
                         << ", 25, 8, 20, 4, TRUE, Task_New(-1, \"MenuText\", \"\", ";
                 quoted(pageOut, item.label);
                 pageOut << ", \"font3.fnt\", 2, \"\", \"\"), Task_New(" << widgetId
@@ -110,7 +115,7 @@ bool writeMenuScript(std::ostream &out, const MenuConfig &config, bool standalon
             } else if (item.kind == ModMenuItemKind::Toggle) {
                 pageOut << ", Task_New(-1, \"MenuFrame\", ";
                 quoted(pageOut, item.id);
-                pageOut << ", \"\", " << config.x << ", " << frameY << ", " << config.width
+                pageOut << ", \"\", " << config.x << ", " << y << ", " << config.width
                         << ", 25, 8, 20, 4, TRUE, Task_New(-1, \"MenuText\", \"\", ";
                 quoted(pageOut, item.label);
                 pageOut << ", \"font3.fnt\", 2, \"\", \"\"), Task_New(" << widgetId
@@ -120,36 +125,44 @@ bool writeMenuScript(std::ostream &out, const MenuConfig &config, bool standalon
                 quoted(pageOut, "IGI_SDK_SetToggle(" + std::to_string(index) + ",this.isOn)");
                 pageOut << "))";
             } else {
-                pageOut << ", Task_New(-1, \"MenuText\", ";
+                // Top-level MenuText has no position parameters, so action rows are
+                // wrapped in a non-selectable MenuFrame at the row position.
+                pageOut << ", Task_New(-1, \"MenuFrame\", ";
                 quoted(pageOut, item.id);
-                pageOut << ", ";
+                pageOut << ", \"\", " << config.x << ", " << y << ", " << config.width
+                        << ", 25, 8, 20, 4, FALSE, Task_New(-1, \"MenuText\", \"\", ";
                 quoted(pageOut, item.label);
                 pageOut << ", \"font3.fnt\", 2, ";
                 if (item.kind == ModMenuItemKind::Action)
                     quoted(pageOut, "IGI_SDK_Action(" + std::to_string(index) + ")");
                 else
                     quoted(pageOut, "");
-                pageOut << ", \"\")";
+                pageOut << ", \"\"))";
             }
         }
+        const int rowsOnPage = static_cast<int>(lastRow - firstRow);
         if (paged) {
-            const int nextScreen =
-                page + 1 < pageCount ? igi::menuPageScreenId(config, page + 1) : firstScreenId;
-            (void)nextScreen;
+            const int navY = rowY(rowsOnPage);
             // Clickable rows, not a selectable frame: MenuManager_AddItems stops at a
             // selectable MenuWindow, so nested buttons would never fire.
-            pageOut << ", Task_New(-1, \"MenuText\", \"page_prev\", \"< Prev Page\", "
-                       "\"font3.fnt\", 2, ";
+            pageOut << ", Task_New(-1, \"MenuFrame\", \"page_prev\", \"\", " << config.x << ", "
+                    << navY << ", " << config.width
+                    << ", 25, 8, 20, 4, FALSE, Task_New(-1, \"MenuText\", \"\", "
+                       "\"< Prev Page\", \"font3.fnt\", 2, ";
             quoted(pageOut, "IGI_SDK_Page(-1)");
-            pageOut << ", \"\")";
-            pageOut << ", Task_New(-1, \"MenuText\", \"page_next\", \"Next Page >\", "
-                       "\"font3.fnt\", 2, ";
+            pageOut << ", \"\"))";
+            pageOut << ", Task_New(-1, \"MenuFrame\", \"page_next\", \"\", " << config.x << ", "
+                    << navY + rowPitch << ", " << config.width
+                    << ", 25, 8, 20, 4, FALSE, Task_New(-1, \"MenuText\", \"\", "
+                       "\"Next Page >\", \"font3.fnt\", 2, ";
             quoted(pageOut, "IGI_SDK_Page(1)");
-            pageOut << ", \"\")";
+            pageOut << ", \"\"))";
         }
         // Selectable = FALSE so the three buttons below are collected as items.
+        // It sits below the control rows (and the nav rows on paged menus).
         pageOut << ", Task_New(-1, \"MenuFrame\", \"ControlsFrame\", \"\", " << config.x << ", "
-                << frameY << ", " << config.width
+                << frameY + rowsOnPage * rowPitch + (paged ? 2 * rowPitch : 0) << ", "
+                << config.width
                 << ", 25, 8, 20, 4, FALSE, "
                    "Task_New(-1, \"MenuText\", \"restart\", \"Restart\", \"font3.fnt\", 2, "
                    "\"IGI_SDK_Cancel() - MenuManager_LeaveMenus(900, 12)\", \"menu_ok\"), "

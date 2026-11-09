@@ -24,6 +24,9 @@ std::size_t menuRowCapacity(const MenuConfig &config);
 // several MenuScreens inside the same resource, so every control keeps the rich
 // row layout (label plus ListBox/ToggleBox/button) instead of a one-line list.
 inline constexpr std::size_t kMenuRowsPerPage = 10;
+// Row geometry shared with the generated script (menu_commands.cpp).
+inline constexpr std::size_t kRowHeight = 25;
+inline constexpr std::size_t kRowSpacing = 4;
 // Id block per page: one screen id plus its widgets, nav row and button row.
 // Pages are spaced by this stride so a page screen id can never equal another
 // page's widget id (that collision crashed the retail task table).

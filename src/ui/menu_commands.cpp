@@ -8,8 +8,6 @@ namespace {
 // Geometry shared with writeMenuScript(): each control row is 25 pixels tall
 // with 4 pixels of vertical spacing, and the frame reserves one row for the
 // title plus the Okay/Cancel row.
-constexpr std::size_t kRowHeight = 25;
-constexpr std::size_t kRowSpacing = 4;
 constexpr std::size_t kReservedRows = 2;
 
 std::string categoryPrefix(const std::string &category) {

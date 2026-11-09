@@ -323,8 +323,11 @@ assert "setFreecamEnabled" in HELPERS and "updateFreecam" in HELPERS, (
 # driving only the override changed HUD info and left the view frozen.
 # Fly mode is the retail BODY_FLY state, so the game's own movement loop does the
 # work and our code only enters/exits the state.
-assert "kBodyStateFly = 0x30" in HELPERS and "*state = kBodyStateFly" in HELPERS, (
-    "fly mode must enter the retail BODY_FLY state, not drive a camera by hand"
+assert "kBodyStateFly = 0x30" in HELPERS and "smGo(player, kBodyStateFly)" in HELPERS, (
+    "fly mode must enter the retail BODY_FLY state through the retail sm_set semantics"
+)
+assert "kSmRunOffset = 0x14" in HELPERS and "kSmStatesOffset = 0x4" in HELPERS, (
+    "the transition must switch the run pointer and run the enter handler, like retail sm_set"
 )
 assert "kSmStateOffset = 0x10" in HELPERS and "kHumanSmOffset = 0x2EC" in HELPERS, (
     "the body state machine is reached through the recovered Human.sm offsets"
@@ -393,6 +396,23 @@ assert "\"PageFrame\"" not in SCRIPT, (
     "page navigation must not be nested in a selectable frame"
 )
 assert "\"page_next\", \"Next Page >\"" in SCRIPT or "page_next" in SCRIPT
+# Control rows must stack vertically: every row gets its own Y offset, or all
+# rows draw at the frame top and the menu looks like a single line.
+assert "const int y = rowY(index - firstRow);" in SCRIPT and "rowY(rowsOnPage)" in SCRIPT, (
+    "control rows must be positioned per row, not all at the frame top"
+)
+assert "*state = kBodyStateFly;" not in HELPERS, (
+    "fly mode must follow retail sm_set (state + run + enter call), not a bare write"
+)
+assert "smGo(player, kBodyStateFly)" in HELPERS and "smGo(player, kBodyStateIdle)" in HELPERS, (
+    "fly mode enter/exit must use the retail state transition"
+)
+assert "(void)unlockHumanInput();" in HELPERS and "fly mode enabled" in HELPERS, (
+    "fly mode must keep input unlocked; BODY_FLY movement comes from the input channels"
+)
+assert "(void)setFreecamEnabled(runtime, false);" in HELPERS and (
+    "g_thirdPersonCrosshairEnabled.store(false" in HELPERS
+), "level change must exit fly mode and the crosshair before the Game task dies"
 assert 'ControlsFrame' in SCRIPT and '20, 4, FALSE, "' in SCRIPT, (
     "the Restart/Okay/Cancel bar must not be selectable so its buttons are items"
 )
@@ -412,8 +432,10 @@ assert "closeCommandScript" in INTERNAL_HOST and "MenuManager_PopScreen(FALSE);"
 # A fresh attach must delete the previous page screens before building the new
 # one, or the base id migrates while old page scripts persist and the retail
 # manager wedges on a screen id that no longer exists.
-assert "releaseInjectedMenuScreen();" in INTERNAL_HOST and INTERNAL_HOST.count(
-    "releaseInjectedMenuScreen()") >= 3, (
+assert "menuScreenCreated = false;" in INTERNAL_HOST and (
+    "releaseInjectedMenuScreen();" in INTERNAL_HOST
+), "a completed close must delete the screen task and clear the created flag"
+assert INTERNAL_HOST.count("releaseInjectedMenuScreen()") >= 4, (
     "reopen and the missed-deadline recovery must clear old page screens first"
 )
 assert "id range freed by removing the previous page screens" in INTERNAL_HOST, (
