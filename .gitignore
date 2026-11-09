@@ -75,6 +75,8 @@ Thumbs.db
 # ==============================================================================
 /data/
 PROMPT.md
+PROMPT.MD
+docs/
 .env
 .env.*
 !.env.example
