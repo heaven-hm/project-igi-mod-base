@@ -305,7 +305,7 @@ void verifiedMenuHelperContractTest() {
     assert(helperSource.find("bool setSfxVolume(Runtime &runtime, float volume)") !=
            std::string::npos);
     assert(helperSource.find("IGI::PLAYER::CYCLE_WEAPON") != std::string::npos);
-    assert(helperSource.find("IGI::PLAYER::REQUEST_WEAPON_ANIM") != std::string::npos);
+    assert(helperSource.find("IGI::PLAYER::SET_WEAPON_ANIM") != std::string::npos);
     assert(helperSource.find("IGI::HUMAN::LOCK_INPUT") != std::string::npos);
     assert(helperSource.find("IGI::HUMAN::ENABLE_LOOK") != std::string::npos);
     assert(helperSource.find("IGI::AUDIO::SET_SFX_VOLUME") != std::string::npos);

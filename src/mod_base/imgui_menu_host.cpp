@@ -831,12 +831,16 @@ void renderImGuiModWindow() {
 void drawCrosshairOverlay() {
     if (!ensureImGuiBackend())
         return;
-    ImGui_ImplWin32_NewFrame();
-    ImGui_ImplDX7_NewFrame();
-    ImGuiIO &io = ImGui::GetIO();
+    // The retail view rect: the crosshair must track this, not the window.
     D3DVIEWPORT7 vp{};
     if (g_menu.boundDevice && SUCCEEDED(g_menu.boundDevice->GetViewport(&vp)) && vp.dwWidth > 0 &&
         vp.dwHeight > 0) {
+        // viewport available
+    }
+    ImGui_ImplWin32_NewFrame();
+    ImGui_ImplDX7_NewFrame();
+    ImGuiIO &io = ImGui::GetIO();
+    if (vp.dwWidth > 0 && vp.dwHeight > 0) {
         io.DisplaySize = ImVec2(static_cast<float>(vp.dwWidth), static_cast<float>(vp.dwHeight));
     }
     io.MouseDrawCursor = false;
@@ -845,7 +849,13 @@ void drawCrosshairOverlay() {
 
     ImGui::NewFrame();
     ImGui::GetIO().WantCaptureMouse = false;
-    const ImVec2 centre(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f);
+    // The weapon aims through the viewport centre in retail (gun.c draws the
+    // cross sprite at width*0.5/height*0.5 of the display mode), but the mod
+    // renders over the D3D viewport, which can letterbox. Use the viewport rect
+    // itself so the crosshair tracks the camera and the aim.
+    const float centreX = static_cast<float>(vp.dwX) + static_cast<float>(vp.dwWidth) * 0.5f;
+    const float centreY = static_cast<float>(vp.dwY) + static_cast<float>(vp.dwHeight) * 0.5f;
+    const ImVec2 centre(centreX, centreY);
     ImDrawList *draw = ImGui::GetBackgroundDrawList();
     constexpr float kGap = 4.0f;
     constexpr float kLength = 10.0f;
@@ -862,6 +872,7 @@ void drawCrosshairOverlay() {
                       ImVec2(centre.x, centre.y - kGap), colour, thickness);
         draw->AddLine(ImVec2(centre.x, centre.y + kGap),
                       ImVec2(centre.x, centre.y + kGap + kLength), colour, thickness);
+        draw->AddCircleFilled(centre, 1.2f, colour, 12);
     }
     ImGui::EndFrame();
     ImGui::Render();

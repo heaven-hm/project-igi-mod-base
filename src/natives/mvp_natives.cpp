@@ -491,6 +491,9 @@ NATIVE_DECL char WEAPON_GET_EVENT3() {
 NATIVE_DECL Task *DROP(Task *w) {
     return NATIVE_INVOKE<Task *>(HASH::WEAPON_DROP, "Task *Weapon_Drop(Task *w)", w);
 }
+NATIVE_DECL void DELETE_ALL(Human *h) {
+    NATIVE_INVOKE<void>(HASH::WEAPON_DELETE_ALL, "void Weapon_DeleteAll(Task *owner)", h);
+}
 NATIVE_DECL Task *SLOT_GET(Task **slots, int index) {
     return NATIVE_INVOKE<Task *>(HASH::WEAPON_SLOTS_GET,
                                  "Task *WeaponSlots_Get(Task **slots, int i)", slots, index);
@@ -1466,7 +1469,7 @@ NATIVE_DECL int SPRITE_HEIGHT(Sprite *sprite) {
 }
 } // namespace OTHER
 std::size_t NativeBindingCount() noexcept {
-    return 342;
+    return 345;
 }
 } // namespace IGI
 #undef NATIVE_INVOKE

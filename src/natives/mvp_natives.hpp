@@ -90,6 +90,7 @@ namespace HASH {
 // Recovered after the generated set was frozen (same IGI-RE catalogue).
 inline constexpr std::uint32_t WEAPON_DROP = 0x004f2390;
 inline constexpr std::uint32_t WEAPON_SLOTS_GET = 0x004f2060;
+inline constexpr std::uint32_t WEAPON_DELETE_ALL = 0x004f2290;
 inline constexpr std::uint32_t WEAPON_SLOTS_SET = 0x004f2070;
 inline constexpr std::uint32_t HUMAN_AI_MOVE_TO = 0x004518e0;
 inline constexpr std::uint32_t HUMAN_AI_RUN_TO = 0x004522a0;
@@ -571,6 +572,8 @@ NATIVE_DECL Task *DROP(Task *w);
 // Carried-weapon slots owned by a Human (IGI-RE: h->weapons, offset 0x4C4).
 NATIVE_DECL Task *SLOT_GET(Task **slots, int index);
 NATIVE_DECL void SLOT_SET(Task **slots, int index, Task *weapon);
+// Deletes every weapon task owned by a human (retail death path).
+NATIVE_DECL void DELETE_ALL(Human *h);
 } // namespace WEAPON
 namespace CAMERA {
 NATIVE_DECL void SET_WEAPON_TARGET(HumanView *v, float pitch, float yaw, float pitchSpeed,

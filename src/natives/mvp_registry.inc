@@ -491,6 +491,15 @@ if (!catalogue.add({0x004f1050, "Task_GetId", "IGI-RE", "entry", "int Task_GetId
 if (!catalogue.add({0x004f1270, "Task_GetName", "IGI-RE", "entry",
                     "void Task_GetName(char *out, Task *task)", NativeVerification::Exposed}))
     return false;
+if (!catalogue.add({0x004631a0, "Human_SetPosition", "IGI-RE", "entry",
+                    "void Human_SetPosition(Human *h, double *pos)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00463220, "Human_SetYaw", "IGI-RE", "entry",
+                    "void Human_SetYaw(Human *h, float yaw)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f2290, "Weapon_DeleteAll", "IGI-RE", "entry",
+                    "void Weapon_DeleteAll(Task *owner)", NativeVerification::Exposed}))
+    return false;
 if (!catalogue.add({0x00463260, "Human_SnapToGround", "IGI-RE", "entry",
                     "void Human_SnapToGround(Human *h)", NativeVerification::Exposed}))
     return false;

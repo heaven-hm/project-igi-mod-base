@@ -176,6 +176,8 @@ LIVE_OBJECT_NATIVES = frozenset({
     "WEAPON::DROP",
     # Slot helpers read/write the live human's carried-weapon array.
     "WEAPON::SLOT_GET",
+    # Weapon_DeleteAll walks the live human's weapon task children.
+    "WEAPON::DELETE_ALL",
     "WEAPON::SLOT_SET",
     "AI::MOVE_TO",
     "AI::RUN_TO",

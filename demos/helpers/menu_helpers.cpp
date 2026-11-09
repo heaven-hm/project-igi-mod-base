@@ -409,8 +409,11 @@ bool requestPlayerWeaponAnimation(Runtime &runtime, int animationId) {
     auto *player = IGI::GAME::GET_PLAYER(0);
     if (!player)
         return false;
-    IGI::PLAYER::REQUEST_WEAPON_ANIM(reinterpret_cast<IGI::HumanPlayer *>(player), animationId);
-    log(LogLevel::Info, "weapon animation requested via IGI::PLAYER::REQUEST_WEAPON_ANIM id=" +
+    // The request native only stores the id; HumanPlayer_SetWeaponAnim is what
+    // plays the body + weapon animations (IGI-RE humanplayer.c: it switches on
+    // anim, reads the weapon type's anim arrays and plays both slots).
+    IGI::PLAYER::SET_WEAPON_ANIM(reinterpret_cast<IGI::HumanPlayer *>(player), animationId);
+    log(LogLevel::Info, "weapon animation played via IGI::PLAYER::SET_WEAPON_ANIM id=" +
                             std::to_string(animationId));
     return true;
 }
@@ -2176,6 +2179,8 @@ bool WeaponHelpers::reportFlashReset() const {
 // Retail Gun.id lives at +0x100 (IGI-RE guncasingtypes.h), which is what
 // WeaponGunPickup matches against to add rounds to the carried weapon.
 constexpr std::size_t kGunIdOffset = 0x100;
+// Retail Gun.rounds at +0x144 (IGI-RE guncasingtypes.h): the loaded clip.
+constexpr std::size_t kGunRoundsOffset = 0x144;
 // Human.weapons[3] at +0x4C4 (IGI-RE human.c: WeaponSlots_Get((char *)h + 0x4C4, 0)).
 constexpr std::size_t kHumanWeaponSlotsOffset = 0x4C4;
 constexpr int kHumanWeaponSlots = 3;
@@ -2198,11 +2203,19 @@ bool WeaponHelpers::refillCurrentWeapon(int ammo) const {
     }
     const int gunId = *reinterpret_cast<const int *>(
         reinterpret_cast<const std::uint8_t *>(weapon) + kGunIdOffset);
+    // Retail Gun.rounds at +0x144 (IGI-RE guncasingtypes.h): the loaded clip.
+    int &rounds =
+        *reinterpret_cast<int *>(reinterpret_cast<std::uint8_t *>(weapon) + kGunRoundsOffset);
+    // WeaponGunPickup adds reserve rounds for the carried gun id (the same call
+    // the player pickup uses), and the clip is then topped from the reserve the
+    // way the retail reload does it.
     int message[] = {gunId, ammo};
     IGI::PLAYER::PICK_UP_WEAPON(player, message);
-    log(LogLevel::Info, "weapon ammo: added " + std::to_string(ammo) + " rounds to gun id " +
-                            std::to_string(gunId) + ", rounds now " +
-                            std::to_string(IGI::WEAPON::HAS_AMMO(weapon)));
+    const int before = rounds;
+    rounds = ammo;
+    log(LogLevel::Info, "weapon ammo: gun id " + std::to_string(gunId) + " clip " +
+                            std::to_string(before) + " -> " + std::to_string(rounds) + " and " +
+                            std::to_string(ammo) + " reserve rounds added");
     return true;
 }
 
@@ -2225,24 +2238,26 @@ bool WeaponHelpers::dropCurrentWeapon() const {
         return false;
     }
     const int weaponId = IGI::TASK::GET_ID(weapon);
-    log(LogLevel::Info, "drop weapon: invoking Weapon_Drop for task #" + std::to_string(weaponId));
+    log(LogLevel::Info,
+        "drop weapon: retail death-drop path for task #" + std::to_string(weaponId));
+    // The retail drop sequence (IGI-RE soldier.c die_start):
+    //   1. Weapon_Drop spawns the ground pickup
+    //   2. the carried slot is cleared so the weapon leaves the cycle list
+    //   3. Weapon_DeleteAll removes every leftover weapon task owned by the human
+    // Doing the delete while holding the task pointer crashed the game: the
+    // handler reparents tasks, so the pointer is re-read after each drop.
     (void)IGI::WEAPON::DROP(weapon);
-
-    // Weapon_Drop only removes the task from the world; the human keeps the slot,
-    // which is why the dropped weapon stayed in the cycle list.
     auto **slots = reinterpret_cast<IGI::Task **>(reinterpret_cast<std::uint8_t *>(player) +
                                                   kHumanWeaponSlotsOffset);
-    int cleared = 0;
     for (int slot = 0; slot < kHumanWeaponSlots; ++slot) {
-        if (IGI::WEAPON::SLOT_GET(slots, slot) != weapon)
-            continue;
-        IGI::WEAPON::SLOT_SET(slots, slot, nullptr);
-        ++cleared;
+        if (IGI::WEAPON::SLOT_GET(slots, slot) == weapon)
+            IGI::WEAPON::SLOT_SET(slots, slot, nullptr);
     }
+    IGI::WEAPON::DELETE_ALL(player);
     IGI::HUMAN::STOP_WEAPON_ANIM(player, 0.0F);
-    log(LogLevel::Info, "drop weapon: task #" + std::to_string(weaponId) + " dropped, " +
-                            std::to_string(cleared) +
-                            " carried slot(s) cleared and the animation stopped");
+    log(LogLevel::Info,
+        "drop weapon: task #" + std::to_string(weaponId) +
+            " dropped, carried slots cleared, weapon tasks deleted and the animation stopped");
     return true;
 }
 
