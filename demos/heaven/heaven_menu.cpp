@@ -353,6 +353,14 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
     movement.nativeAction = "HumanAIMovement";
     movement.values = {"Walk", "Run", "Stop"};
     items.push_back(std::move(movement));
+    igi::ModMenuItemConfig groundState;
+    groundState.id = "npc_ground_state";
+    groundState.kind = igi::ModMenuItemKind::List;
+    groundState.label = "Selected NPC Ground State";
+    groundState.category = "AI / NPC";
+    groundState.nativeAction = "HumanGroundState";
+    groundState.values = {"Ground", "Air"};
+    items.push_back(std::move(groundState));
     igi::ModMenuItemConfig heliReset;
     heliReset.id = "heli_reset";
     heliReset.kind = igi::ModMenuItemKind::Action;

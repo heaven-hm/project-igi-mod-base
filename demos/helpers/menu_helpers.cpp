@@ -776,6 +776,18 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
         } else if (!NpcHelpers(runtime).setMovementMode(npc, value == "Run")) {
             log(LogLevel::Warning, "NPC movement rejected: selected NPC has no live HumanAI task");
         }
+    } else if (id == "npc_ground_state") {
+        auto *npc =
+            reinterpret_cast<IGI::Human *>(findLiveTarget(runtime, g_selectedNpcTaskId, isNpcTask));
+        if (!npc) {
+            reportMissingNpcTarget("NPC ground state");
+        } else if (value == "Ground") {
+            if (!NpcHelpers(runtime).snapToGround(npc))
+                log(LogLevel::Warning,
+                    "NPC ground state rejected: Human_SnapToGround was unavailable");
+        } else if (!EntityHelpers(runtime).leaveHumanGround(npc)) {
+            log(LogLevel::Warning, "NPC ground state rejected: Human_LeaveGround was unavailable");
+        }
     } else if (id == "heli_target") {
         if (const auto selected = targetId(value)) {
             auto *task = findLiveTarget(runtime, *selected, isHeliTask);
