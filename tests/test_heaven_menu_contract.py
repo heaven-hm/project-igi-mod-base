@@ -112,7 +112,7 @@ for item_id, native_path in required_native_paths.items():
     source = HEAVEN if item_id == "weapon_pickup" else HELPERS
     assert native_path in source, f"{item_id} lacks its verified helper path"
 
-assert '"Live Car Target"' in HEAVEN and '"Waiting for live car list"' in HEAVEN, (
+assert '"Live Car / Tank Target"' in HEAVEN and '"Waiting for live car list"' in HEAVEN, (
     "Heaven must render names from the active car list rather than ordinal slots"
 )
 assert '"Live NPC Target"' in HEAVEN and '"Waiting for live NPC list"' in HEAVEN, (

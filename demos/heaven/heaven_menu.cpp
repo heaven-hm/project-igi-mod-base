@@ -180,7 +180,7 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
         // Vehicles
         {"vehicle_target",
          igi::ModMenuItemKind::List,
-         "Live Car Target",
+         "Live Car / Tank Target",
          "Vehicles",
          "SelectCar",
          {"Waiting for live car list"}},
