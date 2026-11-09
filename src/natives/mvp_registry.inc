@@ -1147,6 +1147,9 @@ if (!catalogue.add({0x00487180, "StatusScreen_Get", "IGI-RE", "entry",
 if (!catalogue.add({0x00491cf0, "Display_GetMode", "IGI-RE", "entry",
                     "DisplayMode *Display_GetMode(void)", NativeVerification::Exposed}))
     return false;
+if (!catalogue.add({0x00497620, "Scene_Select", "IGI-RE", "entry",
+                    "void Scene_Select(Scene *s, int add)", NativeVerification::Exposed}))
+    return false;
 if (!catalogue.add({0x004b4f40, "Draw_SpriteZ", "IGI-RE", "entry",
                     "void Draw_SpriteZ(const Sprite *sheet, float x, float y, float r, float g, "
                     "float b, int frame, int unk4, int unk8, float z)",

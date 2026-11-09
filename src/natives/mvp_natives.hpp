@@ -144,6 +144,7 @@ inline constexpr std::uint32_t WEAPON_GET_FIRE_EVENT = 0x00413b20;
 inline constexpr std::uint32_t HUMAN_VIEW_SET_WEAPON_ANGLES = 0x004647a0;
 inline constexpr std::uint32_t STATUS_SCREEN_GET = 0x00487180;
 inline constexpr std::uint32_t DISPLAY_GET_MODE = 0x00491cf0;
+inline constexpr std::uint32_t SCENE_SELECT = 0x00497620;
 inline constexpr std::uint32_t DRAW_SPRITE_Z = 0x004b4f40;
 inline constexpr std::uint32_t SPRITE_WIDTH = 0x004b6ce0;
 inline constexpr std::uint32_t SPRITE_HEIGHT = 0x004b6d00;
@@ -822,6 +823,9 @@ NATIVE_DECL float PROFILE_GET_SFX_VOLUME();
 NATIVE_DECL float PROFILE_GET_MUSIC_VOLUME();
 NATIVE_DECL int PROFILE_GET_LANGUAGE();
 NATIVE_DECL StatusScreen *STATUS_SCREEN_GET();
+// Adds a scene to this frame's draw list (retail HUD scenes do this in
+// StatusScreen_Draw before the frame flush).
+NATIVE_DECL void SCENE_SELECT(void *scene, char add);
 NATIVE_DECL DisplayMode *DISPLAY_GET_MODE();
 NATIVE_DECL void DRAW_SPRITE_Z(const Sprite *sheet, float x, float y, float r, float g, float b,
                                int frame, int unk4, int unk8, float z);

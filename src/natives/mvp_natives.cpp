@@ -1446,6 +1446,9 @@ NATIVE_DECL float PROFILE_GET_MUSIC_VOLUME() {
 NATIVE_DECL int PROFILE_GET_LANGUAGE() {
     return NATIVE_INVOKE<int>(HASH::PROFILE_GET_LANGUAGE, "int Profile_GetLanguage(void)");
 }
+NATIVE_DECL void SCENE_SELECT(void *scene, char add) {
+    NATIVE_INVOKE<Void>(HASH::SCENE_SELECT, "void Scene_Select(Scene *s, int add)", scene, add);
+}
 NATIVE_DECL StatusScreen *STATUS_SCREEN_GET() {
     return NATIVE_INVOKE<StatusScreen *>(HASH::STATUS_SCREEN_GET,
                                          "StatusScreen *StatusScreen_Get(void)");
@@ -1469,7 +1472,7 @@ NATIVE_DECL int SPRITE_HEIGHT(Sprite *sprite) {
 }
 } // namespace OTHER
 std::size_t NativeBindingCount() noexcept {
-    return 345;
+    return 346;
 }
 } // namespace IGI
 #undef NATIVE_INVOKE

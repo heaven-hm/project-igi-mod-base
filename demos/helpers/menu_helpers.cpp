@@ -90,6 +90,8 @@ constexpr int kSightDisplayCrosshair = 1;
 constexpr int kSightDisplayNone = 0;
 
 constexpr std::size_t kStatusScreenCrossSpriteOffset = 0x74;
+// StatusScreen.scene at +0x20 (IGI-RE mission.h: Task then char scene[0x50]).
+constexpr std::size_t kStatusScreenSceneOffset = 0x20;
 
 struct RefreshOutcome {
     bool changed = false;
@@ -767,10 +769,18 @@ bool renderThirdPersonCrosshair(Runtime &runtime) {
     const float halfHeight = static_cast<float>(height) * 0.5F;
     const float x = centerX - std::nearbyint(halfWidth);
     const float y = centerY - std::nearbyint(halfHeight);
+    // Retail draws the HUD inside StatusScreen_Draw, which selects the status
+    // scene first (Scene_Select +1) and relies on Screen_Draw's later
+    // Scene_DrawAll flush. The mod's end-frame callback runs after that flush,
+    // so drawing without a live scene queues into nothing: invisible and unsafe.
+    // Selecting the status scene here adds it to the next flush, which is the
+    // same mechanism the retail status screen uses.
+    IGI::OTHER::SCENE_SELECT(reinterpret_cast<std::byte *>(statusScreen) + kStatusScreenSceneOffset,
+                             1);
     // Same draw the retail HUD handler uses (IGI-RE gun.c Gun_HudHandler):
     // centre of the display, mid-grey, z 1.0.
     IGI::OTHER::DRAW_SPRITE_Z(cross, x, y, 128.0F, 128.0F, 128.0F, 0, 0, 0, 1.0F);
-    reportCrosshairState("drawing at the display centre");
+    reportCrosshairState("drawing in the status scene at the display centre");
     return true;
 }
 

@@ -195,6 +195,8 @@ LIVE_OBJECT_NATIVES = frozenset({
     "AI::SET_RUN",
     # Level_GetTick reads the active level record, which only exists in-game.
     "LEVEL::GET_TICK",
+    # Scene_Select walks the live scene list, which only exists in-game.
+    "OTHER::SCENE_SELECT",
     "AI::REMOVE_ALARM_ACTIONS",
 })
 
