@@ -373,6 +373,9 @@ if (!catalogue.add({0x004658d0, "HumanView_SetCamera", "IGI-RE", "entry",
                     "void HumanView_SetCamera(HumanView *v, const double *pos, const Matrix *rot)",
                     NativeVerification::Exposed}))
     return false;
+if (!catalogue.add({0x00465910, "HumanView_ClearCamOverride", "IGI-RE", "entry",
+                    "void HumanView_ClearCamOverride(HumanView *v)", NativeVerification::Exposed}))
+    return false;
 if (!catalogue.add({0x00465920, "HumanView_SetTarget", "IGI-RE", "entry",
                     "void HumanView_SetTarget(HumanView *v, const int *target, char flag)",
                     NativeVerification::Exposed}))
@@ -493,6 +496,23 @@ if (!catalogue.add({0x004f1270, "Task_GetName", "IGI-RE", "entry",
     return false;
 if (!catalogue.add({0x004631a0, "Human_SetPosition", "IGI-RE", "entry",
                     "void Human_SetPosition(Human *h, double *pos)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00463080, "Human_SendPosition", "IGI-RE", "entry",
+                    "void Human_SendPosition(Human *h)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x0047ce00, "AmmoList_Add", "IGI-RE", "entry",
+                    "void AmmoList_Add(AmmoList *list, int id, int n)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00497f20, "TransContext_Project", "IGI-RE", "entry",
+                    "void TransContext_Project(float *out, float *depth, const double *p)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004e75a0, "Screen_GetFrame", "IGI-RE", "entry", "int Screen_GetFrame(void)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004e8290, "Viewport_AddCallback", "IGI-RE", "entry",
+                    "void Viewport_AddCallback(ViewportCallback fn)", NativeVerification::Exposed}))
     return false;
 if (!catalogue.add({0x00463220, "Human_SetYaw", "IGI-RE", "entry",
                     "void Human_SetYaw(Human *h, float yaw)", NativeVerification::Exposed}))
@@ -1183,4 +1203,14 @@ if (!catalogue.add({0x004522a0, "HumanAI_RunTo", "IGI-RE", "entry",
 if (!catalogue.add({0x00489f00, "Human_StopWeaponAnim", "IGI-RE", "entry",
                     "void Human_StopWeaponAnim(Human *h, float time)",
                     NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004b38e0, "Matrix_SetEuler", "IGI-RE", "entry",
+                    "void Matrix_SetEuler(Matrix *m, float ax, float ay, float az)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004c48c0, "RigidDynCubeObj_GetType", "IGI-RE", "entry",
+                    "uint16_t RigidDynCubeObj_GetType(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004e81f0, "Viewport_GetCurrentCamera", "IGI-RE", "entry",
+                    "Camera *Viewport_GetCurrentCamera(void)", NativeVerification::Exposed}))
     return false;

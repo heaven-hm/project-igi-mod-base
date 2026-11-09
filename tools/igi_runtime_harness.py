@@ -135,6 +135,11 @@ LIVE_OBJECT_NATIVES = frozenset({
     "HUMAN::DISABLE_LOOK",
     "HUMAN::GET_STATE",
     "HUMAN::GET_INDEX",
+    # Camera override/free camera and crosshair projection need a live HumanView
+    # and Camera, which the synthetic source scan cannot construct.
+    "CAMERA::CLEAR_CAM_OVERRIDE",
+    "CAMERA::SET_EULER",
+    "OTHER::VIEWPORT_GET_CAMERA",
     "HUMAN::IS_CROUCHING",
     "HUMAN::IS_ACTIVE",
     "HUMAN::RESET_DAMAGE",

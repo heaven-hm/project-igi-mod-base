@@ -43,6 +43,7 @@ static bool requireLiveGameThread(Runtime &runtime);
 static bool refreshLiveMenu(Runtime &runtime, std::string_view effect);
 static bool executeMenuCommand(std::string_view commandScript);
 static bool isNpcTask(IGI::Task *task);
+static std::string liveTaskName(IGI::Task *task);
 static IGI::HumanAI *npcAiTask(IGI::Human *npc);
 static bool isCarTask(IGI::Task *task);
 static bool isHeliTask(IGI::Task *task);
@@ -65,12 +66,31 @@ struct RetailVec3d {
 };
 static_assert(sizeof(RetailVec3d) == 24);
 
-// Retail Matrix is float[9] (IGI-RE types.h); the bindings keep it opaque, so
-// helpers pass a mirror with the recovered layout.
+// Retail Matrix is float[9] followed by the multiply-depth counter (IGI-RE
+// types.h); the bindings keep it opaque, so helpers use this sized mirror.
 struct RetailMatrix {
     float m[9];
+    int count;
 };
-static_assert(sizeof(RetailMatrix) == 36);
+static_assert(sizeof(RetailMatrix) == 0x28);
+
+// Camera (IGI-RE hazetypes.h): the rendered view for this frame. The axes
+// already include the retail set_view (-90 X) rotation.
+#pragma pack(push, 4)
+struct RetailCameraView {
+    RetailMatrix axes;
+    double position[3];
+    float fov;
+    float aspect;
+    float priority;
+    int frame;
+    int count;
+    void *owner;
+};
+#pragma pack(pop)
+static_assert(offsetof(RetailCameraView, position) == 0x28);
+static_assert(offsetof(RetailCameraView, fov) == 0x40);
+static_assert(offsetof(RetailCameraView, owner) == 0x54);
 
 // Largest node id the retail graph accepts (Graph_AddNode rejects id >= 1000).
 constexpr int kMaxGraphNodes = 1000;
@@ -161,11 +181,77 @@ std::string targetLabel(std::string name, int id) {
     return name + " [#" + std::to_string(id) + "]";
 }
 
+// QTaskList (IGI-RE qasmtypes.h): count, capacity, then the Task* array.
+struct QTaskListLayout {
+    int count;
+    int max;
+    IGI::Task *items[1];
+};
+
+// Every live task registered with the game, deduplicated across its task lists.
+// The old FIND_BY_ID(0..4095) scan missed objects whose ids are outside that
+// range or are not registered in the id table, which left the teleport picker
+// empty on most levels. The game's own task lists are authoritative.
+std::vector<IGI::Task *> liveTasks(Runtime &runtime) {
+    std::vector<IGI::Task *> tasks;
+    if (!requireLiveGameThread(runtime) || !IGI::GAME::GET())
+        return tasks;
+    const auto collect = [&tasks](void *raw) {
+        if (!raw)
+            return;
+        const auto *list = reinterpret_cast<const QTaskListLayout *>(raw);
+        if (list->count <= 0 || list->max <= 0 || list->count > list->max)
+            return;
+        for (int index = 0; index < list->count && tasks.size() < 4096; ++index) {
+            auto *task = list->items[index];
+            if (task && std::find(tasks.begin(), tasks.end(), task) == tasks.end())
+                tasks.push_back(task);
+        }
+    };
+    collect(IGI::GAME::GET_TASK_LIST0());
+    collect(IGI::GAME::GET_TASK_LIST1());
+    collect(IGI::GAME::GET_TASK_LIST2());
+    collect(IGI::GAME::GET_TASK_LIST3());
+    collect(IGI::GAME::GET_TASK_LIST4());
+    if (tasks.empty()) {
+        // Last resort when the game lists are not available yet: keep the old
+        // id scan so the menu still works during level startup.
+        for (int id = 0; id < 4096; ++id) {
+            if (auto *task = IGI::TASK::FIND_BY_ID(id))
+                tasks.push_back(task);
+        }
+    }
+    return tasks;
+}
+
+// Stable menu key for a task. Script ids are the normal case; objects without
+// one get a positive key derived from their address so the dropdown can still
+// represent them. The key is re-resolved against the live list on every action.
+int liveTaskKey(IGI::Task *task) {
+    if (!task)
+        return -1;
+    const int id = IGI::TASK::GET_ID(task);
+    if (id >= 0)
+        return id;
+    return static_cast<int>(reinterpret_cast<std::uintptr_t>(task) & 0x7FFFFFFF);
+}
+
+IGI::Task *findLiveTask(Runtime &runtime, int key) {
+    if (key < 0 || !requireLiveGameThread(runtime))
+        return nullptr;
+    for (auto *task : liveTasks(runtime)) {
+        if (liveTaskKey(task) == key)
+            return task;
+    }
+    // Some tasks are reachable by id but not in a list the mod can walk.
+    return IGI::TASK::FIND_BY_ID(key);
+}
+
 template <typename Predicate>
 IGI::Task *findLiveTarget(Runtime &runtime, int id, Predicate &&predicate) {
     if (!requireLiveGameThread(runtime) || id < 0)
         return nullptr;
-    auto *task = IGI::TASK::FIND_BY_ID(id);
+    auto *task = findLiveTask(runtime, id);
     if (!task)
         return nullptr;
     return predicate(task) ? task : nullptr;
@@ -548,132 +634,176 @@ void reportCrosshairState(std::string_view reason) {
 } // namespace
 
 namespace {
-// IgiTaskLayout is defined further below; only its type field is needed here.
-// Human.view (IGI-RE humanbasetypes.h).
+// Human.view (IGI-RE humanbasetypes.h). No native exposes the field getter, so
+// the documented struct offset is the only way to reach the view task.
 constexpr std::size_t kHumanViewOffset = 0x4EC;
-// HumanPlayerSM offsets (IGI-RE humanplayertypes.h): Human.sm at 0x2EC, and
-// inside HumanPlayerSM: update 0x0, states 0x4, input 0x8, prev 0xC, state 0x10.
-constexpr std::size_t kHumanSmOffset = 0x2EC;
-// HumanPlayerSM (IGI-RE humanplayertypes.h): update 0x0, states 0x4, input 0x8,
-// prev 0xC, state 0x10, run 0x14.
-constexpr std::size_t kSmStatesOffset = 0x4;
-constexpr std::size_t kSmInputOffset = 0x8;
-constexpr std::size_t kSmStateOffset = 0x10;
-constexpr std::size_t kSmRunOffset = 0x14;
-// Player body states (IGI-RE humanplayer.c): BODY_LEAN 0x2C .. BODY_FLY 0x30.
-constexpr int kBodyStateIdle = 0;
-constexpr int kBodyStateFly = 0x30;
-// Input bits (IGI-RE humanplayer.c common_input): the ten move controls start at
-// INPUT_LEFT; HumanPlayer_BodyFlyRun reads 0x20 left, 0x40 right, 0x80 forward,
-// 0x100 back, 0x7000 fast multiplier.
-constexpr std::uint32_t kInLeft = 0x20;
-constexpr std::uint32_t kInRight = 0x40;
-constexpr std::uint32_t kInForward = 0x80;
-constexpr std::uint32_t kInBack = 0x100;
-constexpr std::uint32_t kInRun = 0x2000;
+// Free camera state, owned entirely by the mod: the retail view is told to use
+// this pose through HumanView_SetCamera (camOverride).
+std::atomic<bool> g_freecamActive{false};
+// The live render Camera captured by a viewport callback. Camera_Set accepts
+// the override even while the game is paused (the renderer keeps drawing), so
+// the free camera works while the mod menu is open.
+std::atomic<void *> g_renderCamera{nullptr};
+std::atomic<bool> g_viewportCallbackRegistered{false};
+struct FreecamPose {
+    double position[3]{};
+    float pitch = 0.0F;
+    float yaw = 0.0F;
+    float fov = 1.0F;
+};
+FreecamPose g_freecamPose;
 
-bool isHumanPlayerTask(IGI::Human *human) {
-    if (!human)
-        return false;
-    const auto type = *reinterpret_cast<const std::uint16_t *>(
-        reinterpret_cast<const std::uint8_t *>(human) + 0x1C);
-    return type == IGI::PLAYER::GET_TYPE() || IGI::TASK::IS_A(type, IGI::PLAYER::GET_TYPE()) != 0;
-}
-
-std::uint32_t *smInput(IGI::Human *human) {
-    if (!isHumanPlayerTask(human))
+IGI::HumanView *playerView(IGI::Human *player) {
+    if (!player)
         return nullptr;
-    return reinterpret_cast<std::uint32_t *>(reinterpret_cast<std::uint8_t *>(human) +
-                                             kHumanSmOffset + kSmInputOffset);
-}
-
-int *smState(IGI::Human *human) {
-    if (!isHumanPlayerTask(human))
-        return nullptr;
-    return reinterpret_cast<int *>(reinterpret_cast<std::uint8_t *>(human) + kHumanSmOffset +
-                                   kSmStateOffset);
-}
-
-// Retail sm_set (IGI-RE humanplayer.c): writing the state alone does nothing -
-// the run pointer must switch to the new state's handler and the enter function
-// runs immediately (BODY_FLY enter plays the fly animation and leaves ground).
-void smGo(IGI::Human *human, int state) {
-    auto *base = reinterpret_cast<std::uint8_t *>(human) + kHumanSmOffset;
-    auto **states = *reinterpret_cast<void(***)>(base + kSmStatesOffset);
-    if (!states || !states[state])
-        return;
-    *reinterpret_cast<int *>(base + kSmStateOffset) = state;
-    *reinterpret_cast<void (**)(void)>(base + kSmRunOffset) =
-        reinterpret_cast<void (*)(void)>(states[state]);
-    using StateFn = void (*)(void *, void *);
-    reinterpret_cast<StateFn>(states[state])(base, human);
+    return *reinterpret_cast<IGI::HumanView **>(reinterpret_cast<std::uint8_t *>(player) +
+                                                kHumanViewOffset);
 }
 } // namespace
 
-// Retail fly mode: the player body state machine has a real BODY_FLY state
-// (IGI-RE humanplayer.c, BODY_LEAN 0x2C .. BODY_FLY 0x30). Its run handler moves
-// the body from the view matrix and the merged input bits, so the game's own key
-// bindings (WASD by default) drive it - no camera math of our own to get wrong.
+// Viewport_AddCallback stores the Camera the renderer is about to use. This is
+// the object IGI-RE's FreeCamera_Run calls Camera_Set on every frame.
+extern "C" void __cdecl igiCaptureViewportCamera(void *camera) noexcept {
+    g_renderCamera.store(camera, std::memory_order_release);
+}
+
+// The retail free camera: HumanView_SetCamera sets camOverride, and the view's
+// update copies camPos/camRot verbatim, so the mod owns the camera while keeping
+// the player body and its normal controls untouched. Movement keys are polled
+// with GetAsyncKeyState on the display callback, like the retail debug camera.
 bool freecamEnabled() {
-    auto *player = reinterpret_cast<IGI::Human *>(IGI::GAME::GET_PLAYER(0));
-    const auto *state = smState(player);
-    return state && *state == kBodyStateFly;
+    return g_freecamActive.load(std::memory_order_acquire);
 }
 
 bool setFreecamEnabled(Runtime &runtime, bool enabled) {
     if (!requireLiveGameThread(runtime))
         return false;
     auto *player = reinterpret_cast<IGI::Human *>(IGI::GAME::GET_PLAYER(0));
-    auto *state = smState(player);
-    auto *input = smInput(player);
-    if (!state || !input) {
-        log(LogLevel::Warning, "fly mode rejected: the player state machine is unavailable");
-        return false;
-    }
-    if (*state == kBodyStateFly) {
-        if (enabled) {
-            log(LogLevel::Info, "fly mode already active");
+    auto *view = playerView(player);
+    if (!enabled) {
+        // Disabling must always clear the mod state, even during a level teardown
+        // where the player/view may already be gone.
+        if (view)
+            IGI::CAMERA::CLEAR_CAM_OVERRIDE(view);
+        if (!freecamEnabled()) {
+            log(LogLevel::Info, "free camera already off");
             return true;
         }
-        // Retail exit: BODY_FLY run clears velocity and sm_set(0). Input unlocks so
-        // the normal body controls resume.
+        g_freecamActive.store(false, std::memory_order_release);
         (void)unlockHumanInput();
-        smGo(player, kBodyStateIdle);
-        log(LogLevel::Info, "fly mode disabled: the player resumes normal body control");
+        log(LogLevel::Info, "free camera disabled: the retail view owns the camera again");
         return true;
     }
-    if (!enabled) {
-        log(LogLevel::Info, "fly mode already disabled");
+    if (!player || !view) {
+        log(LogLevel::Warning, "free camera rejected: the player view is unavailable");
+        return false;
+    }
+    if (freecamEnabled()) {
+        log(LogLevel::Info, "free camera already active");
         return true;
     }
-    // IMPORTANT: input stays unlocked. BODY_FLY movement comes from the same
-    // input channels the normal controls use, and HumanPlayer_InputHandler
-    // ignores keys while input is locked - locking made WASD dead.
-    (void)unlockHumanInput();
-    smGo(player, kBodyStateFly);
-    log(LogLevel::Info, "fly mode enabled: the player body flies; use the game's own movement "
-                        "keys (WASD by default), Shift for 4x speed, and the menu control to "
-                        "disable");
+    // Start from the camera the game is rendering, so enabling never snaps the view.
+    IGI::HumanCameraInfo info{};
+    IGI::HUMAN::GET_CAMERA_INFO(player, &info);
+    g_freecamPose.position[0] = info.position[0];
+    g_freecamPose.position[1] = info.position[1];
+    g_freecamPose.position[2] = info.position[2];
+    // HumanView_GetForward takes the middle matrix column (m[1], m[4], m[7]).
+    // Matrix_SetEuler(pitch, 0, yaw) makes forward = (-sin yaw cos pitch,
+    // cos yaw cos pitch, sin pitch), so the inverse is atan2(-x, y).
+    const float forwardX = info.matrix[1];
+    const float forwardY = info.matrix[4];
+    const float forwardZ = info.matrix[7];
+    g_freecamPose.yaw = std::atan2(-forwardX, forwardY);
+    g_freecamPose.pitch = std::asin(std::clamp(forwardZ, -1.0F, 1.0F));
+    g_freecamPose.fov = info.fov > 0.0F ? info.fov : 1.0F;
+#if defined(_WIN32)
+    // Register once; the callback keeps the Camera* the renderer is using.
+    if (!g_viewportCallbackRegistered.exchange(true, std::memory_order_acq_rel))
+        IGI::OTHER::VIEWPORT_ADD_CALLBACK(&igiCaptureViewportCamera);
+#endif
+    // The view override does not stop the body controls, so lock them while the
+    // camera is detached; disabling clears the override and unlocks input again.
+    (void)lockHumanInput();
+    g_freecamActive.store(true, std::memory_order_release);
+    log(LogLevel::Info, "free camera enabled: WASD moves, Space/Ctrl rise/drop, Shift is 4x, "
+                        "arrow keys turn; the player body stays in place");
     return true;
 }
 
 bool updateFreecam(Runtime &runtime) {
-    // The retail BODY_FLY run handler moves the player every frame on its own.
-    // This tick only verifies the state stuck and reports the live input bits so
-    // a dead fly mode is diagnosable from the log instead of silent.
-    if (!requireLiveGameThread(runtime) || !IGI::GAME::GET())
+    if (!freecamEnabled() || !requireLiveGameThread(runtime) || !IGI::GAME::GET())
         return false;
     auto *player = reinterpret_cast<IGI::Human *>(IGI::GAME::GET_PLAYER(0));
-    const auto *state = smState(player);
-    const auto *input = smInput(player);
-    if (!state || !input)
+    auto *view = playerView(player);
+    if (!player || !view)
         return false;
-    static int reportedState = -1;
-    if (reportedState != *state) {
-        reportedState = *state;
-        log(LogLevel::Info, "fly mode: body state now " + std::to_string(*state) +
-                                " (48 = BODY_FLY), input bits " + std::to_string(*input));
+#if defined(_WIN32)
+    // Clamp the step so a menu pause or a stalled frame cannot teleport the camera.
+    static ULONGLONG lastTick = GetTickCount64();
+    const ULONGLONG now = GetTickCount64();
+    const double dt = std::clamp(static_cast<double>(now - lastTick) / 1000.0, 0.0, 0.1);
+    lastTick = now;
+    const auto down = [](int key) { return (GetAsyncKeyState(key) & 0x8000) != 0; };
+    constexpr float kTurnSpeed = 1.8F;
+    // forward = (-sin yaw, cos yaw); turning right moves forward toward +X, which
+    // means decreasing yaw in this matrix convention.
+    if (down(VK_LEFT))
+        g_freecamPose.yaw += kTurnSpeed * static_cast<float>(dt);
+    if (down(VK_RIGHT))
+        g_freecamPose.yaw -= kTurnSpeed * static_cast<float>(dt);
+    if (down(VK_UP))
+        g_freecamPose.pitch += kTurnSpeed * static_cast<float>(dt);
+    if (down(VK_DOWN))
+        g_freecamPose.pitch -= kTurnSpeed * static_cast<float>(dt);
+    g_freecamPose.pitch = std::clamp(g_freecamPose.pitch, -1.5F, 1.5F);
+    const float sinYaw = std::sin(g_freecamPose.yaw);
+    const float cosYaw = std::cos(g_freecamPose.yaw);
+    double moveX = 0.0;
+    double moveY = 0.0;
+    double moveZ = 0.0;
+    // W/S run along the aim direction; A/D strafe along the camera right vector.
+    if (down('W')) {
+        moveX -= sinYaw;
+        moveY += cosYaw;
     }
+    if (down('S')) {
+        moveX += sinYaw;
+        moveY -= cosYaw;
+    }
+    if (down('D')) {
+        moveX += cosYaw;
+        moveY += sinYaw;
+    }
+    if (down('A')) {
+        moveX -= cosYaw;
+        moveY -= sinYaw;
+    }
+    if (down(VK_SPACE))
+        moveZ += 1.0;
+    if (down(VK_CONTROL))
+        moveZ -= 1.0;
+    // Retail world units: 4096 per metre (IGI-RE kUnitsToMeters). Two metres per
+    // second normally, eight with Shift, is responsive without overshooting rooms.
+    const double speed = down(VK_SHIFT) ? 32768.0 : 8192.0;
+    g_freecamPose.position[0] += moveX * speed * dt;
+    g_freecamPose.position[1] += moveY * speed * dt;
+    g_freecamPose.position[2] += moveZ * speed * dt;
+    RetailMatrix rotation{};
+    IGI::CAMERA::SET_EULER(reinterpret_cast<IGI::Matrix *>(&rotation), g_freecamPose.pitch, 0.0F,
+                           g_freecamPose.yaw);
+    // IGI-RE FreeCamera_Run: Camera_Set(camera, pos, axes, fov, 1.0, 100.0,
+    // Screen_GetFrame(), NULL, 0, 0). A high priority keeps our pose ahead of the
+    // paused/update path, and it is the camera the renderer actually reads.
+    if (auto *camera = g_renderCamera.load(std::memory_order_acquire)) {
+        IGI::CAMERA::SET(reinterpret_cast<IGI::Camera *>(camera),
+                         reinterpret_cast<const IGI::Vec3d *>(g_freecamPose.position),
+                         reinterpret_cast<const IGI::Matrix *>(&rotation), g_freecamPose.fov, 1.0F,
+                         1000.0F, IGI::OTHER::SCREEN_GET_FRAME(), nullptr, 0, 0);
+    }
+    IGI::CAMERA::SET_CAMERA(view, g_freecamPose.position,
+                            reinterpret_cast<const IGI::Matrix *>(&rotation));
+#endif
     return true;
 }
 
@@ -696,22 +826,74 @@ bool teleportPlayerToTarget(Runtime &runtime, int targetTaskId) {
     if (!player)
         return false;
     // The live task is re-validated at call time, like every other target action.
-    auto *target = IGI::TASK::FIND_BY_ID(targetTaskId);
+    auto *target = findLiveTask(runtime, targetTaskId);
     if (!target || target == reinterpret_cast<IGI::Task *>(player)) {
         log(LogLevel::Warning, "teleport rejected: target is no longer live on this level");
         return false;
     }
-    IGI::HumanCameraInfo info{};
-    IGI::HUMAN::GET_CAMERA_INFO(player, &info);
-    double position[3] = {info.position[0], info.position[1], info.position[2]};
-    // DynCubeObj objects keep their origin at +0x20 (IGI-RE task_pos()).
-    std::memcpy(position, reinterpret_cast<const std::uint8_t *>(target) + 0x20, sizeof(position));
-    // Place the player two metres behind the target so they do not clip into it.
-    position[1] -= 200.0;
+    double targetPosition[3]{};
+    // DynCubeObj objects keep their origin at +0x20 (IGI-RE task_pos()); Human
+    // uses the same offset, so every accepted teleport target is laid out alike.
+    std::memcpy(targetPosition, reinterpret_cast<const std::uint8_t *>(target) + 0x20,
+                sizeof(targetPosition));
+    std::array<double, 3> playerPosition{};
+    (void)readPlayerPosition(runtime, playerPosition);
+    // Stand 1.5 m from the target on the side the player is already on, so the
+    // body does not spawn inside the object (200 world units is only 5 cm).
+    constexpr double kTeleportStandOff = 1.5 * 4096.0;
+    // Z is vertical in this world (Human_GetEyePos adds the eye height to
+    // pos[2]), so the stand-off is horizontal only and the ground snap fixes the
+    // height afterwards.
+    const double direction[2] = {playerPosition[0] - targetPosition[0],
+                                 playerPosition[1] - targetPosition[1]};
+    const double length = std::sqrt(direction[0] * direction[0] + direction[1] * direction[1]);
+    double position[3]{};
+    if (length > 1.0) {
+        position[0] = targetPosition[0] + direction[0] / length * kTeleportStandOff;
+        position[1] = targetPosition[1] + direction[1] / length * kTeleportStandOff;
+    } else {
+        position[0] = targetPosition[0] + kTeleportStandOff;
+        position[1] = targetPosition[1];
+    }
+    position[2] = targetPosition[2];
+    // Exact retail flow: Human_SetPosition moves the body, Human_SnapToGround
+    // probes and calls Human_SetPosition once more with the grounded point, then
+    // both SendPosition broadcasts publish the final body position. Sending
+    // before the snap left the state machine and camera replicas on the old
+    // height, which is what made teleports end up underground.
     IGI::HUMAN::SET_POSITION(player, position);
     (void)EntityHelpers(runtime).snapHumanToGround(player);
+    IGI::HUMAN::SEND_POSITION(player);
+    IGI::PLAYER::SEND_POSITION(reinterpret_cast<IGI::HumanPlayer *>(player));
     log(LogLevel::Info, "player teleported to target #" + std::to_string(targetTaskId));
     return true;
+}
+
+bool readPlayerPosition(Runtime &runtime, std::array<double, 3> &position) {
+    if (!requireLiveGameThread(runtime) || !IGI::GAME::GET())
+        return false;
+    auto *player = reinterpret_cast<IGI::Human *>(IGI::GAME::GET_PLAYER(0));
+    if (!player)
+        return false;
+    // Human.pos at +0x20 (IGI-RE humanbasetypes.h) is the body position the
+    // teleport natives move. The camera sits behind/above it in third person, so
+    // prefilling from the camera would store the viewing offset as the player
+    // position. No native exposes the field, so the documented layout is used.
+    double bodyPosition[3]{};
+    std::memcpy(bodyPosition, reinterpret_cast<const std::uint8_t *>(player) + 0x20,
+                sizeof(bodyPosition));
+    const double magnitude =
+        std::fabs(bodyPosition[0]) + std::fabs(bodyPosition[1]) + std::fabs(bodyPosition[2]);
+    if (std::isfinite(magnitude) && magnitude >= 1.0) {
+        position = {bodyPosition[0], bodyPosition[1], bodyPosition[2]};
+        return true;
+    }
+    // A zero body position means the player task is not placed yet (mission
+    // start); the camera is still a usable starting point.
+    IGI::HumanCameraInfo info{};
+    IGI::HUMAN::GET_CAMERA_INFO(player, &info);
+    position = {info.position[0], info.position[1], info.position[2]};
+    return std::isfinite(position[0]) && std::isfinite(position[1]) && std::isfinite(position[2]);
 }
 
 bool teleportPlayerToPosition(Runtime &runtime, const std::array<double, 3> &position) {
@@ -723,6 +905,8 @@ bool teleportPlayerToPosition(Runtime &runtime, const std::array<double, 3> &pos
     auto destination = position;
     IGI::HUMAN::SET_POSITION(player, destination.data());
     (void)EntityHelpers(runtime).snapHumanToGround(player);
+    IGI::HUMAN::SEND_POSITION(player);
+    IGI::PLAYER::SEND_POSITION(reinterpret_cast<IGI::HumanPlayer *>(player));
     log(LogLevel::Info, "player moved to " + std::to_string(position[0]) + ", " +
                             std::to_string(position[1]) + ", " + std::to_string(position[2]));
     return true;
@@ -747,6 +931,48 @@ bool thirdPersonCrosshairActive(Runtime &runtime) {
         return false;
     return reinterpret_cast<const WeaponTypeHudLayout *>(weaponType)->sightDisplay ==
            kSightDisplayCrosshair;
+}
+
+bool thirdPersonCrosshairScreenPosition(Runtime &runtime, int width, int height, float &x,
+                                        float &y) {
+    if (width <= 0 || height <= 0 || !requireLiveGameThread(runtime) || !IGI::GAME::GET())
+        return false;
+    auto *player = reinterpret_cast<IGI::Human *>(IGI::GAME::GET_PLAYER(0));
+    if (!player)
+        return false;
+    // GET_CAMERA_INFO already applies the view's camOverride, so this works for
+    // the normal third-person camera and the mod free camera alike.
+    IGI::HumanCameraInfo info{};
+    IGI::HUMAN::GET_CAMERA_INFO(player, &info);
+    const double aim[3] = {info.position[0] + info.matrix[1] * 100000.0,
+                           info.position[1] + info.matrix[4] * 100000.0,
+                           info.position[2] + info.matrix[7] * 100000.0};
+    // Project through the renderer's own active TransContext. This is the exact
+    // call the retail label/HUD code uses to place a world point on screen and it
+    // is evaluated after the viewport draw, when gTransContext is still valid.
+    float projected[2]{};
+    float depth = 0.0F;
+    IGI::OTHER::TRANS_CONTEXT_PROJECT(projected, &depth, aim);
+    if (!(depth > 1.0F) || !std::isfinite(projected[0]) || !std::isfinite(projected[1]))
+        return false;
+    // TransContext_Project returns display pixels; the caller may pass a
+    // letterboxed viewport rect, so scale into its coordinate space.
+    auto *displayMode = IGI::OTHER::DISPLAY_GET_MODE();
+    const float scaleX = displayMode && displayMode->width > 0
+                             ? static_cast<float>(width) / static_cast<float>(displayMode->width)
+                             : 1.0F;
+    const float scaleY = displayMode && displayMode->height > 0
+                             ? static_cast<float>(height) / static_cast<float>(displayMode->height)
+                             : 1.0F;
+    const float screenX = projected[0] * scaleX;
+    const float screenY = projected[1] * scaleY;
+    if (screenX < 0.0F || screenY < 0.0F || screenX > static_cast<float>(width) ||
+        screenY > static_cast<float>(height)) {
+        return false;
+    }
+    x = screenX;
+    y = screenY;
+    return true;
 }
 
 bool renderThirdPersonCrosshair(Runtime &runtime) {
@@ -803,8 +1029,17 @@ bool renderThirdPersonCrosshair(Runtime &runtime) {
         reportCrosshairState("cross sprite is not loaded yet");
         return false;
     }
-    const float centerX = static_cast<float>(displayMode->width) * 0.5F;
-    const float centerY = static_cast<float>(displayMode->height) * 0.5F;
+    float centerX = static_cast<float>(displayMode->width) * 0.5F;
+    float centerY = static_cast<float>(displayMode->height) * 0.5F;
+    // The third-person camera is offset behind/above the player, so the weapon's aim
+    // ray does not pass through the screen centre. Draw where the ray projects.
+    float aimX = 0.0F;
+    float aimY = 0.0F;
+    if (thirdPersonCrosshairScreenPosition(runtime, displayMode->width, displayMode->height, aimX,
+                                           aimY)) {
+        centerX = aimX;
+        centerY = aimY;
+    }
     const float halfWidth = static_cast<float>(width) * 0.5F;
     const float halfHeight = static_cast<float>(height) * 0.5F;
     const float x = centerX - std::nearbyint(halfWidth);
@@ -863,16 +1098,41 @@ bool refreshLiveTargetOptions(MenuConfig &config, Runtime &runtime) {
                                     g_selectedCarTaskId);
     const auto heli = replaceChoices("heli_target", entities.heliTargets(), "No live helicopters",
                                      g_selectedHeliTaskId);
+    // The teleport picker accepts every live world object, not only NPCs, cars and
+    // helicopters: RigidDynCubeObj is the retail base type for 3D objects (doors,
+    // props, pickups) and Human covers every human-derived task.
+    std::vector<LiveTarget> teleportTargets;
+    const auto rigidType = IGI::TASK::RIGID_DYN_CUBE_GET_TYPE();
+    const auto humanType = IGI::HUMAN::GET_TYPE();
+    auto *playerTask = IGI::GAME::GET_PLAYER(0);
+    for (auto *task : liveTasks(runtime)) {
+        if (teleportTargets.size() >= kMaxLiveTargets)
+            break;
+        if (!task || task == playerTask)
+            continue;
+        struct TaskTypePrefix {
+            std::uint8_t prefix[0x1C];
+            std::uint16_t type;
+        };
+        const auto type = reinterpret_cast<const TaskTypePrefix *>(task)->type;
+        if (!isNpcTask(task) && !isCarTask(task) && !isHeliTask(task) &&
+            IGI::TASK::IS_A(type, rigidType) == 0 && IGI::TASK::IS_A(type, humanType) == 0) {
+            continue;
+        }
+        teleportTargets.push_back({liveTaskKey(task), liveTaskName(task)});
+    }
+    const auto teleport =
+        replaceChoices("player_teleport_target", teleportTargets, "No live targets", -1);
     if (!npc.preservedIsLive)
         g_selectedNpcTaskId = -1;
     if (!car.preservedIsLive)
         g_selectedCarTaskId = -1;
     if (!heli.preservedIsLive)
         g_selectedHeliTaskId = -1;
-    if (npc.changed || car.changed || heli.changed) {
+    if (npc.changed || car.changed || heli.changed || teleport.changed) {
         log(LogLevel::Info, "live targets refreshed from the active game task list");
     }
-    return npc.changed || car.changed || heli.changed;
+    return npc.changed || car.changed || heli.changed || teleport.changed;
 }
 
 void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::size_t item,
@@ -942,6 +1202,11 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
         }
     } else if (id == "player_collision") {
         PlayerHelpers(runtime).setCollisionEnabled(value == "Enabled");
+    } else if (id == "player_send_position") {
+        if (PlayerHelpers(runtime).sendPosition())
+            log(LogLevel::Info, "player position resent to the retail player state machine");
+        else
+            log(LogLevel::Warning, "send player position rejected: no live player was found");
     } else if (id == "input") {
         PlayerHelpers(runtime).setInputEnabled(value == "Enabled");
     } else if (id == "look") {
@@ -969,19 +1234,17 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
     } else if (id == "view") {
         setPlayerThirdPersonView(runtime, value == "Third Person");
     } else if (id == "debug_keys") {
-        // The retail debug keys are LCtrl + LShift + KEY. Fly mode (F) is the same
-        // free camera, so this control enables it and reports the retail chart.
+        // The retail debug keys are handled by the game itself (LCtrl + LShift +
+        // KEY). Touching the player body or the camera here crashed the game, so
+        // this control only reports the retail chart.
         const bool enabled = value == "Enabled";
-        if (setFreecamEnabled(runtime, enabled)) {
-            log(LogLevel::Info, std::string("debug keys ") + (enabled ? "enabled" : "disabled") +
-                                    "; retail chart: LCtrl+LShift+ F fly, Q/E cycle camera, "
-                                    "A default camera, F9 unlock missions, F11 position, "
-                                    "F12 next mission, P all weapons, R restart, I invincible, "
-                                    "Numpad +/- zoom, Numpad Enter zoom reset, Numpad * third "
-                                    "person, Numpad 8/2 pitch, 4/6 yaw, 9/3 distance");
-        } else {
-            log(LogLevel::Warning, "debug keys request rejected: the game camera is unavailable");
-        }
+        log(LogLevel::Info, std::string("debug keys ") + (enabled ? "enabled" : "disabled") +
+                                "; retail chart: LCtrl+LShift+ F fly, Q/E cycle camera, "
+                                "A default camera, F9 unlock missions, F11 position, "
+                                "F12 next mission, P all weapons, R restart, I invincible, "
+                                "Numpad +/- zoom, Numpad Enter zoom reset, Numpad * third "
+                                "person, Numpad 8/2 pitch, 4/6 yaw, 9/3 distance. Use the Free "
+                                "Camera control for the mod camera.");
     } else if (id == "freecam") {
         if (setFreecamEnabled(runtime, value == "Enabled"))
             log(LogLevel::Info, "free camera state applied");
@@ -1412,8 +1675,11 @@ static bool executeMenuCommand(std::string_view commandScript) {
         static_cast<IGI::Task *>(static_cast<GameRootLayout *>(static_cast<void *>(game))->root);
     if (!root)
         return false;
+    // The temporary command script only calls registered game functions, so any
+    // live task can host it. This keeps mission switching working in the external
+    // ImGui build, which has no retail MenuManager on the stack.
     auto *manager = IGI::TASK::FIND_CHILD(root, IGI::MENU::GET_TYPE());
-    return executeMenuCommandFor(manager, commandScript);
+    return executeMenuCommandFor(manager ? manager : root, commandScript);
 }
 
 IGI::Human *selectedNpc(Runtime &runtime) {
@@ -1446,6 +1712,8 @@ bool changeLevel(Runtime &runtime, int levelId) {
         log(LogLevel::Error, "level change: injected menu cleanup failed");
         return false;
     }
+    // The cleanup above deleted the retail MenuManager together with the injected
+    // screens, so the temporary command script runs on the game root instead.
     if (!executeMenuCommand("Game_SetMission(" + std::to_string(levelId) + ");")) {
         log(LogLevel::Error, "level change: mission selection command failed");
         return false;
@@ -1690,11 +1958,12 @@ std::vector<LiveTarget> EntityHelpers::npcTargets() const {
     std::vector<LiveTarget> targets;
     if (!requireLiveGameThread(runtime_))
         return targets;
-    for (int id = 0; id < 4096 && targets.size() < kMaxLiveTargets; ++id) {
-        auto *task = IGI::TASK::FIND_BY_ID(id);
+    for (auto *task : liveTasks(runtime_)) {
+        if (targets.size() >= kMaxLiveTargets)
+            break;
         if (!isNpcTask(task))
             continue;
-        targets.push_back({IGI::TASK::GET_ID(task), liveTaskName(task)});
+        targets.push_back({liveTaskKey(task), liveTaskName(task)});
     }
     return targets;
 }
@@ -1702,21 +1971,19 @@ std::vector<LiveTarget> EntityHelpers::carTargets() const {
     std::vector<LiveTarget> targets;
     if (!requireLiveGameThread(runtime_))
         return targets;
-    for (int id = 0; id < 4096 && targets.size() < kMaxLiveTargets; ++id) {
-        auto *task = IGI::TASK::FIND_BY_ID(id);
+    for (auto *task : liveTasks(runtime_)) {
+        if (targets.size() >= kMaxLiveTargets)
+            break;
         if (!isCarTask(task))
             continue;
-        targets.push_back({IGI::TASK::GET_ID(task), liveTaskName(task)});
+        targets.push_back({liveTaskKey(task), liveTaskName(task)});
     }
     return targets;
 }
 IGI::Heli *EntityHelpers::firstHeli() const {
     if (!requireLiveGameThread(runtime_))
         return nullptr;
-    for (int id = 0; id < 4096; ++id) {
-        auto *task = IGI::TASK::FIND_BY_ID(id);
-        if (!task)
-            continue;
+    for (auto *task : liveTasks(runtime_)) {
         const auto type = reinterpret_cast<const IgiTaskLayout *>(task)->type;
         if (isHeliTaskType(type))
             return reinterpret_cast<IGI::Heli *>(task);
@@ -1728,15 +1995,46 @@ std::vector<LiveTarget> EntityHelpers::heliTargets() const {
     std::vector<LiveTarget> targets;
     if (!requireLiveGameThread(runtime_))
         return targets;
-    for (int id = 0; id < 4096 && targets.size() < kMaxLiveTargets; ++id) {
-        auto *task = IGI::TASK::FIND_BY_ID(id);
-        if (!task)
-            continue;
+    for (auto *task : liveTasks(runtime_)) {
+        if (targets.size() >= kMaxLiveTargets)
+            break;
         const auto type = reinterpret_cast<const IgiTaskLayout *>(task)->type;
         if (!isHeliTaskType(type))
             continue;
-        targets.push_back({IGI::TASK::GET_ID(task), liveTaskName(task)});
+        targets.push_back({liveTaskKey(task), liveTaskName(task)});
     }
+    return targets;
+}
+
+std::vector<LiveTarget> EntityHelpers::landmarkTargets() const {
+    std::vector<LiveTarget> targets;
+    if (!requireLiveGameThread(runtime_))
+        return targets;
+    const auto rigidType = IGI::TASK::RIGID_DYN_CUBE_GET_TYPE();
+    auto *playerTask = IGI::GAME::GET_PLAYER(0);
+    for (auto *task : liveTasks(runtime_)) {
+        if (targets.size() >= kMaxLiveTargets)
+            break;
+        if (!task || task == playerTask)
+            continue;
+        const auto type = reinterpret_cast<const IgiTaskLayout *>(task)->type;
+        if (IGI::TASK::IS_A(type, rigidType) == 0)
+            continue;
+        // RigidDynCubeObj.pos is at +0x20 (IGI-RE magicobjtypes.h). A zero
+        // position means the object is not placed yet (or is a template task).
+        double position[3]{};
+        std::memcpy(position, reinterpret_cast<const std::uint8_t *>(task) + 0x20,
+                    sizeof(position));
+        const double magnitude =
+            std::fabs(position[0]) + std::fabs(position[1]) + std::fabs(position[2]);
+        if (!std::isfinite(magnitude) || magnitude < 1.0)
+            continue;
+        targets.push_back(
+            {liveTaskKey(task), liveTaskName(task), {position[0], position[1], position[2]}, true});
+    }
+    std::sort(targets.begin(), targets.end(), [](const LiveTarget &left, const LiveTarget &right) {
+        return left.name < right.name;
+    });
     return targets;
 }
 

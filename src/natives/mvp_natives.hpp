@@ -223,6 +223,25 @@ inline constexpr std::uint32_t HUMAN_GET_PUNCH_EVENT = 0x00460c40;
 inline constexpr std::uint32_t SOLDIER_TURN_TO_HIT = 0x0045daa0;
 inline constexpr std::uint32_t GUN_GET_TYPE = 0x00477bf0;
 inline constexpr std::uint32_t HUMAN_VIEW_SET_CAMERA = 0x004658d0;
+inline constexpr std::uint32_t HUMAN_VIEW_CLEAR_CAM_OVERRIDE = 0x00465910;
+// Matrix_SetEuler composes the retail Z-Y-X rotation the camera override expects.
+inline constexpr std::uint32_t MATRIX_SET_EULER = 0x004b38e0;
+// Base task type for every world-space object (cars, doors, pickups, props).
+inline constexpr std::uint32_t RIGID_DYN_CUBE_OBJ_GET_TYPE = 0x004c48c0;
+// The camera actually being rendered this frame (Camera*, not HumanCamera).
+inline constexpr std::uint32_t VIEWPORT_GET_CURRENT_CAMERA = 0x004e81f0;
+// World->screen projection through the active TransContext (IGI-RE
+// TransContext_Project). Valid inside the frame after the last viewport draw.
+inline constexpr std::uint32_t TRANS_CONTEXT_PROJECT = 0x00497f20;
+// Human_SendPosition broadcasts a Human's body position to task list 1.
+inline constexpr std::uint32_t HUMAN_SEND_POSITION = 0x00463080;
+// AmmoList_Add adds reserve rounds for an ammo id (Human.ammo is at +0x340).
+inline constexpr std::uint32_t AMMO_LIST_ADD = 0x0047ce00;
+// Screen_GetFrame returns the frame serial Camera_Set orders by.
+inline constexpr std::uint32_t SCREEN_GET_FRAME = 0x004e75a0;
+// Viewport_AddCallback registers fn(Camera*) for every viewport draw, which is
+// how the mod captures the live Camera object the renderer will use.
+inline constexpr std::uint32_t VIEWPORT_ADD_CALLBACK = 0x004e8290;
 inline constexpr std::uint32_t CAR_GET_LIGHT = 0x0042fc70;
 inline constexpr std::uint32_t GRAPH_GET_UNUSED_EVENT0 = 0x004f9250;
 inline constexpr std::uint32_t AI_FUNCTION_SET_SECONDARY_ALARM_VIEW_LENGTH = 0x0044de80;
@@ -517,6 +536,9 @@ NATIVE_DECL char IS_DEAD(Human *h);
 NATIVE_DECL char IS_CROUCHING(Human *h);
 NATIVE_DECL char IS_ACTIVE(Human *h);
 NATIVE_DECL void SET_POSITION(Human *h, double *position);
+// Broadcasts the Human body position to task list 1, exactly like the retail
+// HumanPlayer_Update does after every move.
+NATIVE_DECL void SEND_POSITION(Human *h);
 NATIVE_DECL void SET_YAW(Human *h, float yaw);
 NATIVE_DECL void SNAP_TO_GROUND(Human *h);
 NATIVE_DECL void LEAVE_GROUND(Human *h);
@@ -584,6 +606,9 @@ NATIVE_DECL void GET_EYE(double *out, HumanView *v);
 NATIVE_DECL void GET_MATRIX(Matrix *out, HumanView *v);
 NATIVE_DECL void GET_FORWARD(float *out, HumanView *v);
 NATIVE_DECL void SET_CAMERA(HumanView *v, const double *pos, const Matrix *rot);
+// Clears the camera override so the retail view controls the camera again.
+NATIVE_DECL void CLEAR_CAM_OVERRIDE(HumanView *v);
+NATIVE_DECL void SET_EULER(Matrix *m, float ax, float ay, float az);
 NATIVE_DECL void SET_TARGET(HumanView *v, const int *target, char flag);
 NATIVE_DECL void SET_DIP(HumanView *v, float dip);
 NATIVE_DECL void SET_ZOOMED(HumanView *v);
@@ -775,6 +800,7 @@ NATIVE_DECL uint16_t GET_ROOT_TYPE();
 NATIVE_DECL int GET_COUNT();
 NATIVE_DECL uint16_t FIND(const char *name);
 NATIVE_DECL const char *GET_NAME(uint16_t type);
+NATIVE_DECL uint16_t RIGID_DYN_CUBE_GET_TYPE();
 NATIVE_DECL Task *FIND_CHILD(Task *task, uint16_t type);
 NATIVE_DECL Task *FIND_LAST_CHILD(Task *task, uint16_t type);
 NATIVE_DECL Task *FIND_NEXT(Task *task, uint16_t type);
@@ -829,6 +855,16 @@ NATIVE_DECL void SCENE_SELECT(void *scene, char add);
 NATIVE_DECL DisplayMode *DISPLAY_GET_MODE();
 NATIVE_DECL void DRAW_SPRITE_Z(const Sprite *sheet, float x, float y, float r, float g, float b,
                                int frame, int unk4, int unk8, float z);
+NATIVE_DECL void *VIEWPORT_GET_CAMERA();
+// Projects a world point through the active retail TransContext. out[0..1] are
+// display pixels, depth is the view-space z (<= 0 means behind the camera).
+NATIVE_DECL void TRANS_CONTEXT_PROJECT(float *out, float *depth, const double *pos);
+// Adds `count` reserve rounds for `id` to an AmmoList (Human+0x340).
+NATIVE_DECL void AMMO_LIST_ADD(void *list, int id, int count);
+// Returns the current render frame serial (Screen_GetFrame).
+NATIVE_DECL int SCREEN_GET_FRAME();
+// Registers fn(Camera*) to run once per viewport before it draws.
+NATIVE_DECL void VIEWPORT_ADD_CALLBACK(void (*fn)(void *camera));
 NATIVE_DECL int SPRITE_WIDTH(Sprite *sprite);
 NATIVE_DECL int SPRITE_HEIGHT(Sprite *sprite);
 } // namespace OTHER

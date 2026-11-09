@@ -25,6 +25,9 @@ using MenuLiveItemRefresher = std::function<bool(MenuConfig &, Runtime &)>;
 // Asked once per frame by the ImGui host. Returning true draws the mod crosshair
 // over the game view (the retail HUD hides it in third person).
 using MenuCrosshairQuery = std::function<bool(Runtime &)>;
+// Optional: screen position of the demo's crosshair in a width x height view.
+// Falling back to the view centre is the host's job when this returns false.
+using MenuCrosshairPosition = std::function<bool(Runtime &, int, int, float &, float &)>;
 // Reports a page navigation request from the retail menu (delta -1 or +1).
 using MenuPageHandler = std::function<void(int)>;
 // Runs every displayed frame, regardless of whether the menu is open. Used for
@@ -121,8 +124,10 @@ struct MenuConfig {
     // Optional game-thread callback for a demo to replace runtime-backed list
     // choices (for example, live task targets) before a menu is displayed.
     MenuLiveItemRefresher refreshLiveItems;
-    // Optional: the demo reports whether its crosshair should be drawn now.
+    // Optional: the demo reports whether its crosshair should be drawn now, and
+    // where its aim ray projects on screen.
     MenuCrosshairQuery crosshairActive;
+    MenuCrosshairPosition crosshairPosition;
     // Optional per-frame mod logic (free camera, timers, overrides).
     MenuFrameUpdate frameUpdate;
     MenuEndFrameRenderer renderEndFrame;

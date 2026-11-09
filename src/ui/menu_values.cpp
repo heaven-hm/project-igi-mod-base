@@ -56,7 +56,11 @@ void MenuValues::commit() noexcept {
 }
 
 bool MenuValues::selectedChanged(std::size_t item) const noexcept {
-    return item < items_.size() && items_[item].kind == ModMenuItemKind::List &&
+    // Numeric inputs are ListBox sample selectors in the retail frontend, so a
+    // changed input must be applied exactly like a changed list choice.
+    return item < items_.size() &&
+           (items_[item].kind == ModMenuItemKind::List ||
+            items_[item].kind == ModMenuItemKind::Input) &&
            selected_[item] != committedSelected_[item];
 }
 
@@ -110,7 +114,6 @@ bool MenuValues::select(std::size_t item, std::size_t index) noexcept {
 }
 
 bool MenuValues::resync(const MenuConfig &config) {
-    inputLabels_.assign(items_.size(), {});
     if (config.items.size() != items_.size()) {
         // A different control set needs a new bridge and screen, not a resync.
         return false;
@@ -127,6 +130,25 @@ bool MenuValues::resync(const MenuConfig &config) {
             selected_[i] = selection;
             committedSelected_[i] = selection;
             changed = true;
+        }
+        if (items_[i].kind == ModMenuItemKind::Input) {
+            // Numeric inputs expose their sample values through the retail
+            // ListBox. Rebuilding the labels keeps the picker alive across a
+            // live refresh, and a new prefilled value (the player's current
+            // position) becomes selectable instead of leaving an empty list.
+            const bool valueChanged = items_[i].inputValue != live.inputValue;
+            items_[i].inputValue = live.inputValue;
+            items_[i].inputMinimum = live.inputMinimum;
+            items_[i].inputMaximum = live.inputMaximum;
+            items_[i].inputStep = live.inputStep;
+            inputLabels_[i].clear();
+            for (const int sample : inputSamples(items_[i]))
+                inputLabels_[i].push_back(std::to_string(sample));
+            if (valueChanged) {
+                selected_[i] = 0;
+                committedSelected_[i] = 0;
+                changed = true;
+            }
         }
         items_[i].label = live.label;
     }

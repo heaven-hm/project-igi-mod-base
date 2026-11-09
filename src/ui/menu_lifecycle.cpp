@@ -3,6 +3,26 @@
 #include "logging/logging.hpp"
 
 namespace igi {
+namespace {
+// The mod menu can be opened from normal gameplay or from on top of the retail
+// pause menu. Only the pause this module created may be undone on close, or
+// closing the mod menu resumes a game the retail pause menu is still holding.
+struct MenuPauseOwnership {
+    bool active = false;
+    bool gamePausedBefore = false;
+    bool inputLocked = false;
+};
+MenuPauseOwnership g_pause;
+} // namespace
+
+bool menuPauseActive() {
+    return g_pause.active;
+}
+
+void abandonMenuPause() {
+    g_pause = {};
+}
+
 bool lockHumanInput() {
     if (!IGI::GAME::GET())
         return false;
@@ -42,7 +62,11 @@ bool pauseForMenu(Runtime &runtime) {
         return false;
     if (!IGI::GAME::GET())
         return false;
-    lockHumanInput();
+    if (!g_pause.active) {
+        g_pause.active = true;
+        g_pause.gamePausedBefore = IGI::GAME::IS_PAUSED();
+        g_pause.inputLocked = lockHumanInput();
+    }
     if (IGI::GAME::IS_PAUSED())
         return true;
     IGI::GAME::SET_PAUSED(1);
@@ -54,8 +78,23 @@ bool resumeFromMenu(Runtime &runtime) {
         return false;
     if (!IGI::GAME::GET())
         return false;
-    unlockHumanInput();
-    IGI::GAME::SET_PAUSED(0);
-    return !IGI::GAME::IS_PAUSED();
+    if (!g_pause.active) {
+        // No pause was requested through pauseForMenu; keep the historical
+        // behaviour for callers that manage the pause themselves.
+        unlockHumanInput();
+        IGI::GAME::SET_PAUSED(0);
+        return !IGI::GAME::IS_PAUSED();
+    }
+    // The retail pause menu was already holding the game paused: leave its
+    // pause and input lock exactly as they are.
+    const bool retailOwnsPause = g_pause.gamePausedBefore;
+    const bool inputLockedByMod = g_pause.inputLocked;
+    g_pause = {};
+    if (!retailOwnsPause) {
+        if (inputLockedByMod)
+            unlockHumanInput();
+        IGI::GAME::SET_PAUSED(0);
+    }
+    return retailOwnsPause ? IGI::GAME::IS_PAUSED() : !IGI::GAME::IS_PAUSED();
 }
 } // namespace igi

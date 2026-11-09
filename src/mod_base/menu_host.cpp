@@ -83,10 +83,19 @@ struct InternalMenuState {
     std::atomic<bool> shutdownPending{false};
     bool menuScreenCreated = false;
     bool menuScreenAttached = false;
+    // Id of the one MenuScreen task this instance created. Cleanup must never
+    // delete a task at this address that we did not create: the configured id
+    // range can already be occupied by the retail pause menu.
+    std::int32_t createdScreenId = -1;
     MenuTransition pendingTransition = MenuTransition::None;
     // Page navigation closes the current page screen and re-attaches with the
     // next page, so only one MenuScreen task ever exists in the retail manager.
     int pendingPageDelta = 0;
+    bool pageSwitchInFlight = false;
+    // The retail pause menu can be pushed on top of the injected screen. It must
+    // not be popped or deleted from under the game, so the close waits for the
+    // game to leave that screen first.
+    bool closeDeferredBehindRetailScreen = false;
     std::uint64_t transitionDeadlineFrame = 0;
     std::atomic<bool> initialAttachPending{false};
 #if defined(_WIN32)
@@ -115,7 +124,10 @@ auto &shutdownPending = g_menu.shutdownPending;
 auto &menuScreenCreated = g_menu.menuScreenCreated;
 auto &menuScreenAttached = g_menu.menuScreenAttached;
 auto &pendingTransition = g_menu.pendingTransition;
+auto &createdScreenId = g_menu.createdScreenId;
 auto &pendingPageDelta = g_menu.pendingPageDelta;
+auto &pageSwitchInFlight = g_menu.pageSwitchInFlight;
+auto &closeDeferredBehindRetailScreen = g_menu.closeDeferredBehindRetailScreen;
 auto &transitionDeadlineFrame = g_menu.transitionDeadlineFrame;
 auto &initialAttachPending = g_menu.initialAttachPending;
 
@@ -241,8 +253,16 @@ bool installMenuScriptCallbacks() {
         },
         /*deferUntilApply=*/true,
         [](int delta) {
-            if (delta != 0)
-                pendingPageDelta = delta;
+            if (delta == 0 || pendingTransition != MenuTransition::None)
+                return;
+            // A page row is a one-shot click, but rebuilding the page happens on
+            // the game frame after the retail pop. The page switch used to be
+            // deferred until the menu closed, which turned every later close
+            // into a hidden page change instead of a close.
+            pendingPageDelta = delta;
+            pageSwitchInFlight = true;
+            igi::log(igi::LogLevel::Info,
+                     "internal menu page: requested; switching after the retail screen pop");
         });
     menuCallbacks = std::make_unique<igi::MenuScriptCallbacks>(*menuBridge, script);
     if (!menuRegistration.start(*menuCallbacks, registry)) {
@@ -288,28 +308,39 @@ bool isConfiguredMenuScreenActive() {
     return false;
 }
 
+// True when the retail manager is showing a screen of its own (the in-game pause
+// menu) rather than the injected one.
+bool anyRetailScreenActive() {
+    auto *manager = static_cast<const RetailMenuManagerLayout *>(IGI::OTHER::FLOW_GET_SCREEN());
+    if (!manager || manager->currentScreenId <= 0)
+        return false;
+    return IGI::TASK::FIND_BY_ID(manager->currentScreenId) != nullptr;
+}
+
 // Removes the injected MenuScreen task while the retail MenuManager is still
 // alive. The retail pop only takes the screen off the stack, so a leftover child
 // would keep sitting in front of the game's own screens (the pause menu would
 // open behind a dead screen). Must run before the QVM resource is released.
 void releaseInjectedMenuScreen() {
 #if defined(_WIN32)
-    bool removed = false;
-    const auto pages = igi::menuPageCount(menuConfig);
-    for (std::size_t page = 0; page < pages; ++page) {
-        const int id = igi::menuPageScreenId(menuConfig, page);
-        auto *screen = IGI::TASK::FIND_BY_ID(id);
-        if (!screen)
-            continue;
-        igi::log(igi::LogLevel::Info,
-                 "internal unload: deleting leftover menu screen task id " + std::to_string(id));
-        IGI::TASK::DELETE_TASK(screen);
-        removed = true;
+    // Only delete the screen this instance created. The configured id range can
+    // already hold the retail in-game (pause) menu, and deleting every task at
+    // those ids used to eject that menu as soon as the mod attached.
+    if (!menuScreenCreated || createdScreenId < 0) {
+        createdScreenId = -1;
+        return;
     }
-    if (!removed && menuScreenCreated)
+    auto *screen = IGI::TASK::FIND_BY_ID(createdScreenId);
+    if (screen) {
+        igi::log(igi::LogLevel::Info, "internal unload: deleting injected menu screen task id " +
+                                          std::to_string(createdScreenId));
+        IGI::TASK::DELETE_TASK(screen);
+    } else {
         igi::log(igi::LogLevel::Info,
                  "internal unload: injected menu screen already detached from id " +
-                     std::to_string(igi::menuPageScreenId(menuConfig, menuConfig.pageIndex)));
+                     std::to_string(createdScreenId));
+    }
+    createdScreenId = -1;
 #else
     (void)0;
 #endif
@@ -334,6 +365,9 @@ void completeShutdownOnGameThread() {
     menuScreenCreated = false;
     menuScreenAttached = false;
     pendingTransition = MenuTransition::None;
+    pageSwitchInFlight = false;
+    closeDeferredBehindRetailScreen = false;
+    pendingPageDelta = 0;
     shutdownPending.store(false, std::memory_order_release);
     safeToShutdown.store(true, std::memory_order_release);
     igi::log(igi::LogLevel::Info, "internal unload: game-thread cleanup finished");
@@ -377,22 +411,36 @@ bool startPageSwitch() {
 void completeCloseTransition() {
     pendingTransition = MenuTransition::None;
     menuScreenAttached = false;
-    if (pendingPageDelta != 0) {
+    if (pageSwitchInFlight && pendingPageDelta != 0) {
+        pageSwitchInFlight = false;
         if (menuBridge)
             menuBridge->cancel(false);
         if (startPageSwitch())
             return;
     }
+    // A plain close must never turn into a page change: drop any stale delta.
+    pendingPageDelta = 0;
+    pageSwitchInFlight = false;
     // The retail pop only takes the screen off the stack; the task and the
     // created flag must go too, or the next start-key press takes the fragile
     // reopen path (request a screen that was popped, miss the transition, then
     // attach anyway - the "menu opens twice" report).
     releaseInjectedMenuScreen();
     menuScreenCreated = false;
+    closeDeferredBehindRetailScreen = false;
     if (menuBridge)
         menuBridge->cancel(false);
-    if (!igi::resumeFromMenu(runtime))
+    if (anyRetailScreenActive()) {
+        // Popping our screen exposed the game's own pause menu again. That menu
+        // owns the pause and input lock now; resuming here would close it from
+        // under the player.
+        igi::abandonMenuPause();
+        igi::log(igi::LogLevel::Info,
+                 "internal menu close: game's own screen is current; left its pause state "
+                 "untouched");
+    } else if (!igi::resumeFromMenu(runtime)) {
         igi::log(igi::LogLevel::Warning, "internal menu close: unable to resume game");
+    }
     if (shutdownPending.load(std::memory_order_acquire)) {
         completeShutdownOnGameThread();
         return;
@@ -400,6 +448,48 @@ void completeCloseTransition() {
     safeToShutdown.store(true, std::memory_order_release);
     igi::log(igi::LogLevel::Info,
              "internal menu close: retail screen transition confirmed; game resumed");
+}
+
+bool closeMenuScreen();
+
+// Finishes a close that was deferred because the game's own pause menu was on
+// top of the injected screen. Runs only on the game frame.
+void processDeferredClose() {
+    if (!closeDeferredBehindRetailScreen || pendingTransition != MenuTransition::None)
+        return;
+    if (anyRetailScreenActive())
+        return;
+    closeDeferredBehindRetailScreen = false;
+    if (isConfiguredMenuScreenActive()) {
+        // The game popped back to our screen, so exactly one retail pop removes it.
+        if (!runMenuCommand("LOCAL:mod_base/modmenu-close.qvm", "deferred close")) {
+            pageSwitchInFlight = false;
+            pendingPageDelta = 0;
+            safeToShutdown.store(true, std::memory_order_release);
+            igi::log(igi::LogLevel::Warning,
+                     "internal menu close: deferred pop was rejected; screen left in place");
+            return;
+        }
+        pendingTransition = MenuTransition::Closing;
+        transitionDeadlineFrame = runtime.scheduler().gameHookInvocationCount() + 120;
+        safeToShutdown.store(false, std::memory_order_release);
+        igi::log(igi::LogLevel::Info,
+                 "internal menu close: game's own screen closed; popping the injected screen now");
+        return;
+    }
+    // The retail stack no longer references our screen: delete our task and keep
+    // the pause the game's menu established.
+    releaseInjectedMenuScreen();
+    menuScreenCreated = false;
+    menuScreenAttached = false;
+    (void)igi::resumeFromMenu(runtime);
+    if (shutdownPending.load(std::memory_order_acquire)) {
+        completeShutdownOnGameThread();
+        return;
+    }
+    safeToShutdown.store(true, std::memory_order_release);
+    igi::log(igi::LogLevel::Info,
+             "internal menu close: deferred close completed after the game's screen closed");
 }
 
 void processPendingMenuTransition() {
@@ -416,6 +506,14 @@ void processPendingMenuTransition() {
         pendingTransition = MenuTransition::None;
         menuScreenAttached = true;
         safeToShutdown.store(false, std::memory_order_release);
+        if (shutdownPending.load(std::memory_order_acquire)) {
+            // A shutdown request arrived while the reopen transition ran; the
+            // queued unload callback already returned, so close again from here.
+            igi::log(igi::LogLevel::Info,
+                     "internal menu reopen: shutdown is pending; closing the reopened screen");
+            (void)closeMenuScreen();
+            return;
+        }
         if (!igi::pauseForMenu(runtime)) {
             igi::log(igi::LogLevel::Error, "internal menu reopen: unable to pause game");
             return;
@@ -440,11 +538,22 @@ void processPendingMenuTransition() {
         return;
     }
     menuScreenAttached = false;
-    menuScreenCreated = false;
     (void)igi::resumeFromMenu(runtime);
     igi::log(igi::LogLevel::Warning,
              "internal menu reopen: retail screen did not transition; forcing a fresh attach");
+    // RequestScreen may have created the page task without ever showing it. It
+    // would keep its id occupied and make every later attach relocate, so delete
+    // it here unless the retail manager is pointing at it.
+    const int requested = igi::menuPageScreenId(menuConfig, menuConfig.pageIndex);
+    auto *manager = static_cast<const RetailMenuManagerLayout *>(IGI::OTHER::FLOW_GET_SCREEN());
+    if (auto *stale = IGI::TASK::FIND_BY_ID(requested);
+        stale && (!manager || manager->currentScreenId != requested)) {
+        igi::log(igi::LogLevel::Info, "internal menu reopen: deleting un-attached page task id " +
+                                          std::to_string(requested));
+        IGI::TASK::DELETE_TASK(stale);
+    }
     releaseInjectedMenuScreen();
+    menuScreenCreated = false;
     // The retail manager can be left pointing at a screen task that no longer
     // exists. Detach everything and let the frame tick build the screen again,
     // which also clears any wedged state instead of leaving the game stuck.
@@ -475,14 +584,11 @@ bool writeMenuResourceFile() {
     return output.good();
 }
 
-// Page navigation pushes one screen per page, so closing has to pop the whole
-// range we pushed or the game is left on a page screen.
+// Exactly one MenuScreen task is attached at a time, including after a page
+// switch. Popping once removes our screen; popping once per configured page
+// walked down the retail menu stack and closed the game's own pause menu.
 std::string closeCommandScript() {
-    const auto pages = igi::menuPageCount(menuConfig);
-    std::string script;
-    for (std::size_t page = 0; page < pages; ++page)
-        script += "MenuManager_PopScreen(FALSE);";
-    return script;
+    return "MenuManager_PopScreen(FALSE);";
 }
 
 bool rebuildMenuResources() {
@@ -567,7 +673,7 @@ constexpr std::uint64_t kLiveRefreshTicks = 60;
 // internal menu kept the list it collected when it first attached.
 void refreshAttachedLiveItems() {
     if (!menuScreenAttached || pendingTransition != MenuTransition::None || !menuBridge ||
-        !menuConfig.refreshLiveItems)
+        createdScreenId < 0 || !menuConfig.refreshLiveItems)
         return;
     const auto tick = runtime.scheduler().gameHookInvocationCount();
     if (tick - lastLiveRefreshTick < kLiveRefreshTicks)
@@ -577,7 +683,7 @@ void refreshAttachedLiveItems() {
         return;
     if (!menuBridge->resync(menuConfig))
         return;
-    if (auto *screen = IGI::TASK::FIND_BY_ID(menuConfig.screenId)) {
+    if (auto *screen = IGI::TASK::FIND_BY_ID(createdScreenId)) {
         using GetChangedEvent = std::uint8_t(__cdecl *)();
         using Broadcast = void(__cdecl *)(IGI::Task *, std::uint8_t, void *);
         const auto changedEvent =
@@ -600,7 +706,22 @@ void menuFrameWork() {
     ensureEndFrameCallbackRegistered();
 #endif
     processPendingMenuTransition();
+    processDeferredClose();
+    if (pageSwitchInFlight && pendingTransition == MenuTransition::None && menuScreenAttached) {
+        // The page row only queued the request; pop our screen here, on the game
+        // frame, so the retail manager is not re-entered from inside a script.
+        if (!runMenuCommand("LOCAL:mod_base/modmenu-close.qvm", "page switch")) {
+            pageSwitchInFlight = false;
+            pendingPageDelta = 0;
+        } else {
+            pendingTransition = MenuTransition::Closing;
+            transitionDeadlineFrame = runtime.scheduler().gameHookInvocationCount() + 120;
+            safeToShutdown.store(false, std::memory_order_release);
+        }
+    }
     refreshAttachedLiveItems();
+    if (closeDeferredBehindRetailScreen)
+        return;
     if (menuScreenAttached || pendingTransition != MenuTransition::None)
         return;
     if (!initialAttachPending.load(std::memory_order_acquire))
@@ -672,6 +793,10 @@ void menuFrameWork() {
                  "internal menu natives: screen parameter initialization completed");
     }
     menuScreenCreated = screen != nullptr;
+    // Only ever track the task at the id the page script creates. RUN_SCRIPT can
+    // return the parent task on some paths, and deleting that would take the
+    // retail MenuManager down with it.
+    createdScreenId = IGI::TASK::FIND_BY_ID(requestedScreenId) ? requestedScreenId : -1;
     menuScreenAttached = screen != nullptr;
     if (menuScreenAttached) {
         initialAttachPending.store(false, std::memory_order_release);
@@ -693,6 +818,31 @@ void menuFrameWork() {
 }
 
 bool closeMenuScreen() {
+    if (!isConfiguredMenuScreenActive()) {
+        pendingTransition = MenuTransition::None;
+        pageSwitchInFlight = false;
+        pendingPageDelta = 0;
+        menuScreenAttached = false;
+        if (anyRetailScreenActive()) {
+            // The game's own pause menu is on top of our screen. Popping would
+            // close that menu and deleting our task would leave the retail stack
+            // pointing at a dead screen, so wait for the game to pop back to us.
+            closeDeferredBehindRetailScreen = true;
+            safeToShutdown.store(false, std::memory_order_release);
+            igi::abandonMenuPause();
+            igi::log(igi::LogLevel::Info,
+                     "internal menu close: deferred while the game's own screen is open");
+            return true;
+        }
+        releaseInjectedMenuScreen();
+        menuScreenCreated = false;
+        (void)igi::resumeFromMenu(runtime);
+        safeToShutdown.store(true, std::memory_order_release);
+        igi::log(igi::LogLevel::Info,
+                 "internal menu close: no injected screen is active; cleaned up without "
+                 "touching the game's screens");
+        return true;
+    }
     if (!runMenuCommand("LOCAL:mod_base/modmenu-close.qvm", "close"))
         return false;
     pendingTransition = MenuTransition::Closing;
@@ -730,6 +880,11 @@ bool reopenMenuScreen() {
 }
 
 bool toggleMenuScreenOnGameThread() {
+    if (closeDeferredBehindRetailScreen) {
+        igi::log(igi::LogLevel::Info,
+                 "internal menu toggle: waiting for the game's own screen to close first");
+        return false;
+    }
     if (pendingTransition != MenuTransition::None) {
         igi::log(igi::LogLevel::Info,
                  "internal menu toggle: ignored while a retail screen transition is in flight");
@@ -754,6 +909,13 @@ bool prepareMenuForLevelChange() {
         return true;
 
     initialAttachPending.store(false, std::memory_order_release);
+    // The Game task is torn down immediately after this call, so no close/reopen
+    // transition may keep running against it in the next frame.
+    pendingTransition = MenuTransition::None;
+    pendingPageDelta = 0;
+    pageSwitchInFlight = false;
+    closeDeferredBehindRetailScreen = false;
+    transitionDeadlineFrame = 0;
 #if defined(_WIN32)
     unregisterEndFrameCallback();
 #endif
@@ -812,7 +974,10 @@ extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_Internal_Initialize() {
         igi::log(igi::LogLevel::Error, "internal initialize: runtime initialization failed");
         return false;
     }
-    initialAttachPending.store(true, std::memory_order_release);
+    // Do not stage an automatic attach here: the start key that initialized the
+    // DLL is the same press that should open the menu exactly once. The caller
+    // toggles after a successful initialize.
+    initialAttachPending.store(false, std::memory_order_release);
     igi::log(igi::LogLevel::Info, "internal startup stage: enqueue begin");
     runtime.scheduler().enqueueEveryFrame([] { menuFrameWork(); });
     igi::log(igi::LogLevel::Info, "internal startup stage: enqueue complete");
@@ -898,6 +1063,13 @@ extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_Internal_RequestShutdown() {
     safeToShutdown.store(false, std::memory_order_release);
     runtime.scheduler().enqueueOnce([] {
         igi::log(igi::LogLevel::Info, "internal unload: game-thread cleanup started");
+        if (closeDeferredBehindRetailScreen || pendingTransition != MenuTransition::None) {
+            // finishCloseAndShutdown runs from the deferred-close path once the
+            // retail stack is back on our screen.
+            igi::log(igi::LogLevel::Info,
+                     "internal unload: waiting for the in-flight screen transition to finish");
+            return;
+        }
         const bool wasAttached = menuScreenAttached;
         if (wasAttached && !closeMenuScreen()) {
             igi::log(igi::LogLevel::Error,

@@ -39,11 +39,13 @@ std::size_t menuScreenIdSpan(const MenuConfig &config) {
 }
 
 int menuRequiredHeight(const MenuConfig &config) {
-    // Only one page is visible at a time, so the frame is sized for the rows on a
-    // page plus the title, navigation and button rows.
+    // The frame must fit every row it draws: the title, the controls on this
+    // page, both navigation rows when the menu is paged, and the button row.
+    // The old formula counted only one navigation row, so paged menus clipped
+    // the row above the buttons.
     const bool paged = menuPageCount(config) > 1;
     const std::size_t rowsOnPage = std::min(config.items.size(), kMenuRowsPerPage);
-    const auto rows = rowsOnPage + 2 + (paged ? 1 : 0);
+    const auto rows = rowsOnPage + (config.title.empty() ? 0 : 1) + (paged ? 2 : 0) + 1;
     return static_cast<int>(rows) * static_cast<int>(kRowHeight + kRowSpacing) + 8;
 }
 
@@ -72,10 +74,17 @@ std::vector<int> inputSamples(const ModMenuItemConfig &item) {
     // The retail screen offers a few presets only; the ImGui frontend has the
     // real text box, so a long sample list would just bloat the retail list.
     constexpr std::size_t kMaxInputSamples = 5;
+    // A prefilled value (for example the player's current X/Y/Z) must be the
+    // first entry, not a value the list can never reach from its minimum.
+    if (item.inputValue >= low && item.inputValue <= high)
+        samples.push_back(item.inputValue);
     const int step = item.inputStep > 0 ? item.inputStep : 1;
     for (int value = low; value <= high;) {
-        samples.push_back(value);
         if (samples.size() >= kMaxInputSamples)
+            break;
+        if (std::find(samples.begin(), samples.end(), value) == samples.end())
+            samples.push_back(value);
+        if (value > high - step)
             break;
         value += step;
     }

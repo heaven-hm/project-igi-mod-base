@@ -61,6 +61,9 @@ struct ExternalImGuiMenuState {
     std::vector<bool> toggleValues;
     std::vector<int> sliderValues;
     std::vector<int> inputValues;
+    // Last prefilled value seen from the demo (player position, ammo readout),
+    // so a demo refresh reaches the widget without overwriting user edits.
+    std::vector<int> prefilledInputValues;
     std::string lastStatusMessage;
     std::atomic<std::uint64_t> frameCount{0};
     std::atomic<bool> safeToShutdown{true};
@@ -87,6 +90,7 @@ auto &listSelections = g_menu.listSelections;
 auto &toggleValues = g_menu.toggleValues;
 auto &sliderValues = g_menu.sliderValues;
 auto &inputValues = g_menu.inputValues;
+auto &prefilledInputValues = g_menu.prefilledInputValues;
 auto &lastStatusMessage = g_menu.lastStatusMessage;
 auto &frameCount = g_menu.frameCount;
 auto &safeToShutdown = g_menu.safeToShutdown;
@@ -141,11 +145,13 @@ void initializeMenuStateBuffers() {
     toggleValues.resize(menuConfig.items.size(), false);
     sliderValues.assign(menuConfig.items.size(), 0);
     inputValues.assign(menuConfig.items.size(), 0);
+    prefilledInputValues.assign(menuConfig.items.size(), 0);
     for (std::size_t index = 0; index < menuConfig.items.size(); ++index) {
         const auto &item = menuConfig.items[index];
         toggleValues[index] = item.defaultToggle;
         sliderValues[index] = item.sliderDefault;
         inputValues[index] = item.inputValue;
+        prefilledInputValues[index] = item.inputValue;
         if (item.defaultSelection < item.values.size())
             listSelections[index] = static_cast<int>(item.defaultSelection);
     }
@@ -167,7 +173,23 @@ void refreshLiveMenuItems() {
         anyList = anyList || isList;
         previousChoices.push_back(isList ? item.values : std::vector<std::string>{});
     }
-    if (!anyList || !menuConfig.refreshLiveItems(menuConfig, runtime))
+    const bool refreshed = anyList ? menuConfig.refreshLiveItems(menuConfig, runtime) : false;
+    // A demo can also refresh numeric inputs from live state (the player's
+    // current X/Y/Z position). Adopt a value only when the demo changed it, so
+    // typing in the box is never overwritten by the per-frame refresh.
+    if (prefilledInputValues.size() == menuConfig.items.size()) {
+        for (std::size_t index = 0; index < menuConfig.items.size(); ++index) {
+            const auto &item = menuConfig.items[index];
+            if (item.kind != igi::ModMenuItemKind::Input)
+                continue;
+            if (prefilledInputValues[index] == item.inputValue)
+                continue;
+            prefilledInputValues[index] = item.inputValue;
+            if (index < inputValues.size())
+                inputValues[index] = item.inputValue;
+        }
+    }
+    if (!refreshed)
         return;
     for (std::size_t index = 0; index < menuConfig.items.size() && index < listSelections.size();
          ++index) {
@@ -828,7 +850,7 @@ void renderImGuiModWindow() {
 // The retail HUD hides the crosshair in third person, so the mod draws it over
 // the game view. This uses the validated Direct3D 7 ImGui renderer that already
 // draws the menu, which is why it does not depend on the retail sprite pass.
-void drawCrosshairOverlay() {
+void drawCrosshairOverlay(igi::Runtime &runtime) {
     if (!ensureImGuiBackend())
         return;
     // The retail view rect: the crosshair must track this, not the window.
@@ -853,8 +875,18 @@ void drawCrosshairOverlay() {
     // cross sprite at width*0.5/height*0.5 of the display mode), but the mod
     // renders over the D3D viewport, which can letterbox. Use the viewport rect
     // itself so the crosshair tracks the camera and the aim.
-    const float centreX = static_cast<float>(vp.dwX) + static_cast<float>(vp.dwWidth) * 0.5f;
-    const float centreY = static_cast<float>(vp.dwY) + static_cast<float>(vp.dwHeight) * 0.5f;
+    float centreX = static_cast<float>(vp.dwX) + static_cast<float>(vp.dwWidth) * 0.5f;
+    float centreY = static_cast<float>(vp.dwY) + static_cast<float>(vp.dwHeight) * 0.5f;
+    // Project the player's aim ray through the live third-person camera; the old
+    // centre-only crosshair did not match where the weapon actually shot.
+    float aimX = 0.0f;
+    float aimY = 0.0f;
+    if (menuConfig.crosshairPosition &&
+        menuConfig.crosshairPosition(runtime, static_cast<int>(vp.dwWidth),
+                                     static_cast<int>(vp.dwHeight), aimX, aimY)) {
+        centreX = static_cast<float>(vp.dwX) + aimX;
+        centreY = static_cast<float>(vp.dwY) + aimY;
+    }
     const ImVec2 centre(centreX, centreY);
     ImDrawList *draw = ImGui::GetBackgroundDrawList();
     constexpr float kGap = 4.0f;
@@ -895,7 +927,7 @@ extern "C" void __cdecl onDisplayEndFrame() noexcept {
         if (menuConfig.crosshairActive) {
             // The mod reports whether its crosshair belongs on screen right now.
             if (menuConfig.crosshairActive(runtime))
-                drawCrosshairOverlay();
+                drawCrosshairOverlay(runtime);
             return;
         }
         if (menuConfig.renderEndFrame)
@@ -971,7 +1003,9 @@ extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_External_Initialize() {
         igi::log(igi::LogLevel::Error, "external imgui initialize: runtime initialization failed");
         return false;
     }
-    initialAttachPending.store(true, std::memory_order_release);
+    // The start key that initialized the DLL opens the menu exactly once; an
+    // automatic attach here made the first F5 press look like two opens.
+    initialAttachPending.store(false, std::memory_order_release);
     runtime.scheduler().enqueueEveryFrame([] { menuFrameWork(); });
 #else
     runtime.scheduler().bindGameThread();

@@ -75,8 +75,7 @@ bool writeMenuScript(std::ostream &out, const MenuConfig &config, bool standalon
         const std::size_t lastRow = std::min(firstRow + rowsPerPage, config.items.size());
         pageOut
             << "Task_New(" << pageScreenId << ", \"MenuScreen\", \"IGI SDK\", \"\", " << config.x
-            << ", " << config.y << ", " << config.x + config.width << ", "
-            << config.y + config.height
+            << ", " << screenTop << ", " << config.x + config.width << ", " << screenBottom
             << ", \"IGI_SDK_Cancel() - MenuManager_PopScreen(FALSE)\", \"\", \"\", Task_New(-1, "
                "\"MenuFrame\", \"\", \"\", "
             << config.x << ", " << frameY << ", " << config.width << ", " << frameHeight

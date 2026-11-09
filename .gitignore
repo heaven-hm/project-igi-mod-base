@@ -69,6 +69,7 @@ Thumbs.db
 .claude
 .gemini
 .agy
+.opencode
 
 # ==============================================================================
 # Local Data & Assets (per AGENTS.md rule)

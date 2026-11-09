@@ -37,8 +37,10 @@ constexpr std::array kWeaponLabels = {"Glock 17",   "MP5SD",        "Uzi",    "M
 // Selected weapon index and the ammo amount the user typed into the text box.
 std::size_t g_selectedWeapon = 0;
 int g_refillAmmo = 120;
-// Typed teleport coordinates.
+// Typed teleport coordinates and whether the player edited any of them. An
+// untouched (0,0,0) triple used to teleport the player out of the world.
 double g_teleportPos[3] = {0.0, 0.0, 0.0};
+bool g_teleportPosSet = false;
 
 constexpr std::array kLevelLabels = {"Level 1",  "Level 2",  "Level 3",  "Level 4", "Level 5",
                                      "Level 6",  "Level 7",  "Level 8",  "Level 9", "Level 10",
@@ -150,6 +152,12 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
          "Player",
          "HumanCollision",
          {"Enabled", "Disabled"}},
+        {"player_send_position",
+         igi::ModMenuItemKind::Action,
+         "Send Player Position",
+         "Player",
+         "PlayerSendPosition",
+         {}},
         {"player_teleport_target",
          igi::ModMenuItemKind::List,
          "Teleport Player To Target",
@@ -429,6 +437,42 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
 }
 } // namespace
 
+namespace {
+// Fill the typed teleport boxes from the live player the first time the menu is
+// refreshed, so X/Y/Z never start at an unset (0,0,0). Once the user edits a
+// coordinate the typed value is kept instead of being overwritten each refresh.
+bool prefillTeleportCoordinates(igi::MenuConfig &config, igi::Runtime &runtime) {
+    // A new level builds a new Game task; the old prefill and the old typed
+    // coordinates belong to the previous level and must not be reused.
+    static void *lastGame = nullptr;
+    auto *game = IGI::GAME::GET();
+    if (game && game != lastGame) {
+        lastGame = game;
+        g_teleportPosSet = false;
+    }
+    if (g_teleportPosSet)
+        return false;
+    std::array<double, 3> position{};
+    if (!igi::readPlayerPosition(runtime, position))
+        return false;
+    constexpr const char *kIds[3] = {"player_teleport_x", "player_teleport_y", "player_teleport_z"};
+    bool changed = false;
+    for (std::size_t axis = 0; axis < position.size(); ++axis) {
+        g_teleportPos[axis] = position[axis];
+        const auto rounded = static_cast<int>(position[axis]);
+        for (auto &item : config.items) {
+            if (item.id == kIds[axis] && item.inputValue != rounded) {
+                item.inputValue = rounded;
+                changed = true;
+            }
+        }
+    }
+    // The boxes now hold a real position, so Apply must accept it.
+    g_teleportPosSet = true;
+    return changed;
+}
+} // namespace
+
 bool configureModMenu(igi::MenuConfig &config) {
 #if defined(IGI_HEAVEN_ADVANCED)
     config.title = "Heaven's Mod Advanced";
@@ -443,8 +487,13 @@ bool configureModMenu(igi::MenuConfig &config) {
     config.crosshairActive = [](igi::Runtime &runtime) {
         return igi::thirdPersonCrosshairActive(runtime);
     };
+    config.crosshairPosition = [](igi::Runtime &runtime, int width, int height, float &x,
+                                  float &y) {
+        return igi::thirdPersonCrosshairScreenPosition(runtime, width, height, x, y);
+    };
     config.refreshLiveItems = [](igi::MenuConfig &liveConfig, igi::Runtime &runtime) {
-        return igi::refreshLiveTargetOptions(liveConfig, runtime);
+        const bool prefilled = prefillTeleportCoordinates(liveConfig, runtime);
+        return igi::refreshLiveTargetOptions(liveConfig, runtime) || prefilled;
     };
     return true;
 }
@@ -492,11 +541,16 @@ void runModMenu(const igi::MenuConfig &config, igi::Runtime &runtime, std::size_
         return;
     }
     if (inRange && config.items[item].id == "player_teleport_apply") {
+        if (!g_teleportPosSet) {
+            igi::log(igi::LogLevel::Warning,
+                     "teleport rejected: set at least one X/Y/Z coordinate first");
+            return;
+        }
         const bool placed = igi::teleportPlayerToPosition(
             runtime, {g_teleportPos[0], g_teleportPos[1], g_teleportPos[2]});
         igi::log(placed ? igi::LogLevel::Info : igi::LogLevel::Warning,
                  placed ? "player moved to the typed position"
-                        : "teleport rejected: enter all three coordinates first");
+                        : "teleport rejected: the live player was unavailable");
         return;
     }
     if (inRange && config.items[item].id.starts_with("player_teleport_") &&
@@ -516,6 +570,7 @@ void runModMenu(const igi::MenuConfig &config, igi::Runtime &runtime, std::size_
             g_teleportPos[1] = coordinate;
         else
             g_teleportPos[2] = coordinate;
+        g_teleportPosSet = true;
         igi::log(igi::LogLevel::Info, "teleport " + std::string(config.items[item].id) +
                                           " set to " + std::to_string(coordinate));
         return;

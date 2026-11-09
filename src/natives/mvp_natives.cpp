@@ -319,6 +319,9 @@ NATIVE_DECL void SET_POSITION(Human *h, double *position) {
     return NATIVE_INVOKE<Void>(HASH::HUMAN_SET_POSITION,
                                "void Human_SetPosition(Human *h, double *pos)", h, position);
 }
+NATIVE_DECL void SEND_POSITION(Human *h) {
+    return NATIVE_INVOKE<Void>(HASH::HUMAN_SEND_POSITION, "void Human_SendPosition(Human *h)", h);
+}
 NATIVE_DECL void SET_YAW(Human *h, float yaw) {
     return NATIVE_INVOKE<Void>(HASH::HUMAN_SET_YAW, "void Human_SetYaw(Human *h, float yaw)", h,
                                yaw);
@@ -534,6 +537,15 @@ NATIVE_DECL void SET_CAMERA(HumanView *v, const double *pos, const Matrix *rot) 
         HASH::HUMAN_VIEW_SET_CAMERA,
         "void HumanView_SetCamera(HumanView *v, const double *pos, const Matrix *rot)", v, pos,
         rot);
+}
+NATIVE_DECL void CLEAR_CAM_OVERRIDE(HumanView *v) {
+    return NATIVE_INVOKE<Void>(HASH::HUMAN_VIEW_CLEAR_CAM_OVERRIDE,
+                               "void HumanView_ClearCamOverride(HumanView *v)", v);
+}
+NATIVE_DECL void SET_EULER(Matrix *m, float ax, float ay, float az) {
+    return NATIVE_INVOKE<Void>(HASH::MATRIX_SET_EULER,
+                               "void Matrix_SetEuler(Matrix *m, float ax, float ay, float az)", m,
+                               ax, ay, az);
 }
 NATIVE_DECL void SET_TARGET(HumanView *v, const int *target, char flag) {
     return NATIVE_INVOKE<Void>(
@@ -1274,6 +1286,10 @@ NATIVE_DECL const char *GET_NAME(uint16_t type) {
     return NATIVE_INVOKE<const char *>(HASH::TASK_TYPE_GET_NAME,
                                        "const char *TaskType_GetName(uint16_t type)", type);
 }
+NATIVE_DECL uint16_t RIGID_DYN_CUBE_GET_TYPE() {
+    return NATIVE_INVOKE<uint16_t>(HASH::RIGID_DYN_CUBE_OBJ_GET_TYPE,
+                                   "uint16_t RigidDynCubeObj_GetType(void)");
+}
 NATIVE_DECL Task *FIND_CHILD(Task *task, uint16_t type) {
     return NATIVE_INVOKE<Task *>(HASH::TASK_FIND_CHILD,
                                  "Task *Task_FindChild(Task *task, uint16_t type)", task, type);
@@ -1470,9 +1486,30 @@ NATIVE_DECL int SPRITE_WIDTH(Sprite *sprite) {
 NATIVE_DECL int SPRITE_HEIGHT(Sprite *sprite) {
     return NATIVE_INVOKE<int>(HASH::SPRITE_HEIGHT, "int Sprite_Height(Sprite *s)", sprite);
 }
+NATIVE_DECL void *VIEWPORT_GET_CAMERA() {
+    return NATIVE_INVOKE<void *>(HASH::VIEWPORT_GET_CURRENT_CAMERA,
+                                 "Camera *Viewport_GetCurrentCamera(void)");
+}
+NATIVE_DECL void TRANS_CONTEXT_PROJECT(float *out, float *depth, const double *pos) {
+    return NATIVE_INVOKE<Void>(HASH::TRANS_CONTEXT_PROJECT,
+                               "void TransContext_Project(float *out, float *depth, "
+                               "const double *pos)",
+                               out, depth, pos);
+}
+NATIVE_DECL void AMMO_LIST_ADD(void *list, int id, int count) {
+    return NATIVE_INVOKE<Void>(HASH::AMMO_LIST_ADD,
+                               "void AmmoList_Add(void *list, int id, int count)", list, id, count);
+}
+NATIVE_DECL int SCREEN_GET_FRAME() {
+    return NATIVE_INVOKE<int>(HASH::SCREEN_GET_FRAME, "int Screen_GetFrame(void)");
+}
+NATIVE_DECL void VIEWPORT_ADD_CALLBACK(void (*fn)(void *camera)) {
+    return NATIVE_INVOKE<Void>(HASH::VIEWPORT_ADD_CALLBACK,
+                               "void Viewport_AddCallback(void (*fn)(Camera *camera))", fn);
+}
 } // namespace OTHER
 std::size_t NativeBindingCount() noexcept {
-    return 346;
+    return 355;
 }
 } // namespace IGI
 #undef NATIVE_INVOKE

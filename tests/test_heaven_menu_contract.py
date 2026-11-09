@@ -37,7 +37,7 @@ ids = [entry[0] for entry in defs]
 assert len(ids) == len(set(ids)), f"duplicate Heaven item IDs: {ids}"
 
 MIN_OPTIONS = 30
-NORMAL_OPTIONS = 54
+NORMAL_OPTIONS = 55
 assert MIN_OPTIONS <= len(ids) == NORMAL_OPTIONS, (
     f"normal Heaven must ship exactly {NORMAL_OPTIONS} working controls, found {len(ids)}"
 )
@@ -304,8 +304,11 @@ assert "teleportPlayerToTarget" in HELPERS and "teleportPlayerToPosition" in HEL
 assert "IGI::HUMAN::SET_POSITION" in HELPERS and "snapHumanToGround" in HELPERS, (
     "teleporting sets the position and grounds the player"
 )
-assert '"player_send_position"' not in HEAVEN, (
-    "the dead send-position control is replaced by the two teleport paths"
+assert '"player_send_position"' in HEAVEN and 'id == "player_send_position"' in DISPATCHER, (
+    "the Send Player Position control must reach the retail SEND_POSITION path"
+)
+assert "IGI::PLAYER::SEND_POSITION" in HELPERS, (
+    "teleporting must notify the player state machine after moving the body"
 )
 assert '"debug_keys"' in HEAVEN and '"Debug Keys / Fly Mode"' in HEAVEN, (
     "Heaven must expose the retail debug keys / fly mode toggle"
@@ -319,25 +322,21 @@ assert '"freecam"' in HEAVEN and '"Free Camera (WASD)"' in HEAVEN, (
 assert "setFreecamEnabled" in HELPERS and "updateFreecam" in HELPERS, (
     "the free camera needs an enable path and a per-frame update"
 )
-# The renderer reads the real Camera object (Game+0x60), not HumanView.camOverride:
-# driving only the override changed HUD info and left the view frozen.
-# Fly mode is the retail BODY_FLY state, so the game's own movement loop does the
-# work and our code only enters/exits the state.
-assert "kBodyStateFly = 0x30" in HELPERS and "smGo(player, kBodyStateFly)" in HELPERS, (
-    "fly mode must enter the retail BODY_FLY state through the retail sm_set semantics"
+# The free camera uses the retail camera override (HumanView_SetCamera), which
+# the renderer honours, instead of writing the player body state machine.
+assert "IGI::CAMERA::SET_CAMERA" in HELPERS and "IGI::CAMERA::CLEAR_CAM_OVERRIDE" in HELPERS, (
+    "the free camera must drive and clear the retail camera override"
 )
-assert "kSmRunOffset = 0x14" in HELPERS and "kSmStatesOffset = 0x4" in HELPERS, (
-    "the transition must switch the run pointer and run the enter handler, like retail sm_set"
+assert "IGI::CAMERA::SET_EULER" in HELPERS and "GetAsyncKeyState" in HELPERS, (
+    "the free camera builds its own pose from the WASD keys"
 )
-assert "kSmStateOffset = 0x10" in HELPERS and "kHumanSmOffset = 0x2EC" in HELPERS, (
-    "the body state machine is reached through the recovered Human.sm offsets"
+for key in ("down('W')", "down('A')", "down('S')", "down('D')", "down(VK_SPACE)",
+            "down(VK_CONTROL)"):
+    assert key in HELPERS, f"the free camera must poll {key}"
+assert "BODY_FLY" not in HELPERS and "kBodyStateFly" not in HELPERS, (
+    "the crashing BODY_FLY path must not come back"
 )
-assert "lockHumanInput" in HELPERS, (
-    "enabling fly mode must lock player input through the existing helper"
-)
-assert "kInForward = 0x80" in HELPERS and "kFlySpeed" not in HELPERS or True, (
-    "fly movement comes from the retail state machine's own input bits"
-)
+assert 'id == "freecam"' in DISPATCHER, "the free camera control must have a dispatch branch"
 assert "frameUpdate" in HEAVEN and "frameUpdate" in INTERNAL_HOST and "frameUpdate" in IMGUI_HOST, (
     "both hosts must run the per-frame mod update"
 )
@@ -401,14 +400,11 @@ assert "\"page_next\", \"Next Page >\"" in SCRIPT or "page_next" in SCRIPT
 assert "const int y = rowY(index - firstRow);" in SCRIPT and "rowY(rowsOnPage)" in SCRIPT, (
     "control rows must be positioned per row, not all at the frame top"
 )
-assert "*state = kBodyStateFly;" not in HELPERS, (
-    "fly mode must follow retail sm_set (state + run + enter call), not a bare write"
+assert "kBodyStateFly" not in HELPERS and "smGo" not in HELPERS, (
+    "the free camera must not mutate the player body state machine"
 )
-assert "smGo(player, kBodyStateFly)" in HELPERS and "smGo(player, kBodyStateIdle)" in HELPERS, (
-    "fly mode enter/exit must use the retail state transition"
-)
-assert "(void)unlockHumanInput();" in HELPERS and "fly mode enabled" in HELPERS, (
-    "fly mode must keep input unlocked; BODY_FLY movement comes from the input channels"
+assert "free camera enabled" in HELPERS and "free camera disabled" in HELPERS, (
+    "the free camera must report both state changes"
 )
 assert "(void)setFreecamEnabled(runtime, false);" in HELPERS and (
     "g_thirdPersonCrosshairEnabled.store(false" in HELPERS

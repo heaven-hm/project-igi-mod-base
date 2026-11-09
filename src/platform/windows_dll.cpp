@@ -155,8 +155,14 @@ void mainLoopTick(const igi::DllMenuCallbacks &callbacks, igi::hotkeys::KeyTrack
         if (!g_state.initialized) {
             if (callbacks.initialize && callbacks.initialize()) {
                 g_state.initialized = true;
-                igi::log(igi::LogLevel::Info,
-                         "internal menu: initialized and opened from configured start key");
+                // Initialization deliberately leaves the menu closed; this same
+                // key press opens it once. Staging the attach during initialize
+                // plus toggling here is what produced two opens for one F5.
+                const bool opened = callbacks.toggle ? callbacks.toggle() : false;
+                igi::log(opened ? igi::LogLevel::Info : igi::LogLevel::Warning,
+                         opened ? "internal menu: initialized and opened from configured start key"
+                                : "internal menu: initialized; menu opens on the next active "
+                                  "gameplay frame");
             } else {
                 igi::log(igi::LogLevel::Warning,
                          "internal menu: initialization deferred until gameplay is active");

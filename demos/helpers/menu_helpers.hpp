@@ -22,6 +22,9 @@ struct AiScriptContext {
 struct LiveTarget {
     int taskId = -1;
     std::string name;
+    // Optional world position, filled for landmark/world-object entries.
+    std::array<double, 3> position{};
+    bool hasPosition = false;
 };
 
 class EntityHelpers {
@@ -40,6 +43,9 @@ class EntityHelpers {
     std::vector<LiveTarget> carTargets() const;
     IGI::Heli *firstHeli() const;
     std::vector<LiveTarget> heliTargets() const;
+    // Named world objects (buildings, doors, props and mission landmarks) with
+    // their level position, used for the predefined teleport dropdown.
+    std::vector<LiveTarget> landmarkTargets() const;
     bool moveHuman(IGI::Human *human, const std::array<double, 3> &position) const;
     bool setHumanYaw(IGI::Human *human, float yaw) const;
     bool snapHumanToGround(IGI::Human *human) const;
@@ -135,6 +141,13 @@ class WorldHelpers {
     bool changeLevel(int levelId) const;
     bool restartMission() const;
     bool setWeather(std::string_view weather) const;
+    // World clock and mission timer. Both live in the level's LevelFlow task
+    // (nTick +0x68, startHour +0x6C, timeLimit +0x74).
+    bool setWorldHour(float hour) const;
+    bool setMissionElapsedSeconds(int seconds) const;
+    bool setMissionTimeLimit(float seconds) const;
+    std::optional<float> worldHour() const;
+    std::optional<int> missionElapsedSeconds() const;
     bool setPaused(bool paused) const;
     std::optional<bool> isPaused() const;
     bool refreshDisplay() const;
@@ -272,6 +285,10 @@ bool setThirdPersonCrosshairEnabled(Runtime &runtime, bool enabled);
 // True when the mod crosshair should be drawn: the toggle is on, the camera is
 // in third person and the equipped weapon uses the crosshair sight type.
 bool thirdPersonCrosshairActive(Runtime &runtime);
+// Screen position of the player's aim ray for the current third-person camera.
+// Returns false when the rendered camera does not belong to this player.
+bool thirdPersonCrosshairScreenPosition(Runtime &runtime, int width, int height, float &x,
+                                        float &y);
 // Free camera built on the retail camera-override path (HumanView_SetCamera):
 // the view follows a pose the mod owns, so WASD flies the camera around without
 // moving the player. Enabling it locks human input; disabling restores it.
@@ -283,6 +300,9 @@ bool updateFreecam(Runtime &runtime);
 int parseTargetId(std::string_view value);
 // Moves the live player next to the selected NPC/car/heli target.
 bool teleportPlayerToTarget(Runtime &runtime, int targetTaskId);
+// Current player body position in retail world units. Used to prefill the
+// teleport X/Y/Z inputs so the menu never starts at an unset (0,0,0).
+bool readPlayerPosition(Runtime &runtime, std::array<double, 3> &position);
 // Moves the live player to a typed world position.
 bool teleportPlayerToPosition(Runtime &runtime, const std::array<double, 3> &position);
 // Retail-sprite draw for the QVM menu host (no Dear ImGui there).
