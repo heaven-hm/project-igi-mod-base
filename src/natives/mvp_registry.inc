@@ -1117,6 +1117,15 @@ if (!catalogue.add({0x004062d0, "Profile_GetMusicVolume", "IGI-RE", "entry",
 if (!catalogue.add({0x004062e0, "Profile_GetLanguage", "IGI-RE", "entry",
                     "int Profile_GetLanguage(void)", NativeVerification::Exposed}))
     return false;
+if (!catalogue.add({0x0044ff40, "HumanAI_ClearMove", "IGI-RE", "entry",
+                    "void HumanAI_ClearMove(HumanAI *ai)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004525e0, "HumanAI_SetWalk", "IGI-RE", "entry",
+                    "void HumanAI_SetWalk(HumanAI *ai)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00452660, "HumanAI_SetRun", "IGI-RE", "entry",
+                    "void HumanAI_SetRun(HumanAI *ai)", NativeVerification::Exposed}))
+    return false;
 if (!catalogue.add({0x00460070, "Human_GetWeaponHandler", "IGI-RE", "entry",
                     "Task *Human_GetWeaponHandler(Human *h)", NativeVerification::Exposed}))
     return false;

@@ -122,6 +122,9 @@ inline constexpr std::uint32_t TASK_EVENT_SET = 0x00401860;
 inline constexpr std::uint32_t GAME_SET_MUSIC_VOLUME = 0x00415950;
 inline constexpr std::uint32_t HUMAN_PLAYER_SET_FLAG_D68 = 0x0040c150;
 inline constexpr std::uint32_t HUMAN_GET_TYPE = 0x00460be0;
+inline constexpr std::uint32_t HUMAN_AI_CLEAR_MOVE = 0x0044ff40;
+inline constexpr std::uint32_t HUMAN_AI_SET_WALK = 0x004525e0;
+inline constexpr std::uint32_t HUMAN_AI_SET_RUN = 0x00452660;
 inline constexpr std::uint32_t HUMAN_GET_WEAPON = 0x00460070;
 inline constexpr std::uint32_t SOLDIER_GET_TYPE = 0x0045d5a0;
 inline constexpr std::uint32_t WEAPON_GET_FIRE_EVENT = 0x00413b20;
@@ -613,6 +616,9 @@ NATIVE_DECL void GET_NODE_POS(Vec3d *out, GraphNode *node);
 NATIVE_DECL void GET_NODE_MATRIX(Matrix *out, GraphNode *node, char rotate);
 } // namespace GRAPH
 namespace AI {
+NATIVE_DECL void CLEAR_MOVE(HumanAI *ai);
+NATIVE_DECL void SET_WALK(HumanAI *ai);
+NATIVE_DECL void SET_RUN(HumanAI *ai);
 NATIVE_DECL ScriptValue *REMOVE_ALARM_ACTIONS(ScriptValue *out, void *data, void *args);
 NATIVE_DECL ScriptValue *SET_VIEW_LENGTH(ScriptValue *out, void *data, void *args);
 NATIVE_DECL ScriptValue *SET_ALARM_VIEW_LENGTH(ScriptValue *out, void *data, void *args);

@@ -714,6 +714,16 @@ NATIVE_DECL void GET_NODE_MATRIX(Matrix *out, GraphNode *node, char rotate) {
 }
 } // namespace GRAPH
 namespace AI {
+NATIVE_DECL void CLEAR_MOVE(HumanAI *ai) {
+    return NATIVE_INVOKE<Void>(HASH::HUMAN_AI_CLEAR_MOVE, "void HumanAI_ClearMove(HumanAI *ai)",
+                               ai);
+}
+NATIVE_DECL void SET_WALK(HumanAI *ai) {
+    return NATIVE_INVOKE<Void>(HASH::HUMAN_AI_SET_WALK, "void HumanAI_SetWalk(HumanAI *ai)", ai);
+}
+NATIVE_DECL void SET_RUN(HumanAI *ai) {
+    return NATIVE_INVOKE<Void>(HASH::HUMAN_AI_SET_RUN, "void HumanAI_SetRun(HumanAI *ai)", ai);
+}
 NATIVE_DECL ScriptValue *REMOVE_ALARM_ACTIONS(ScriptValue *out, void *data, void *args) {
     return NATIVE_INVOKE<ScriptValue *>(
         HASH::AI_FUNCTION_REMOVE_ALARM_ACTIONS,
@@ -1424,7 +1434,7 @@ NATIVE_DECL int SPRITE_HEIGHT(Sprite *sprite) {
 }
 } // namespace OTHER
 std::size_t NativeBindingCount() noexcept {
-    return 332;
+    return 335;
 }
 } // namespace IGI
 #undef NATIVE_INVOKE
