@@ -1,10 +1,15 @@
 cmake_minimum_required(VERSION 3.20)
 project(project_igi_mod_base VERSION 0.2.0 LANGUAGES C CXX)
 
-# Retail IGI 1 is a PE32 x86 process. A 64-bit DLL cannot be loaded into it,
-# so reject that misleading configuration at generation time.
-if(WIN32 AND NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
-    message(FATAL_ERROR "IGI 1 SDK Windows targets require a 32-bit x86 toolchain")
+# Project I.G.I. (igi.exe) is strictly a 32-bit (x86) Windows PE executable.
+# 64-bit / x64 builds are strictly forbidden across all Windows targets.
+if(WIN32)
+    if(CMAKE_SIZEOF_VOID_P EQUAL 8 OR CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|x64|arm64|aarch64")
+        message(FATAL_ERROR "64-bit (x64) Windows builds are strictly forbidden! Project I.G.I. (igi.exe) is a 32-bit (x86) executable only. Target 32-bit x86 (e.g. cmake -A Win32 or i686-w64-mingw32).")
+    endif()
+    if(NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
+        message(FATAL_ERROR "Project I.G.I. requires a 32-bit (x86) toolchain (CMAKE_SIZEOF_VOID_P must be 4). 64-bit builds are strictly forbidden.")
+    endif()
 endif()
 
 # Retail IGI 1 igi.exe is a 2002 ANSI Win32 process. The SDK DLLs must load

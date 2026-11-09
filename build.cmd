@@ -18,7 +18,8 @@ echo Unknown argument: %~1
 goto usage_error
 
 :configure
-cmake -S "%~dp0." -B "%BUILD_DIR%" -DCMAKE_BUILD_TYPE=%CONFIG% -DIGI_SDK_BUILD_DEMOS=%DEMOS%
+rem Enforce 32-bit x86 architecture (Project I.G.I. is strictly 32-bit; 64-bit is forbidden)
+cmake -S "%~dp0." -B "%BUILD_DIR%" -A Win32 -DCMAKE_BUILD_TYPE=%CONFIG% -DIGI_SDK_BUILD_DEMOS=%DEMOS%
 if errorlevel 1 exit /b %errorlevel%
 cmake --build "%BUILD_DIR%" --config %CONFIG% --parallel
 if errorlevel 1 exit /b %errorlevel%

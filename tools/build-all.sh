@@ -47,6 +47,13 @@ c_compiler=${IGI_WIN32_CC:-i686-w64-mingw32-gcc}
 cxx_compiler=${IGI_WIN32_CXX:-i686-w64-mingw32-g++}
 rc_compiler=${IGI_WIN32_RC:-i686-w64-mingw32-windres}
 
+# Strictly enforce 32-bit (x86) and forbid 64-bit (x86_64) toolchains
+if [[ "$c_compiler" == *x86_64* || "$cxx_compiler" == *x86_64* ]]; then
+    printf 'error: 64-bit compiler rejected: %s\n' "$cxx_compiler" >&2
+    printf 'Project I.G.I. (igi.exe) is 32-bit x86 only; 64-bit builds are strictly forbidden.\n' >&2
+    exit 1
+fi
+
 for tool in "$c_compiler" "$cxx_compiler" "$rc_compiler"; do
     if ! command -v "$tool" >/dev/null 2>&1; then
         printf 'error: missing 32-bit mingw-w64 tool: %s\n' "$tool" >&2

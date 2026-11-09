@@ -40,7 +40,35 @@ jobs:
       - name: Configure Win32
         if: runner.os == 'Windows'
         run: cmake -S . -B build -A Win32 -DIGI_SDK_BUILD_DEMOS=ON
+      - name: Verify 64-bit Windows build is rejected
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          if cmake -S . -B build-x64 -A x64 -DIGI_SDK_BUILD_DEMOS=ON 2>&1 | grep -q "64-bit (x64) Windows builds are strictly forbidden"; then
+            echo "PASS: 64-bit Windows build was rejected with FATAL_ERROR as required."
+          else
+            echo "FAIL: 64-bit build was not rejected!"
+            exit 1
+          fi
       - name: Build
         run: cmake --build build --config Release --parallel
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
+
+  mingw32:
+    name: Windows x86 (MinGW-w64 cross)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install 32-bit MinGW-w64
+        run: sudo apt-get update && sudo apt-get install --yes gcc-mingw-w64-i686 g++-mingw-w64-i686
+      - name: Build all Win32 targets
+        run: ./tools/build-all.sh --release
+      - name: Verify binaries are strictly 32-bit x86 PE32
+        run: |
+          for f in binaries/*.dll; do
+            file "$f" | grep -q "PE32 executable.*Intel 80386" || { echo "ERROR: $f is not 32-bit x86 PE32!"; exit 1; }
+          done
+          echo "All DLLs confirmed 32-bit x86 PE32"
