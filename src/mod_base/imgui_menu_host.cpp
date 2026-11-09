@@ -872,6 +872,8 @@ void drawCrosshairOverlay() {
 extern "C" void __cdecl onDisplayEndFrame() noexcept {
     if (!runtime.initialized())
         return;
+    if (menuConfig.frameUpdate)
+        menuConfig.frameUpdate(runtime);
     if (!menuVisible) {
         if (menuConfig.crosshairActive) {
             // The mod reports whether its crosshair belongs on screen right now.

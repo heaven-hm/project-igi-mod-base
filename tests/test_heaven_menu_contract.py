@@ -29,7 +29,7 @@ ids = [entry[0] for entry in defs]
 assert len(ids) == len(set(ids)), f"duplicate Heaven item IDs: {ids}"
 
 MIN_OPTIONS = 30
-NORMAL_OPTIONS = 50
+NORMAL_OPTIONS = 51
 assert MIN_OPTIONS <= len(ids) == NORMAL_OPTIONS, (
     f"normal Heaven must ship exactly {NORMAL_OPTIONS} working controls, found {len(ids)}"
 )
@@ -275,6 +275,22 @@ assert "thirdPersonCrosshairActive" in HELPERS and "thirdPersonCrosshairActive" 
 )
 assert "drawCrosshairOverlay" in IMGUI_HOST and "crosshairActive(runtime)" in IMGUI_HOST, (
     "the ImGui host must draw the crosshair through its validated D3D7 renderer"
+)
+# Free camera: retail camera-override path with WASD flight and a clean disable.
+assert '"freecam"' in HEAVEN and '"Free Camera (WASD)"' in HEAVEN, (
+    "Heaven must expose the free camera in both frontends"
+)
+assert "setFreecamEnabled" in HELPERS and "updateFreecam" in HELPERS, (
+    "the free camera needs an enable path and a per-frame update"
+)
+assert "kHumanViewCamOverrideOffset = 0x13A" in HELPERS, (
+    "disabling the free camera must clear HumanView.camOverride at its real offset"
+)
+assert "IGI::CAMERA::SET_CAMERA" in HELPERS and "lockHumanInput" in HELPERS, (
+    "the free camera drives the retail view override and locks player input"
+)
+assert "frameUpdate" in HEAVEN and "frameUpdate" in INTERNAL_HOST and "frameUpdate" in IMGUI_HOST, (
+    "both hosts must run the per-frame mod update"
 )
 assert "IGI::WEAPON::DROP" in HELPERS and "WeaponHelpers::dropCurrentWeapon" in HELPERS, (
     "drop weapon must use the retail Weapon_Drop lifecycle"

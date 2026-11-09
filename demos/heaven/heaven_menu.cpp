@@ -179,6 +179,12 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
          "Camera",
          "ThirdPersonCrosshair",
          {"Disabled", "Enabled"}},
+        {"freecam",
+         igi::ModMenuItemKind::List,
+         "Free Camera (WASD)",
+         "Camera",
+         "FreeCamera",
+         {"Disabled", "Enabled"}},
         {"look",
          igi::ModMenuItemKind::List,
          "Look Control",
@@ -403,6 +409,7 @@ bool configureModMenu(igi::MenuConfig &config) {
     config.renderEndFrame = [](igi::Runtime &runtime) {
         (void)igi::renderThirdPersonCrosshair(runtime);
     };
+    config.frameUpdate = [](igi::Runtime &runtime) { (void)igi::updateFreecam(runtime); };
     config.crosshairActive = [](igi::Runtime &runtime) {
         return igi::thirdPersonCrosshairActive(runtime);
     };

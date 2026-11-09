@@ -27,6 +27,9 @@ using MenuLiveItemRefresher = std::function<bool(MenuConfig &, Runtime &)>;
 using MenuCrosshairQuery = std::function<bool(Runtime &)>;
 // Reports a page navigation request from the retail menu (delta -1 or +1).
 using MenuPageHandler = std::function<void(int)>;
+// Runs every displayed frame, regardless of whether the menu is open. Used for
+// continuous features such as the free camera.
+using MenuFrameUpdate = std::function<void(Runtime &)>;
 using MenuEndFrameRenderer = std::function<void(Runtime &)>;
 
 struct ModMenuItemConfig {
@@ -120,6 +123,8 @@ struct MenuConfig {
     MenuLiveItemRefresher refreshLiveItems;
     // Optional: the demo reports whether its crosshair should be drawn now.
     MenuCrosshairQuery crosshairActive;
+    // Optional per-frame mod logic (free camera, timers, overrides).
+    MenuFrameUpdate frameUpdate;
     MenuEndFrameRenderer renderEndFrame;
 };
 

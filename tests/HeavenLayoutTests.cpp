@@ -25,7 +25,7 @@ bool prepareMenuForLevelChange() {
 
 namespace {
 constexpr std::size_t kMinimumControls = 30;
-constexpr std::size_t kMaximumControls = 50;
+constexpr std::size_t kMaximumControls = 60;
 
 std::size_t countKind(const igi::MenuConfig &config, igi::ModMenuItemKind kind) {
     std::size_t count = 0;

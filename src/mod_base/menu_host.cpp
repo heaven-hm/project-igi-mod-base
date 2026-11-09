@@ -166,7 +166,12 @@ void unregisterEndFrameCallback() noexcept {
 }
 
 extern "C" void __cdecl onInternalDisplayEndFrame() noexcept {
-    if (!runtime.initialized() || menuScreenAttached || !menuConfig.renderEndFrame)
+    if (!runtime.initialized())
+        return;
+    // Continuous mod features (free camera) must run even while the menu is open.
+    if (menuConfig.frameUpdate)
+        menuConfig.frameUpdate(runtime);
+    if (menuScreenAttached || !menuConfig.renderEndFrame)
         return;
     menuConfig.renderEndFrame(runtime);
 }

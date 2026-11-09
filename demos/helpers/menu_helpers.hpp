@@ -271,6 +271,13 @@ bool setThirdPersonCrosshairEnabled(Runtime &runtime, bool enabled);
 // True when the mod crosshair should be drawn: the toggle is on, the camera is
 // in third person and the equipped weapon uses the crosshair sight type.
 bool thirdPersonCrosshairActive(Runtime &runtime);
+// Free camera built on the retail camera-override path (HumanView_SetCamera):
+// the view follows a pose the mod owns, so WASD flies the camera around without
+// moving the player. Enabling it locks human input; disabling restores it.
+bool setFreecamEnabled(Runtime &runtime, bool enabled);
+bool freecamEnabled();
+// Per-frame free camera update. Call from a displayed-frame callback.
+bool updateFreecam(Runtime &runtime);
 // Retail-sprite draw for the QVM menu host (no Dear ImGui there).
 bool renderThirdPersonCrosshair(Runtime &runtime);
 bool changeLevel(Runtime &runtime, int levelId);
