@@ -25,7 +25,7 @@ assert MIN_OPTIONS <= len(ids) <= MAX_OPTIONS, (
     f"Heaven must ship {MIN_OPTIONS}-{MAX_OPTIONS} working controls, found {len(ids)}"
 )
 
-categories = {"Weapons", "Player", "Camera", "World", "Vehicles", "AI / NPC", "Audio"}
+categories = {"Weapons", "Player", "Camera", "World", "Vehicles", "AI / NPC"}
 found_categories = {entry[3] for entry in defs}
 assert found_categories == categories, (
     f"Heaven categories must exactly match the production category set; got {found_categories}"
@@ -35,6 +35,10 @@ assert found_categories == categories, (
 # game with it. Look control is a camera control, so it must live in Camera.
 kinds = {entry[0]: (entry[1], entry[3]) for entry in defs}
 assert "input" not in ids, "Heaven must not expose the raw player input lock"
+assert "weapon_flash" not in ids, "Heaven must not expose cosmetic flash clearing"
+assert not {"music", "sfx", "audio_info", "audio_rate"} & set(ids), (
+    "Heaven must keep its production controls focused on gameplay rather than audio"
+)
 assert kinds.get("look", (None, None))[1] == "Camera", (
     "look control is a camera control and must not reappear in Player"
 )
@@ -80,7 +84,6 @@ required_native_paths = {
     "weapon_cycle": "WeaponHelpers(runtime).cycle(1)",
     "weapon_draw_anim": "WeaponHelpers(runtime).requestAnimation",
     "weapon_category": "WeaponHelpers(runtime).selectCategory",
-    "weapon_flash": "WeaponHelpers(runtime).reportFlashReset",
     "vehicle_reset": "VehicleHelpers(runtime).resetCar",
     "vehicle_explode": "VehicleHelpers(runtime).explodeCar",
     "vehicle_drive": "VehicleHelpers(runtime).driveCar",
@@ -102,11 +105,8 @@ required_native_paths = {
     "world_level_tick": "WorldHelpers(runtime).reportLevelTick",
     "world_flow": "WorldHelpers(runtime).reportFlow",
     "world_events": "WorldHelpers(runtime).reportEvents",
-    "audio_info": "AudioHelpers(runtime).reportInfo",
     "npc_reset_damage": "NpcHelpers(runtime).resetDamage",
     "restart_mission": "WorldHelpers(runtime).restartMission",
-    "music": "setMusicVolume",
-    "sfx": "setSfxVolume",
 }
 for item_id, native_path in required_native_paths.items():
     source = HEAVEN if item_id == "weapon_pickup" else HELPERS

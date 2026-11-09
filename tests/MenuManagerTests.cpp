@@ -311,8 +311,7 @@ void verifiedMenuHelperContractTest() {
     assert(helperSource.find("IGI::AUDIO::SET_SFX_VOLUME") != std::string::npos);
 
     const auto heavenMenu = readDemoSource("demos/heaven/heaven_menu.cpp");
-    for (const char* category :
-         {"Weapons", "Player", "Camera", "World", "Vehicles", "AI / NPC", "Audio"}) {
+    for (const char* category : {"Weapons", "Player", "Camera", "World", "Vehicles", "AI / NPC"}) {
         assert(heavenMenu.find(category) != std::string::npos);
     }
     assert(heavenMenu.find("Live Heli Target") != std::string::npos);

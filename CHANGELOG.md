@@ -1,9 +1,9 @@
 # Changelog
 
-## 0.3 — Heaven production menu: 50 verified controls
+## 0.3 — Heaven production menu: 45 gameplay controls
 
-- Heaven now ships 50 controls across seven categories (Weapons, Player,
-  Camera, World, Vehicles, AI / NPC, Audio), all declared from one table so a
+- Heaven now ships 45 controls across six categories (Weapons, Player,
+  Camera, World, Vehicles, AI / NPC), all declared from one table so a
   control cannot ship without a category or an action route.
 - The retail QVM menu fits only a handful of rows, so a control set that
   outgrows the frame now generates one scrollable `ListBox` over a flattened
