@@ -8,6 +8,8 @@ import re
 ROOT = Path(__file__).resolve().parents[1]
 HEAVEN = (ROOT / "demos/heaven/heaven_menu.cpp").read_text(encoding="utf-8")
 HELPERS = (ROOT / "demos/helpers/menu_helpers.cpp").read_text(encoding="utf-8")
+IMGUI_HOST = (ROOT / "src/mod_base/imgui_menu_host.cpp").read_text(encoding="utf-8")
+INTERNAL_HOST = (ROOT / "src/mod_base/menu_host.cpp").read_text(encoding="utf-8")
 
 # Every control is declared once in the definition table:
 #   {"id", igi::ModMenuItemKind::Kind, "Label", "Category", "Action", values},
@@ -163,6 +165,15 @@ assert "target.taskId == preserved" in HELPERS, (
 )
 assert "preservedIsLive" in HELPERS, (
     "a selection that vanished from the task table must be dropped, not silently re-pointed"
+)
+assert "listSelections[index] = static_cast<int>(item.defaultSelection);" in IMGUI_HOST, (
+    "the external menu must adopt the refreshed task-ID-preserving selection"
+)
+assert "menuBridge->resync(menuConfig)" in INTERNAL_HOST, (
+    "the internal menu must resync its script bridge after refreshing live targets"
+)
+assert "Task_Broadcast" in INTERNAL_HOST and "live target lists refreshed" in INTERNAL_HOST, (
+    "the internal menu must publish refreshed live targets to its attached retail screen"
 )
 
 assert 'WeaponEntry{"Binoculars", "WEAPON_ID_BINOCULARS", 0}' in HEAVEN, (
