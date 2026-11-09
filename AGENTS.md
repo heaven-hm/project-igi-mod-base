@@ -2,7 +2,7 @@
 
 ## Scope
 
-This repository builds Windows x86 DLLs for the retail single-player Project I.G.I. executable.
+This repository builds Windows x86 (32-bit only) DLLs for the retail single-player Project I.G.I. executable (x64 / 64-bit is forbidden).
 Keep the public mod API in `src/mod_base`, common implementation in `src/{config,logging,natives,platform,runtime,ui}`, and examples in `demos/`.
 
 ## Do
@@ -17,6 +17,7 @@ Keep the public mod API in `src/mod_base`, common implementation in `src/{config
 
 ## Do not
 
+- Do not target, build, or add x64/64-bit architectures; the retail executable (igi.exe) is strictly 32-bit (x86) Windows only.
 - Do not edit, commit, or require local game assets in `data/`; the checked-in native bindings must still build without them.
 - Do not format or modify `third_party/` unless deliberately updating that dependency.
 - Do not add raw game-memory offsets to demos when an `IGI::` native wrapper exists.

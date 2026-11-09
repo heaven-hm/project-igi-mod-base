@@ -44,7 +44,7 @@ Heaven's Mod is the flagship production menu shipping 50 verified native gamepla
 |:---:|:---:|:---:|
 | **AI & NPC Controls** | **Vehicle & Fleet Controls** | **World & Weather Controls** |
 
-Target: the `European` version Windows x86 IGI 1 executable. 
+Target: the `European` version Windows x86 (32-bit only; x64/64-bit is forbidden and unsupported) IGI 1 executable. 
 ```sh
 SHA256: dea34892d417715873ea61d7b2ba5556655f1ad65385104348146f9679915a01
 MD5: 9d8ebb7f28a1be56a8626dd5948826e4
