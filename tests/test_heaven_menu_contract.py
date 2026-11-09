@@ -175,6 +175,12 @@ assert "preservedIsLive" in HELPERS, (
 assert "listSelections[index] = static_cast<int>(item.defaultSelection);" in IMGUI_HOST, (
     "the external menu must adopt the refreshed task-ID-preserving selection"
 )
+assert "onInternalDisplayEndFrame" in INTERNAL_HOST and "ensureEndFrameCallbackRegistered" in INTERNAL_HOST, (
+    "the internal Heaven frontend must render the shared end-frame callback too"
+)
+assert "unregisterEndFrameCallback();" in INTERNAL_HOST, (
+    "the internal end-frame callback must be removed before the DLL can unload"
+)
 assert "menuBridge->resync(menuConfig)" in INTERNAL_HOST, (
     "the internal menu must resync its script bridge after refreshing live targets"
 )

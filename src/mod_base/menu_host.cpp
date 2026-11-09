@@ -33,6 +33,13 @@
 #endif
 
 namespace {
+#if defined(_WIN32)
+struct DisplayCallbackNode {
+    DisplayCallbackNode *next = nullptr;
+    void(__cdecl *callback)() = nullptr;
+};
+#endif
+
 enum class IgiMenuScreenState : std::int32_t {
     MainMenu = 3,
     InGame = 4,
@@ -79,6 +86,9 @@ struct InternalMenuState {
     MenuTransition pendingTransition = MenuTransition::None;
     std::uint64_t transitionDeadlineFrame = 0;
     std::atomic<bool> initialAttachPending{false};
+#if defined(_WIN32)
+    DisplayCallbackNode endFrameNode{};
+#endif
 };
 
 InternalMenuState g_menu;
@@ -104,6 +114,59 @@ auto &menuScreenAttached = g_menu.menuScreenAttached;
 auto &pendingTransition = g_menu.pendingTransition;
 auto &transitionDeadlineFrame = g_menu.transitionDeadlineFrame;
 auto &initialAttachPending = g_menu.initialAttachPending;
+
+#if defined(_WIN32)
+extern "C" void __cdecl onInternalDisplayEndFrame() noexcept;
+
+DisplayCallbackNode **endFrameCallbackHead() noexcept {
+    return reinterpret_cast<DisplayCallbackNode **>(
+        static_cast<std::uintptr_t>(igi::re::HASH::gDisplayEndFrameCallbacks));
+}
+
+bool isEndFrameCallbackRegistered() noexcept {
+    DisplayCallbackNode *node = *endFrameCallbackHead();
+    for (int guard = 0; node && guard < 64; ++guard) {
+        if (node == &g_menu.endFrameNode || node->callback == &onInternalDisplayEndFrame)
+            return true;
+        node = node->next;
+    }
+    return false;
+}
+
+void ensureEndFrameCallbackRegistered() noexcept {
+    if (isEndFrameCallbackRegistered())
+        return;
+    auto **head = endFrameCallbackHead();
+    g_menu.endFrameNode.callback = &onInternalDisplayEndFrame;
+    g_menu.endFrameNode.next = *head;
+    *head = &g_menu.endFrameNode;
+}
+
+void unregisterEndFrameCallback() noexcept {
+    auto **head = endFrameCallbackHead();
+    DisplayCallbackNode *previous = nullptr;
+    DisplayCallbackNode *node = *head;
+    for (int guard = 0; node && guard < 64; ++guard) {
+        if (node == &g_menu.endFrameNode || node->callback == &onInternalDisplayEndFrame) {
+            if (previous)
+                previous->next = node->next;
+            else
+                *head = node->next;
+            break;
+        }
+        previous = node;
+        node = node->next;
+    }
+    g_menu.endFrameNode.next = nullptr;
+    g_menu.endFrameNode.callback = nullptr;
+}
+
+extern "C" void __cdecl onInternalDisplayEndFrame() noexcept {
+    if (!runtime.initialized() || menuScreenAttached || !menuConfig.renderEndFrame)
+        return;
+    menuConfig.renderEndFrame(runtime);
+}
+#endif
 
 struct GameRootLayout {
     std::uint8_t prefix[0x44];
@@ -198,6 +261,9 @@ bool isConfiguredMenuScreenActive() {
 }
 
 void completeShutdownOnGameThread() {
+#if defined(_WIN32)
+    unregisterEndFrameCallback();
+#endif
     IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, "IGI SDK Mod Menu: disabled");
     menuRegistration.stop();
     menuCallbacks.reset();
@@ -390,6 +456,9 @@ void refreshAttachedLiveItems() {
 void menuFrameWork() {
     if (!runtime.initialized())
         return;
+#if defined(_WIN32)
+    ensureEndFrameCallbackRegistered();
+#endif
     processPendingMenuTransition();
     refreshAttachedLiveItems();
     if (menuScreenAttached || pendingTransition != MenuTransition::None)
@@ -528,6 +597,9 @@ bool prepareMenuForLevelChange() {
         return true;
 
     initialAttachPending.store(false, std::memory_order_release);
+#if defined(_WIN32)
+    unregisterEndFrameCallback();
+#endif
     if (menuBridge)
         menuBridge->cancel();
     else if (!resumeFromMenu(runtime))
