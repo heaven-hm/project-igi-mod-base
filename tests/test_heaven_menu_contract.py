@@ -340,6 +340,16 @@ assert "menuPageCount(config)" in SCRIPT and "kMenuRowsPerPage" in SCRIPT, (
 assert "Next Page >" in SCRIPT and "IGI_SDK_Page(" in SCRIPT, (
     "page navigation must be a registered SDK symbol so the host can switch pages"
 )
+# MenuManager_AddItems stops at a selectable MenuWindow, so a button nested in a
+# selectable frame is never clickable. Navigation buttons must be their own rows
+# and the button bar must not be selectable.
+assert "\"PageFrame\"" not in SCRIPT, (
+    "page navigation must not be nested in a selectable frame"
+)
+assert "\"page_next\", \"Next Page >\"" in SCRIPT or "page_next" in SCRIPT
+assert 'ControlsFrame' in SCRIPT and '20, 4, FALSE, "' in SCRIPT, (
+    "the Restart/Okay/Cancel bar must not be selectable so its buttons are items"
+)
 assert "pageScreen(activePage)" in SCRIPT, (
     "only the active page may be emitted, so no page screen is ever orphaned"
 )

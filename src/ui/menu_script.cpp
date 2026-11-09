@@ -135,21 +135,22 @@ bool writeMenuScript(std::ostream &out, const MenuConfig &config, bool standalon
         if (paged) {
             const int nextScreen =
                 page + 1 < pageCount ? igi::menuPageScreenId(config, page + 1) : firstScreenId;
-            const int prevScreen =
-                page > 0 ? igi::menuPageScreenId(config, page - 1) : lastScreenId;
-            pageOut << ", Task_New(-1, \"MenuFrame\", \"PageFrame\", \"\", " << config.x << ", "
-                    << frameY << ", " << config.width
-                    << ", 25, 8, 20, 4, TRUE, Task_New(-1, \"MenuText\", \"page_prev\", "
-                       "\"< Prev Page\", \"font3.fnt\", 2, ";
+            (void)nextScreen;
+            // Clickable rows, not a selectable frame: MenuManager_AddItems stops at a
+            // selectable MenuWindow, so nested buttons would never fire.
+            pageOut << ", Task_New(-1, \"MenuText\", \"page_prev\", \"< Prev Page\", "
+                       "\"font3.fnt\", 2, ";
             quoted(pageOut, "IGI_SDK_Page(-1)");
-            pageOut << ", \"\"), Task_New(-1, \"MenuText\", \"page_next\", \"Next Page >\", "
+            pageOut << ", \"\")";
+            pageOut << ", Task_New(-1, \"MenuText\", \"page_next\", \"Next Page >\", "
                        "\"font3.fnt\", 2, ";
             quoted(pageOut, "IGI_SDK_Page(1)");
-            pageOut << ", \"\"))";
+            pageOut << ", \"\")";
         }
+        // Selectable = FALSE so the three buttons below are collected as items.
         pageOut << ", Task_New(-1, \"MenuFrame\", \"ControlsFrame\", \"\", " << config.x << ", "
                 << frameY << ", " << config.width
-                << ", 25, 8, 20, 4, TRUE, "
+                << ", 25, 8, 20, 4, FALSE, "
                    "Task_New(-1, \"MenuText\", \"restart\", \"Restart\", \"font3.fnt\", 2, "
                    "\"IGI_SDK_Cancel() - MenuManager_LeaveMenus(900, 12)\", \"menu_ok\"), "
                    "Task_New(-1, \"MenuText\", \"okay\", \"Okay\", \"font3.fnt\", 2, "
