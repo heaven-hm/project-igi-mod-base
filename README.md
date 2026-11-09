@@ -318,7 +318,7 @@ provides its own menu items and actions.
 
 ## License and credits
 
-Read [`CREDITS.md`](CREDITS.md), [`NOTICE`](NOTICE) and `LICENSES/` before
+Read [`CREDITS.md`](CREDITS.md) and `LICENSES/` before
 redistributing. Metadata is attributed and kept as address/signature
 research only.
 - SlickDaddy and BlankName — Project I.G.I. native research and information

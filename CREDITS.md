@@ -6,7 +6,7 @@
   address/name catalogue and signature metadata. Every imported game-native
   catalogue record credits this repository and remains catalogued research
   until separately verified for the supported executable.
-- **IGI-Research-Devs / project-igi-natives** — predecessor SDK source,
+- **Heaven-HM / project-igi-natives** — predecessor SDK source,
   native catalogue, and MIT-licensed compatibility baseline.
 - **Future optional dependencies** — Dear ImGui, MinHook, and GTLibCpp will
   receive version-specific notices before they are vendored or linked.

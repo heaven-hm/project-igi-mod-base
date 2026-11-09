@@ -834,6 +834,8 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
             reinterpret_cast<IGI::Human *>(findLiveTarget(runtime, g_selectedNpcTaskId, isNpcTask));
         if (!npc) {
             reportMissingNpcTarget("soldier execution");
+        } else if (IGI::HUMAN::IS_DEAD(npc)) {
+            log(LogLevel::Info, "soldier execution skipped: the selected soldier is already dead");
         } else if (NpcHelpers(runtime).executeSoldier(npc)) {
             log(LogLevel::Info, "selected soldier executed through the retail soldier flow");
         } else {
@@ -902,11 +904,34 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
             log(LogLevel::Warning, "heli info rejected: vehicle native was unavailable");
         }
     } else if (id == "heli_reset") {
-        auto *heli = reinterpret_cast<IGI::Heli *>(
-            findLiveTarget(runtime, g_selectedHeliTaskId, isHeliTask));
+        auto *heli = selectedHeli(runtime);
+        if (!heli && g_selectedHeliTaskId < 0) {
+            // Reset is the one heli action that needs no further choice, so adopt
+            // the only live helicopter instead of refusing the click.
+            EntityHelpers entities(runtime);
+            const auto helis = entities.heliTargets();
+            if (helis.size() == 1) {
+                g_selectedHeliTaskId = helis.front().taskId;
+                heli = selectedHeli(runtime);
+                log(LogLevel::Info, "heli reset: using the only live helicopter [" +
+                                        std::to_string(g_selectedHeliTaskId) + "]");
+            } else if (helis.empty()) {
+                log(LogLevel::Info, "heli reset: no live helicopter on this level");
+            } else {
+                log(LogLevel::Info,
+                    "heli reset: " + std::to_string(helis.size()) +
+                        " helicopters are live; select one in Live Heli Target first");
+            }
+        }
         if (!heli) {
-            log(LogLevel::Warning, "heli reset rejected: selected helicopter was unavailable");
-        } else if (!VehicleHelpers(runtime).resetHeli(heli)) {
+            if (g_selectedHeliTaskId >= 0) {
+                g_selectedHeliTaskId = -1;
+                log(LogLevel::Warning,
+                    "heli reset rejected: the selected helicopter is no longer live");
+            }
+        } else if (VehicleHelpers(runtime).resetHeli(heli)) {
+            log(LogLevel::Info, "heli reset: helicopter restored to its start position");
+        } else {
             log(LogLevel::Warning, "heli reset rejected: Heli_Control was unavailable");
         }
     } else if (id == "vehicle_info") {
@@ -945,6 +970,8 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
             reinterpret_cast<IGI::Human *>(findLiveTarget(runtime, g_selectedNpcTaskId, isNpcTask));
         if (!npc) {
             reportMissingNpcTarget("soldier stand down");
+        } else if (IGI::HUMAN::IS_DEAD(npc)) {
+            log(LogLevel::Info, "soldier stand down skipped: the selected soldier is dead");
         } else if (NpcHelpers(runtime).standDownSoldier(npc)) {
             log(LogLevel::Info, "selected soldier returned to its retail stand state");
         } else {
@@ -1643,10 +1670,11 @@ bool VehicleHelpers::explodeAllCars() const {
         cars.push_back(car);
     for (auto *car : cars)
         IGI::VEHICLE::CAR_EXPLODE(car);
-    log(LogLevel::Info,
-        "vehicle explode all: triggered " + std::to_string(cars.size()) + " live car explosions");
+    const std::string count = std::to_string(cars.size());
+    log(LogLevel::Info, "vehicle explode all: triggered " + count +
+                            (cars.size() == 1 ? " live car explosion" : " live car explosions"));
     IGI::MISC::STATUS_MESSAGE_SHOW(
-        nullptr, ("IGI MOD: exploded " + std::to_string(cars.size()) + " cars").c_str());
+        nullptr, ("IGI MOD: exploded " + count + (cars.size() == 1 ? " car" : " cars")).c_str());
     return !cars.empty();
 }
 

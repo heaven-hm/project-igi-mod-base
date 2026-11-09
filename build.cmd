@@ -7,7 +7,7 @@ set "BUILD_DIR=%TEMP%\igi-sdk-windows-%CONFIG%"
 :parse
 if "%~1"=="" goto configure
 if /I "%~1"=="--build" (
-  if /I not "%~2"=="windows" (echo Use build.sh for macOS/Linux.& exit /b 2)
+  if /I not "%~2"=="windows" (echo Use tools/build.sh for macOS/Linux.& exit /b 2)
   shift & shift & goto parse
 )
 if /I "%~1"=="--config" (set "CONFIG=%~2"& set "BUILD_DIR=%TEMP%\igi-sdk-windows-%~2"& shift & shift & goto parse)

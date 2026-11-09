@@ -8,12 +8,12 @@ clean=0
 
 usage() {
     cat <<'EOF'
-Usage: ./build.sh [--build macos|linux] [--config Debug|Release] [--no-demos] [--clean]
+Usage: tools/build.sh [--build macos|linux] [--config Debug|Release] [--no-demos] [--clean]
 
 Examples:
-  ./build.sh --build macos
-  ./build.sh --build linux --config Debug
-  ./build.sh --build macos --clean
+  tools/build.sh --build macos
+  tools/build.sh --build linux --config Debug
+  tools/build.sh --build macos --clean
 EOF
 }
 
@@ -37,7 +37,8 @@ esac
 build_dir="${TMPDIR:-/tmp}/igi-sdk-${platform}-${config}"
 if [ "$clean" -eq 1 ]; then rm -rf "$build_dir"; fi
 
-cmake -S "$(dirname "$0")" -B "$build_dir" \
+root="$(cd "$(dirname "$0")/.." && pwd)"
+cmake -S "$root" -B "$build_dir" \
     -DCMAKE_BUILD_TYPE="$config" -DIGI_SDK_BUILD_DEMOS="$demos"
 cmake --build "$build_dir" --parallel
 ctest --test-dir "$build_dir" --output-on-failure

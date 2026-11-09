@@ -4,7 +4,7 @@
 #
 set -euo pipefail
 
-root=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 configuration=Release
 clean=0
 cli_dest=""
