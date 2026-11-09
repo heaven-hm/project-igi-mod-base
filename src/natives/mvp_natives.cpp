@@ -281,6 +281,10 @@ NATIVE_DECL void SET_AI(Human *h, HumanAI *ai) {
 NATIVE_DECL void RESET_DAMAGE(Human *h) {
     return NATIVE_INVOKE<Void>(HASH::HUMAN_RESET_DAMAGE, "void Human_ResetDamage(Human *h)", h);
 }
+NATIVE_DECL Task *GET_WEAPON(Human *h) {
+    return NATIVE_INVOKE<Task *>(HASH::HUMAN_GET_WEAPON, "Task *Human_GetWeaponHandler(Human *h)",
+                                 h);
+}
 NATIVE_DECL void GET_CAMERA_INFO(Human *h, HumanCameraInfo *info) {
     return NATIVE_INVOKE<Void>(HASH::HUMAN_GET_CAMERA_INFO,
                                "void Human_GetHumanCameraInfoHandler(Human *h, HumanCameraInfo "
@@ -1397,9 +1401,30 @@ NATIVE_DECL float PROFILE_GET_MUSIC_VOLUME() {
 NATIVE_DECL int PROFILE_GET_LANGUAGE() {
     return NATIVE_INVOKE<int>(HASH::PROFILE_GET_LANGUAGE, "int Profile_GetLanguage(void)");
 }
+NATIVE_DECL StatusScreen *STATUS_SCREEN_GET() {
+    return NATIVE_INVOKE<StatusScreen *>(HASH::STATUS_SCREEN_GET,
+                                         "StatusScreen *StatusScreen_Get(void)");
+}
+NATIVE_DECL DisplayMode *DISPLAY_GET_MODE() {
+    return NATIVE_INVOKE<DisplayMode *>(HASH::DISPLAY_GET_MODE,
+                                        "DisplayMode *Display_GetMode(void)");
+}
+NATIVE_DECL void DRAW_SPRITE_Z(const Sprite *sheet, float x, float y, float r, float g, float b,
+                               int frame, int unk4, int unk8, float z) {
+    return NATIVE_INVOKE<Void>(HASH::DRAW_SPRITE_Z,
+                               "void Draw_SpriteZ(const Sprite *sheet, float x, float y, float r, "
+                               "float g, float b, int frame, int unk4, int unk8, float z)",
+                               sheet, x, y, r, g, b, frame, unk4, unk8, z);
+}
+NATIVE_DECL int SPRITE_WIDTH(Sprite *sprite) {
+    return NATIVE_INVOKE<int>(HASH::SPRITE_WIDTH, "int Sprite_Width(Sprite *s)", sprite);
+}
+NATIVE_DECL int SPRITE_HEIGHT(Sprite *sprite) {
+    return NATIVE_INVOKE<int>(HASH::SPRITE_HEIGHT, "int Sprite_Height(Sprite *s)", sprite);
+}
 } // namespace OTHER
 std::size_t NativeBindingCount() noexcept {
-    return 326;
+    return 332;
 }
 } // namespace IGI
 #undef NATIVE_INVOKE

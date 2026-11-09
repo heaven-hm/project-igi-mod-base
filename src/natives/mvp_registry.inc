@@ -1117,3 +1117,23 @@ if (!catalogue.add({0x004062d0, "Profile_GetMusicVolume", "IGI-RE", "entry",
 if (!catalogue.add({0x004062e0, "Profile_GetLanguage", "IGI-RE", "entry",
                     "int Profile_GetLanguage(void)", NativeVerification::Exposed}))
     return false;
+if (!catalogue.add({0x00460070, "Human_GetWeaponHandler", "IGI-RE", "entry",
+                    "Task *Human_GetWeaponHandler(Human *h)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00487180, "StatusScreen_Get", "IGI-RE", "entry",
+                    "StatusScreen *StatusScreen_Get(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00491cf0, "Display_GetMode", "IGI-RE", "entry",
+                    "DisplayMode *Display_GetMode(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004b4f40, "Draw_SpriteZ", "IGI-RE", "entry",
+                    "void Draw_SpriteZ(const Sprite *sheet, float x, float y, float r, float g, "
+                    "float b, int frame, int unk4, int unk8, float z)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004b6ce0, "Sprite_Width", "IGI-RE", "entry", "int Sprite_Width(Sprite *s)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004b6d00, "Sprite_Height", "IGI-RE", "entry", "int Sprite_Height(Sprite *s)",
+                    NativeVerification::Exposed}))
+    return false;

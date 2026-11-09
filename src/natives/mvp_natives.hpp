@@ -33,8 +33,24 @@ struct CarControlArg {
     int reset;
     float *input;
 };
+
+struct DisplayMode {
+    int unk0;
+    int width;
+    int height;
+    int backBuffers;
+    int depth;
+    char unk14;
+    char unk15;
+    char unk16;
+    char unk17;
+    int renderMode;
+    char device[0x80];
+    char description[0x80];
+};
 #pragma pack(pop)
 static_assert(sizeof(HumanCameraInfo) == 0x74);
+static_assert(sizeof(DisplayMode) == 0x11C);
 struct HumanAI;
 struct HumanCamera;
 struct HumanPlayer;
@@ -58,6 +74,7 @@ struct SoldierSM;
 struct Sound;
 struct SoundOptions;
 struct Sprite;
+struct StatusScreen;
 struct SymbolTable;
 struct Task;
 struct Text;
@@ -105,9 +122,15 @@ inline constexpr std::uint32_t TASK_EVENT_SET = 0x00401860;
 inline constexpr std::uint32_t GAME_SET_MUSIC_VOLUME = 0x00415950;
 inline constexpr std::uint32_t HUMAN_PLAYER_SET_FLAG_D68 = 0x0040c150;
 inline constexpr std::uint32_t HUMAN_GET_TYPE = 0x00460be0;
+inline constexpr std::uint32_t HUMAN_GET_WEAPON = 0x00460070;
 inline constexpr std::uint32_t SOLDIER_GET_TYPE = 0x0045d5a0;
 inline constexpr std::uint32_t WEAPON_GET_FIRE_EVENT = 0x00413b20;
 inline constexpr std::uint32_t HUMAN_VIEW_SET_WEAPON_ANGLES = 0x004647a0;
+inline constexpr std::uint32_t STATUS_SCREEN_GET = 0x00487180;
+inline constexpr std::uint32_t DISPLAY_GET_MODE = 0x00491cf0;
+inline constexpr std::uint32_t DRAW_SPRITE_Z = 0x004b4f40;
+inline constexpr std::uint32_t SPRITE_WIDTH = 0x004b6ce0;
+inline constexpr std::uint32_t SPRITE_HEIGHT = 0x004b6d00;
 inline constexpr std::uint32_t CAR_GET_PARAM_TABLE = 0x0042ea00;
 inline constexpr std::uint32_t GRAPH_GET_TYPE = 0x004f9210;
 inline constexpr std::uint32_t AI_FUNCTION_SET_ALARM_VIEW_LENGTH = 0x0044dcd0;
@@ -465,6 +488,7 @@ NATIVE_DECL void *GET_PARAM_TABLE();
 NATIVE_DECL void *GET_LIST();
 NATIVE_DECL void SET_AI(Human *h, HumanAI *ai);
 NATIVE_DECL void RESET_DAMAGE(Human *h);
+NATIVE_DECL Task *GET_WEAPON(Human *h);
 NATIVE_DECL void GET_CAMERA_INFO(Human *h, HumanCameraInfo *info);
 NATIVE_DECL int GET_STATE(Human *h);
 NATIVE_DECL int GET_INDEX(Human *h);
@@ -764,5 +788,11 @@ NATIVE_DECL PlayerProfile *PROFILE_GET_ACTIVE();
 NATIVE_DECL float PROFILE_GET_SFX_VOLUME();
 NATIVE_DECL float PROFILE_GET_MUSIC_VOLUME();
 NATIVE_DECL int PROFILE_GET_LANGUAGE();
+NATIVE_DECL StatusScreen *STATUS_SCREEN_GET();
+NATIVE_DECL DisplayMode *DISPLAY_GET_MODE();
+NATIVE_DECL void DRAW_SPRITE_Z(const Sprite *sheet, float x, float y, float r, float g, float b,
+                               int frame, int unk4, int unk8, float z);
+NATIVE_DECL int SPRITE_WIDTH(Sprite *sprite);
+NATIVE_DECL int SPRITE_HEIGHT(Sprite *sprite);
 } // namespace OTHER
 } // namespace IGI
