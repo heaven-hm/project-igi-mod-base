@@ -23,11 +23,17 @@ inline constexpr std::uint32_t HUMAN_AI_MOVE_TO_HANDLER = 0x004518e0;
 inline constexpr std::uint32_t HUMAN_AI_RUN_TO_HANDLER = 0x004522a0;
 // Human_StopWeaponAnim: clears a stuck weapon animation (0x00489F00).
 inline constexpr std::uint32_t HUMAN_STOP_WEAPON_ANIM_HANDLER = 0x00489f00;
+// Human.weapons[3] slot helpers (IGI-RE humanbase/human.c).
+inline constexpr std::uint32_t WEAPON_SLOTS_GET_HANDLER = 0x004f2060;
+inline constexpr std::uint32_t WEAPON_SLOTS_SET_HANDLER = 0x004f2070;
 } // namespace HASH
 
 namespace WEAPON {
 // Returns the dropped weapon task, or null when the drop was rejected.
 NATIVE_DECL Task *DROP(Task *w);
+// Carried-weapon slots owned by a Human (IGI-RE: h->weapons is at 0x4C4).
+NATIVE_DECL Task *SLOT_GET(Task **slots, int index);
+NATIVE_DECL void SLOT_SET(Task **slots, int index, Task *weapon);
 } // namespace WEAPON
 
 namespace HUMAN {

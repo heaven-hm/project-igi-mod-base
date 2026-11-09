@@ -432,36 +432,12 @@ void runModMenu(const igi::MenuConfig &config, igi::Runtime &runtime, std::size_
         return;
     }
     if (inRange && config.items[item].id == "weapon_ammo") {
+        // Remember the typed amount for the other weapon actions, then fall
+        // through to the shared dispatcher, which applies it to the held weapon.
         int ammo = 0;
         const auto parsed = std::from_chars(value.data(), value.data() + value.size(), ammo);
-        if (parsed.ec != std::errc{} || ammo <= 0) {
-            igi::log(igi::LogLevel::Warning,
-                     "ammo amount rejected: '" + std::string(value) + "' is not a positive number");
-            return;
-        }
-        g_refillAmmo = ammo;
-        // The text box's Apply button is the refill action: it applies the typed
-        // amount to the selected weapon, so no separate Refill control is needed.
-        const auto &weapon = kWeapons[g_selectedWeapon];
-        const bool applied = igi::WeaponHelpers(runtime).pickup(weapon.id, ammo);
-        igi::log(applied ? igi::LogLevel::Info : igi::LogLevel::Warning,
-                 "ammo " + std::to_string(ammo) + " applied to " + std::string(weapon.label) +
-                     (applied ? "" : " (rejected)"));
-        return;
-    }
-    if (inRange && config.items[item].id == "weapon_refill_all") {
-        const int ammo = g_refillAmmo > 0 ? g_refillAmmo : 120;
-        std::size_t granted = 0;
-        for (const auto &weapon : kWeapons) {
-            // Binoculars and the medipack carry no rounds; use their own counts.
-            const int rounds = weapon.ammo == 0 ? 0 : ammo;
-            if (igi::WeaponHelpers(runtime).pickup(weapon.id, rounds))
-                ++granted;
-        }
-        igi::log(granted > 0 ? igi::LogLevel::Info : igi::LogLevel::Warning,
-                 "refill all weapons: " + std::to_string(granted) + " weapons set to " +
-                     std::to_string(ammo) + " rounds");
-        return;
+        if (parsed.ec == std::errc{} && ammo > 0)
+            g_refillAmmo = ammo;
     }
     if (inRange && config.items[item].id == "npc_ensure_weapon") {
         auto *npc = igi::selectedNpc(runtime);

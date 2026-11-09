@@ -91,6 +91,10 @@ class WeaponHelpers {
     bool reportEvents() const;
     bool reportWeaponInfo() const;
     bool stopWeaponAnimation() const;
+    // Adds rounds to the weapon the player is holding right now.
+    bool refillCurrentWeapon(int ammo) const;
+    // Fully drops the held weapon: retail drop, cleared carried slot and no
+    // leftover draw animation, so the weapon cannot be cycled back to.
     bool dropCurrentWeapon() const;
     std::optional<int> hasAmmo(void *weaponTask) const;
     IGI::WeaponType *type(void *weaponTask) const;

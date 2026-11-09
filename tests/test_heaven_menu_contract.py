@@ -279,6 +279,25 @@ assert "drawCrosshairOverlay" in IMGUI_HOST and "crosshairActive(runtime)" in IM
 assert "IGI::WEAPON::DROP" in HELPERS and "WeaponHelpers::dropCurrentWeapon" in HELPERS, (
     "drop weapon must use the retail Weapon_Drop lifecycle"
 )
+# Dropping must also clear the carried slot and stop the draw animation, or the
+# weapon can still be cycled back to.
+assert "kHumanWeaponSlotsOffset = 0x4C4" in HELPERS, (
+    "drop must clear Human.weapons[] at the recovered 0x4C4 offset"
+)
+assert "IGI::WEAPON::SLOT_SET(slots, slot, nullptr)" in HELPERS, (
+    "drop must clear the carried weapon slot"
+)
+assert "IGI::HUMAN::STOP_WEAPON_ANIM(player, 0.0F)" in HELPERS, (
+    "drop must stop the weapon animation"
+)
+# Ammo must apply to the weapon in hand, not to a menu selection.
+assert "WeaponHelpers::refillCurrentWeapon" in HELPERS, (
+    "the ammo control must refill the held weapon"
+)
+assert "kGunIdOffset = 0x100" in HELPERS and "PICK_UP_WEAPON(player, message)" in HELPERS, (
+    "the held weapon is refilled through its retail gun id"
+)
+assert 'id == "weapon_ammo"' in HELPERS, "the ammo control must have a dispatch branch"
 # Car_Control input[1] is a target speed in retail speed units, not a 0..1
 # throttle: the car AI cruises at 5 and up, and negative drives in reverse.
 assert '{"Stop", "Reverse", "Walk", "Run", "Full", "Brake"}' in HEAVEN, (

@@ -72,6 +72,19 @@ NATIVE_DECL char RUN_TO(HumanAI *ai, int dest, const Vec3d *pos, char replan) {
 }
 } // namespace AI
 
+namespace WEAPON {
+NATIVE_DECL Task *SLOT_GET(Task **slots, int index) {
+    return InvokeExtraNative<Task *>(HASH::WEAPON_SLOTS_GET_HANDLER,
+                                     "Task *WeaponSlots_Get(Task **slots, int i)", slots, index);
+}
+
+NATIVE_DECL void SLOT_SET(Task **slots, int index, Task *weapon) {
+    InvokeExtraNative<void>(HASH::WEAPON_SLOTS_SET_HANDLER,
+                            "void WeaponSlots_Set(Task **slots, int i, Task *w)", slots, index,
+                            weapon);
+}
+} // namespace WEAPON
+
 namespace HUMAN {
 NATIVE_DECL void STOP_WEAPON_ANIM(Human *h, float time) {
     InvokeExtraNative<void>(HASH::HUMAN_STOP_WEAPON_ANIM_HANDLER,
@@ -80,7 +93,7 @@ NATIVE_DECL void STOP_WEAPON_ANIM(Human *h, float time) {
 } // namespace HUMAN
 
 std::size_t ExtraBindingCount() noexcept {
-    return 4;
+    return 6;
 }
 
 bool loadExtraNativeBindings(igi::NativeCatalogue &catalogue) {
@@ -95,8 +108,16 @@ bool loadExtraNativeBindings(igi::NativeCatalogue &catalogue) {
                         "char HumanAI_RunTo(HumanAI *ai, int dest, const Vec3d *pos, char replan)",
                         igi::NativeVerification::Exposed}))
         return false;
-    return catalogue.add({HASH::HUMAN_STOP_WEAPON_ANIM_HANDLER, "Human_StopWeaponAnim", "IGI-RE",
-                          "entry", "void Human_StopWeaponAnim(Human *h, float time)",
+    if (!catalogue.add({HASH::HUMAN_STOP_WEAPON_ANIM_HANDLER, "Human_StopWeaponAnim", "IGI-RE",
+                        "entry", "void Human_StopWeaponAnim(Human *h, float time)",
+                        igi::NativeVerification::Exposed}))
+        return false;
+    if (!catalogue.add({HASH::WEAPON_SLOTS_GET_HANDLER, "WeaponSlots_Get", "IGI-RE", "entry",
+                        "Task *WeaponSlots_Get(Task **slots, int i)",
+                        igi::NativeVerification::Exposed}))
+        return false;
+    return catalogue.add({HASH::WEAPON_SLOTS_SET_HANDLER, "WeaponSlots_Set", "IGI-RE", "entry",
+                          "void WeaponSlots_Set(Task **slots, int i, Task *w)",
                           igi::NativeVerification::Exposed});
 }
 } // namespace IGI

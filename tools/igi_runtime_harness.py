@@ -178,6 +178,9 @@ LIVE_OBJECT_NATIVES = frozenset({
     # Weapon_Drop detaches a weapon task owned by a live human; the AI move calls
     # dereference the live HumanAI graph, node grid and route queue.
     "WEAPON::DROP",
+    # Slot helpers read/write the live human's carried-weapon array.
+    "WEAPON::SLOT_GET",
+    "WEAPON::SLOT_SET",
     "AI::MOVE_TO",
     "AI::RUN_TO",
     # Graph node accessors dereference the live level graph's node array.

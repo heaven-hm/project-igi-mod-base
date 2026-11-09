@@ -1059,6 +1059,17 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
             log(LogLevel::Info, "weapon category selection requested");
         else
             log(LogLevel::Warning, "weapon category selection rejected: player unavailable");
+    } else if (id == "weapon_ammo") {
+        int ammo = 0;
+        const auto parsed = std::from_chars(value.data(), value.data() + value.size(), ammo);
+        if (parsed.ec != std::errc{} || ammo <= 0) {
+            log(LogLevel::Warning,
+                "weapon ammo rejected: '" + std::string(value) + "' is not a positive round count");
+        } else if (WeaponHelpers(runtime).refillCurrentWeapon(ammo)) {
+            log(LogLevel::Info, "weapon ammo applied to the held weapon");
+        } else {
+            log(LogLevel::Warning, "weapon ammo rejected: the player is not holding a weapon");
+        }
     } else if (id == "weapon_drop") {
         if (WeaponHelpers(runtime).dropCurrentWeapon())
             log(LogLevel::Info, "selected weapon dropped through the retail weapon lifecycle");
@@ -1986,9 +1997,44 @@ bool WeaponHelpers::cycle(int force) const {
 bool WeaponHelpers::reportFlashReset() const {
     return restorePlayerVisualFeedback(runtime_);
 }
-// Drops the player's current weapon through the retail weapon lifecycle.
-// Weapon_Drop detaches the weapon task and hands it back to the level, which is
-// the same path the game takes when a weapon is thrown away.
+// Retail Gun.id lives at +0x100 (IGI-RE guncasingtypes.h), which is what
+// WeaponGunPickup matches against to add rounds to the carried weapon.
+constexpr std::size_t kGunIdOffset = 0x100;
+// Human.weapons[3] at +0x4C4 (IGI-RE human.c: WeaponSlots_Get((char *)h + 0x4C4, 0)).
+constexpr std::size_t kHumanWeaponSlotsOffset = 0x4C4;
+constexpr int kHumanWeaponSlots = 3;
+
+// Adds rounds to the weapon currently in hand. The pickup native matches the
+// weapon id against the carried tasks, so this refills the held gun rather than
+// the menu's selection.
+bool WeaponHelpers::refillCurrentWeapon(int ammo) const {
+    if (!requireLiveGameThread(runtime_) || ammo <= 0)
+        return false;
+    auto *player = reinterpret_cast<IGI::Human *>(IGI::GAME::GET_PLAYER(0));
+    if (!player) {
+        log(LogLevel::Warning, "weapon ammo rejected: player is unavailable");
+        return false;
+    }
+    auto *weapon = IGI::HUMAN::GET_WEAPON(player);
+    if (!weapon) {
+        log(LogLevel::Info, "weapon ammo: the player is not holding a weapon");
+        return false;
+    }
+    const int gunId = *reinterpret_cast<const int *>(
+        reinterpret_cast<const std::uint8_t *>(weapon) + kGunIdOffset);
+    int message[] = {gunId, ammo};
+    IGI::PLAYER::PICK_UP_WEAPON(player, message);
+    log(LogLevel::Info, "weapon ammo: added " + std::to_string(ammo) + " rounds to gun id " +
+                            std::to_string(gunId) + ", rounds now " +
+                            std::to_string(IGI::WEAPON::HAS_AMMO(weapon)));
+    return true;
+}
+
+// Drops the player's current weapon completely:
+//   1. Weapon_Drop runs the retail drop handler (spawns the pickup, marks remove)
+//   2. every carried slot that referenced the task is cleared, so the weapon can
+//      no longer be cycled back to
+//   3. the weapon draw animation is stopped, so the hands return to idle
 bool WeaponHelpers::dropCurrentWeapon() const {
     if (!requireLiveGameThread(runtime_))
         return false;
@@ -2002,12 +2048,25 @@ bool WeaponHelpers::dropCurrentWeapon() const {
         log(LogLevel::Info, "drop weapon: the player is not carrying a weapon task");
         return false;
     }
-    log(LogLevel::Info,
-        "drop weapon: invoking Weapon_Drop for task #" + std::to_string(IGI::TASK::GET_ID(weapon)));
-    if (!IGI::WEAPON::DROP(weapon)) {
-        log(LogLevel::Warning, "drop weapon: Weapon_Drop rejected the weapon task");
-        return false;
+    const int weaponId = IGI::TASK::GET_ID(weapon);
+    log(LogLevel::Info, "drop weapon: invoking Weapon_Drop for task #" + std::to_string(weaponId));
+    (void)IGI::WEAPON::DROP(weapon);
+
+    // Weapon_Drop only removes the task from the world; the human keeps the slot,
+    // which is why the dropped weapon stayed in the cycle list.
+    auto **slots = reinterpret_cast<IGI::Task **>(reinterpret_cast<std::uint8_t *>(player) +
+                                                  kHumanWeaponSlotsOffset);
+    int cleared = 0;
+    for (int slot = 0; slot < kHumanWeaponSlots; ++slot) {
+        if (IGI::WEAPON::SLOT_GET(slots, slot) != weapon)
+            continue;
+        IGI::WEAPON::SLOT_SET(slots, slot, nullptr);
+        ++cleared;
     }
+    IGI::HUMAN::STOP_WEAPON_ANIM(player, 0.0F);
+    log(LogLevel::Info, "drop weapon: task #" + std::to_string(weaponId) + " dropped, " +
+                            std::to_string(cleared) +
+                            " carried slot(s) cleared and the animation stopped");
     return true;
 }
 
