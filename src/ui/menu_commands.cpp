@@ -26,8 +26,25 @@ std::size_t menuRowCapacity(const MenuConfig &config) {
     return usable > kReservedRows ? usable - kReservedRows : 0;
 }
 
+int menuRequiredHeight(const MenuConfig &config) {
+    const auto rows = static_cast<int>(config.items.size()) + 2;
+    return rows * static_cast<int>(kRowHeight + kRowSpacing) + 8;
+}
+
+int menuLayoutY(const MenuConfig &config) {
+    // Keep the bottom edge the user configured and grow upwards instead of
+    // letting the last controls fall off the screen.
+    const int bottom = config.y + config.height;
+    return std::max(8, bottom - menuRequiredHeight(config));
+}
+
 bool menuNeedsCommandList(const MenuConfig &config) {
-    return config.items.size() > menuRowCapacity(config);
+    // A ListBox is a one-line selector, so the per-control layout is preferred
+    // whenever the rows can be drawn on screen at all.
+    constexpr std::size_t kMaxFlatRows = 20;
+    const auto room =
+        static_cast<std::size_t>(std::max(config.height, 0) / (kRowHeight + kRowSpacing));
+    return config.items.size() > std::max(kMaxFlatRows, room);
 }
 
 std::vector<int> inputSamples(const ModMenuItemConfig &item) {

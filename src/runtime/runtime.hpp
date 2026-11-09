@@ -22,7 +22,13 @@ class Runtime final {
     bool ensureTickRegistered() noexcept {
         return hooks_.ensureFrameTickRegistered();
     }
-    void shutdown() noexcept;
+    // Returns true only when every installed hook was restored and removed. A
+    // false result means the process still executes DLL code: the caller must
+    // NOT unload the module or the game will jump into freed memory.
+    bool shutdown() noexcept;
+    bool hooksResident() const noexcept {
+        return hooks_.resident();
+    }
     Scheduler &scheduler() noexcept {
         return scheduler_;
     }

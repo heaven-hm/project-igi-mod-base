@@ -81,14 +81,30 @@ bool Runtime::initialize(game::TickHook hook) {
     log(LogLevel::Info, "IGI 1 SDK runtime initialized");
     return true;
 }
-void Runtime::shutdown() noexcept {
-    if (!hooks_.uninstall())
-        return;
+bool Runtime::shutdown() noexcept {
+    if (!hooks_.uninstall()) {
+        // The frame callback could not be removed safely. Keep every SDK object
+        // alive: the game still calls into this module.
+        log(LogLevel::Error,
+            "runtime shutdown deferred: retail hooks remain installed; module stays resident");
+        return false;
+    }
+    if (hooks_.resident()) {
+        // Hooks retired in place: the game may still enter them, so the native
+        // caller and catalogue must stay valid. Only the scheduler is detached.
+        scheduler_.reset();
+        directNativeMode_ = false;
+        initialized_ = false;
+        log(LogLevel::Info,
+            "runtime shutdown: hooks retired; native bindings stay loaded for the resident module");
+        return true;
+    }
     bindIgiNativeCaller(nullptr);
     caller_.reset();
     catalogue_.reset();
     scheduler_.reset();
     directNativeMode_ = false;
     initialized_ = false;
+    return true;
 }
 } // namespace igi

@@ -227,6 +227,20 @@ DWORD WINAPI igiSdkMainThread(void *rawModule) {
             if (deactivateMenuRuntime(callbacks)) {
                 g_state.running.store(false, std::memory_order_release);
                 if (unloadRequested) {
+                    // Unloading is only safe once the retail hooks are restored.
+                    // Otherwise the game still calls into this module and freeing
+                    // it freezes the game.
+                    if (callbacks.hooksResident && callbacks.hooksResident()) {
+                        igi::log(igi::LogLevel::Error,
+                                 "safe unload refused: retail hooks are still installed; the mod "
+                                 "is disabled and the DLL stays resident until the game exits");
+                        g_state.running.store(false, std::memory_order_release);
+                        igi::log(igi::LogLevel::Info,
+                                 "internal host stopped; DLL remains resident safely");
+                        detachConsole();
+                        igi::closeLogFile();
+                        return 0;
+                    }
                     igi::log(igi::LogLevel::Info,
                              "safe unload: callbacks stopped; releasing DLL from its host thread");
                     detachConsole();

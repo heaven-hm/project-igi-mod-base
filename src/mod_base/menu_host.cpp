@@ -776,6 +776,14 @@ extern "C" IGI_DEMO_EXPORT std::uint64_t IGI_MenuManager_Internal_TickCount() {
 #endif
 }
 
+extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_Internal_HooksResident() {
+#if defined(_WIN32)
+    return runtime.hooksResident();
+#else
+    return false;
+#endif
+}
+
 extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_Internal_CanUnload() {
 #if defined(_WIN32)
     return safeToShutdown.load(std::memory_order_acquire) && !runtime.scheduler().isRunning();
@@ -800,7 +808,13 @@ extern "C" IGI_DEMO_EXPORT void IGI_MenuManager_Internal_Shutdown() {
     reopenResource.release();
     closeResource.release();
     gameMenu.reset();
-    runtime.shutdown();
+    if (!runtime.shutdown()) {
+        // The game can still call into this module. Keep every resource alive and
+        // let the host keep the DLL loaded.
+        igi::log(igi::LogLevel::Error,
+                 "internal shutdown: hooks still resident; keeping the module loaded");
+        return;
+    }
     compiledMenu.clear();
     reopenMenu.clear();
     closeMenu.clear();
@@ -819,7 +833,7 @@ const DllMenuCallbacks &getDllMenuCallbacks() noexcept {
         &IGI_MenuManager_Internal_Initialize,      &IGI_MenuManager_Internal_Toggle,
         &IGI_MenuManager_Internal_RequestShutdown, &IGI_MenuManager_Internal_CanUnload,
         &IGI_MenuManager_Internal_Shutdown,        &IGI_MenuManager_Internal_EnsureTick,
-        &IGI_MenuManager_Internal_TickCount,
+        &IGI_MenuManager_Internal_TickCount,       &IGI_MenuManager_Internal_HooksResident,
     };
     return callbacks;
 }

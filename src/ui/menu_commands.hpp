@@ -18,10 +18,15 @@ struct MenuCommand {
 };
 
 // Rows a retail MenuFrame can draw for the configured frame height. The
-// generator uses the same geometry, so this decides which layout is used.
+// generator grows the frame to fit, so this is informational.
 std::size_t menuRowCapacity(const MenuConfig &config);
-// True when the configured controls no longer fit the retail frame and the
-// command-list layout is required.
+// Pixel height needed to draw one row per control plus the title and button row.
+int menuRequiredHeight(const MenuConfig &config);
+// Top coordinate that keeps the configured bottom edge when the frame grows.
+int menuLayoutY(const MenuConfig &config);
+// True only when one row per control cannot fit the retail screen at all. A
+// retail ListBox draws a single item with prev/next arrows, so this fallback is
+// a single-line command selector and is used only for very large menus.
 bool menuNeedsCommandList(const MenuConfig &config);
 // Flattens every control into command entries, grouped by category.
 std::vector<MenuCommand> buildMenuCommands(const MenuConfig &config);

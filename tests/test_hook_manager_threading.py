@@ -11,7 +11,8 @@ from pathlib import Path
 import re
 
 
-SOURCE = Path(__file__).resolve().parents[1] / "src/runtime/hook_manager.cpp"
+ROOT = Path(__file__).resolve().parents[1]
+SOURCE = ROOT / "src/runtime/hook_manager.cpp"
 
 
 def body(name: str) -> str:
@@ -44,7 +45,9 @@ def test_callback_list_work_is_owned_by_frame_dispatch():
 def test_hook_restore_waits_for_an_active_frame_detour_to_return():
     source = SOURCE.read_text(encoding="utf-8")
     frame_dispatch = body("displayRunCallbacksDetour")
-    uninstall = re.search(r"bool HookManager::uninstall\(\) noexcept \{(?P<body>[\s\S]*?)\n}\n", source)
+    uninstall = re.search(
+        r"bool HookManager::uninstall\(bool restoreHooks\) noexcept \{(?P<body>[\s\S]*?)\n}\n", source
+    )
 
     assert uninstall, "missing HookManager::uninstall"
     assert "runDispatchActive.store(true" in frame_dispatch
@@ -56,6 +59,33 @@ def test_hook_restore_waits_for_an_active_frame_detour_to_return():
     )
 
 
+def test_runtime_shutdown_retires_hooks_instead_of_patching_live_code():
+    """Eject must not restore retail code under a running game: doing so patches
+    bytes in a suspended process and froze the game on unload."""
+    source = SOURCE.read_text(encoding="utf-8")
+    match = re.search(
+        r"bool HookManager::uninstall\(bool restoreHooks\) noexcept \{(?P<body>[\s\S]*?)\n}\n",
+        source,
+    )
+    assert match, "missing HookManager::uninstall(bool restoreHooks)"
+    uninstall = match.group("body")
+    runtime = (ROOT / "src/runtime/runtime.cpp").read_text(encoding="utf-8")
+
+    # The default runtime path retires the hooks and reports them resident.
+    assert "if (!restoreHooks) {" in uninstall
+    assert "retired_ = true" in uninstall
+    assert "hooks retired in place" in uninstall
+    # Restoring bytes stays available but is opt-in only.
+    assert "MH_DisableHook" in uninstall
+    assert "bool restoreHooks = false" in (
+        ROOT / "src/runtime/hook_manager.hpp"
+    ).read_text(encoding="utf-8")
+    # A resident module keeps its native bindings alive for in-flight callbacks.
+    assert "hooks_.resident()" in runtime
+    assert "native bindings stay loaded" in runtime
+
+
 if __name__ == "__main__":
     test_callback_list_work_is_owned_by_frame_dispatch()
+    test_runtime_shutdown_retires_hooks_instead_of_patching_live_code()
     test_hook_restore_waits_for_an_active_frame_detour_to_return()

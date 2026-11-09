@@ -367,7 +367,7 @@ bool HookManager::ensureFrameTickRegistered() noexcept {
 #endif
 }
 
-bool HookManager::uninstall() noexcept {
+bool HookManager::uninstall(bool restoreHooks) noexcept {
 #if defined(__APPLE__)
     macos::uninstallGameTickHook(trampoline_);
     return true;
@@ -400,6 +400,17 @@ bool HookManager::uninstall() noexcept {
             "frame tick removal timed out; preserving hooks and SDK state to avoid a cross-thread "
             "callback-list mutation");
         return false;
+    }
+
+    if (!restoreHooks) {
+        // Safe retire: the callback is out of the retail list and the scheduler is
+        // detached, so every hook is inert. Leaving the detours installed keeps the
+        // game's own code untouched while the module stays resident.
+        retired_ = true;
+        log(LogLevel::Info,
+            "IGI 1 display frame hooks retired in place; retail code left untouched and the "
+            "module stays resident");
+        return true;
     }
 
     if (!scheduler_.isGameThread()) {

@@ -27,11 +27,20 @@ class HookManager final {
     // Refuses a re-entrant call from the active Display_AddFrameCallback detour.
     // Detaches the scheduler and disables the detours but deliberately leaves the
     // module resident so no in-flight game callback can jump into freed memory.
-    bool uninstall() noexcept;
+    // `restoreHooks=false` is the safe runtime path: our frame callback is removed
+    // from the retail list and the scheduler stops, but the process hooks stay
+    // installed. Restoring them suspends and patches live game code, which can
+    // deadlock a running game, so it is only used when the game is shutting down.
+    bool uninstall(bool restoreHooks = false) noexcept;
+    // True while process hooks are still installed and the game may call in.
+    bool resident() const noexcept {
+        return installed_ || retired_;
+    }
 
   private:
     Scheduler &scheduler_;
     bool installed_ = false;
+    bool retired_ = false;
     void *trampoline_ = nullptr;
 };
 } // namespace igi

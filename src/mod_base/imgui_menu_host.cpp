@@ -1053,6 +1053,14 @@ extern "C" IGI_DEMO_EXPORT std::uint64_t IGI_MenuManager_External_TickCount() {
 #endif
 }
 
+extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_External_HooksResident() {
+#if defined(_WIN32)
+    return runtime.hooksResident();
+#else
+    return false;
+#endif
+}
+
 extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_External_CanUnload() {
 #if defined(_WIN32)
     return safeToShutdown.load(std::memory_order_acquire) && !runtime.scheduler().isRunning();
@@ -1076,7 +1084,20 @@ extern "C" IGI_DEMO_EXPORT void IGI_MenuManager_External_Shutdown() {
         menuModel->shutdown();
         menuModel.reset();
     }
-    runtime.shutdown();
+    if (!runtime.shutdown()) {
+        igi::log(igi::LogLevel::Warning,
+                 "external imgui shutdown: hooks still resident; keeping the module loaded");
+        listSelections.clear();
+        toggleValues.clear();
+        sliderValues.clear();
+        inputValues.clear();
+        lastStatusMessage.clear();
+        menuVisible = false;
+        initialAttachPending.store(false, std::memory_order_release);
+        shutdownPending.store(false, std::memory_order_release);
+        safeToShutdown.store(true, std::memory_order_release);
+        return;
+    }
     listSelections.clear();
     toggleValues.clear();
     sliderValues.clear();
@@ -1132,7 +1153,7 @@ const DllMenuCallbacks &getDllMenuCallbacks() noexcept {
         &IGI_MenuManager_External_Initialize,      &IGI_MenuManager_External_Toggle,
         &IGI_MenuManager_External_RequestShutdown, &IGI_MenuManager_External_CanUnload,
         &IGI_MenuManager_External_Shutdown,        &IGI_MenuManager_External_EnsureTick,
-        &IGI_MenuManager_External_TickCount,
+        &IGI_MenuManager_External_TickCount,       &IGI_MenuManager_External_HooksResident,
     };
     return callbacks;
 }

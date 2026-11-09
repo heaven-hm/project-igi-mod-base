@@ -400,15 +400,43 @@ void menuCommandListTest() {
         action.category = "World";
         config.items.push_back(action);
     }
-    // A small control set keeps the direct per-control layout.
-    assert(igi::menuRowCapacity(config) >= config.items.size());
+    // A small control set keeps the direct per-control layout: a retail ListBox
+    // draws one item only, so one row per control is what users expect.
     assert(!igi::menuNeedsCommandList(config));
+    // A frame tall enough for the rows keeps the configured geometry.
+    assert(igi::menuRequiredHeight(config) <= config.height);
     std::ostringstream smallScript;
     assert(igi::writeIgiMenuScreenScript(smallScript, config));
     assert(smallScript.str().find("IGI_SDK_FillList(-1)") == std::string::npos);
     assert(smallScript.str().find("IGI_SDK_Action(0)") != std::string::npos);
 
-    while (config.items.size() <= igi::menuRowCapacity(config)) {
+    // A medium control set (9-20 rows) still uses one row per control; the frame
+    // grows upwards so the last rows stay on screen and the bottom edge is kept.
+    while (config.items.size() < 9) {
+        igi::ModMenuItemConfig list;
+        list.id = "list_" + std::to_string(config.items.size());
+        list.kind = igi::ModMenuItemKind::List;
+        list.label = "List " + std::to_string(config.items.size());
+        list.category = "Vehicles";
+        list.values = {"First", "Second"};
+        config.items.push_back(list);
+    }
+    assert(!igi::menuNeedsCommandList(config));
+    assert(igi::menuRequiredHeight(config) > config.height);
+    assert(igi::menuLayoutY(config) < config.y);
+    assert(igi::menuLayoutY(config) + igi::menuRequiredHeight(config) ==
+           config.y + config.height);
+    // Nine controls (the Simple menu size) must still be one row per control.
+    std::ostringstream nineScript;
+    assert(igi::writeIgiMenuScreenScript(nineScript, config));
+    const auto nine = nineScript.str();
+    assert(nine.find("IGI_SDK_Action(0)") != std::string::npos);
+    assert(nine.find("IGI_SDK_FillList(-1)") == std::string::npos);
+    // The generated frame must use the grown geometry so no row is clipped.
+    assert(nine.find(std::to_string(igi::menuLayoutY(config))) != std::string::npos);
+
+    constexpr std::size_t kFlatLimit = 21;
+    while (config.items.size() < kFlatLimit) {
         igi::ModMenuItemConfig list;
         list.id = "list_" + std::to_string(config.items.size());
         list.kind = igi::ModMenuItemKind::List;

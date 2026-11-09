@@ -54,11 +54,15 @@ bool writeMenuScript(std::ostream &out, const MenuConfig &config, bool standalon
                "Task_New(-1, \"MenuManager\", \"IGI SDK\", "
             << config.screenId << ", \"LOCAL:menusystem/ingamemenu.res\", FALSE, ";
     const bool commandList = menuNeedsCommandList(config);
+    // One row per control needs more height than the configured frame for most
+    // menus, so the frame is grown upwards to keep every control on screen.
+    const int frameY = commandList ? config.y : menuLayoutY(config);
+    const int frameHeight = commandList ? config.height : menuRequiredHeight(config);
     out << "Task_New(" << config.screenId << ", \"MenuScreen\", \"IGI SDK\", \"\", " << config.x
         << ", " << config.y << ", " << config.x + config.width << ", " << config.y + config.height
         << ", \"IGI_SDK_Cancel() - MenuManager_PopScreen(FALSE)\", \"\", \"\", Task_New(-1, "
            "\"MenuFrame\", \"\", \"\", "
-        << config.x << ", " << config.y << ", " << config.width << ", " << config.height
+        << config.x << ", " << frameY << ", " << config.width << ", " << frameHeight
         << ", 1, 4, 4, FALSE";
     if (!config.title.empty()) {
         out << ", Task_New(-1, \"MenuText\", \"title\", ";
@@ -95,7 +99,7 @@ bool writeMenuScript(std::ostream &out, const MenuConfig &config, bool standalon
         if (item.kind == ModMenuItemKind::List || item.kind == ModMenuItemKind::Input) {
             out << ", Task_New(-1, \"MenuFrame\", ";
             quoted(out, item.id);
-            out << ", \"\", " << config.x << ", " << config.y << ", " << config.width
+            out << ", \"\", " << config.x << ", " << frameY << ", " << config.width
                 << ", 25, 8, 20, 4, TRUE, Task_New(-1, \"MenuText\", \"\", ";
             quoted(out, item.label);
             out << ", \"font3.fnt\", 2, \"\", \"\"), Task_New(" << widgetId
