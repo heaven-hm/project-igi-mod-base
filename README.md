@@ -4,59 +4,9 @@ Project IGI Mod Base is a foundation for creating single-player mods and in-game
 
 ## Included mod menus
 
-### Heaven Mod Menu (Production Menu)
-
-Heaven's Mod is the flagship gameplay menu for Project I.G.I., featuring 50 verified native-backed gameplay controls organized across seven categories: Weapons, Player, Camera, World, Vehicles, AI / NPC, and Live Target Selection.
-
-- **Dual Frontend Architecture:**
-  - **Internal Menu (`igi-heaven-mod-internal.dll`)**: Runs inside the retail engine via the QVM `MenuManager` UI. Outsized control sets automatically generate a scrollable `ListBox` over a flattened command list so every option stays accessible within the retail frame.
-  - **External ImGui Menu (`igi-heaven-mod-external.dll`)**: Renders a rich Direct3D 7 Dear ImGui overlay with full mouse navigation, categories, and real-time readouts.
-- **50+ Verified Controls:**
-  - **Weapons**: Direct ammo refills for Glock 17, MP5SD, M16A2, and AK-47, all-weapon equips (including Binoculars and Medipack), weapon cycling, draw animations, and unlimited ammo.
-  - **Player**: Health/damage reset, ground snap, controller flag toggles, team/state readouts, and collision toggles.
-  - **Camera**: First/third-person camera toggling, weapon aiming angles, and native 3rd-person crosshair rendering via retail HUD sprites.
-  - **World**: Frame-rate presets (30 to 240 FPS), precipitation weather control (Rain, Snow, Off), mission warp (Levels 1–14), and flow performance diagnostics.
-  - **Vehicles**: Car driving controls (throttle/steering/brake), car reset, car explosion, and whole-level vehicle triggers (explode all cars, reset all cars).
-  - **AI / NPC**: Soldier stand-down, AI weapon equipping, alarm action clearing, and live status readouts.
-  - **Live Target Selection**: Tracks live NPCs, Cars/Tanks, and Helicopters by task ID (`Name [#taskId]`), refreshed dynamically from the running game's task table.
-
-### Heaven Advanced Mod Menu
-
-Built for advanced experimentation, fleet management, and spatial manipulation (`igi-heaven-mod-advanced-internal.dll` and `igi-heaven-mod-advanced-external.dll`):
-
-![Heaven Mod Advanced AI and NPC Controls](assets/heaven-mod-npc-controls.png)
-
-#### Live NPC & AI Controls
-- **Live NPC Target Selection**: Dynamically enumerates all active NPCs in the level with real-time task identifiers (e.g., `HumanSoldier_424 [#424]`).
-- **Tactical Soldier Management**: Query status and parameters, equip weapons, reset damage, and toggle collision.
-- **Behavioral Control**: Force soldier stand-down to reset alert states, or trigger instant execution via retail death state-machines.
-- **3D Spatial Movement (Heaven Advanced)**: Move selected NPCs Forward (+5m), Backward (-5m), Left (-5m), Right (+5m), Elevate (+2m), and Snap to Ground.
-- **Ground Attachment & Levitation**: Switch NPC and player between `Ground` (gravity-bound terrain probe) and `Air` (suspended levitation) via `Human_SnapToGround` and `Human_LeaveGround`.
-- **Visible 3rd-Person Crosshair**: Centered crosshair reticle rendered natively through the retail HUD sprite pipeline.
-
-![Heaven Mod Advanced Vehicle and Helicopter Controls](assets/heaven-mod-vehicle-controls.png)
-
-#### Vehicle & Helicopter Fleet Controls
-- **Live Ground Fleet Targeting**: Target active cars and tanks by task name and ID.
-- **Interactive Driving**: Send throttle, steering, and braking commands directly into the retail car physics controller.
-- **Vehicle Maintenance & Destruction**: Reset car positions and control inputs, or trigger vehicle explosions on demand.
-- **Global Fleet Commands**: Execute level-wide `Explode All Cars` or `Reset All Cars` operations across all active vehicle tasks.
-- **Live Helicopter Telemetry**: Select active helicopters (e.g., `Heli_866 [#866]`) to inspect mounted gun configs, door status, and state sizes.
-- **Helicopter Engine Reset**: Restore selected helicopters back to initial insertion parameters using the retail `tick = 0` control branch.
-
-![Heaven Mod Advanced World and Performance Controls](assets/heaven-mod-world-controls.png)
-
-#### World, Weather & Performance Controls
-- **Instant Mission Warping**: Direct mission selection covering all 14 campaign levels (Level 1 Trainyard to Level 14 Headquarters) with proper menu resource cleanup.
-- **Clean Mission Restart**: Instant mission restarts through the native engine reload flow.
-- **Dynamic Weather System**: Switch between real-time Rain, Snow, or Off by parenting the retail `RainEffect` task and broadcasting parameter change events.
-- **Decoupled Game Pause**: Toggle game freeze independently of menu visibility (`Running` / `Paused`).
-- **High-Refresh Frame Limiter**: Switch between 30, 60, 120, 144, and 240 FPS presets for fluid gameplay on modern high-refresh monitors.
-- **Real-Time Engine Telemetry**: Instant diagnostic readouts for Level Tick, Flow Counters (FPS, frames, renders), and internal Game Events.
+### Simple Mod Menu
 
 ![Simple mod menu running in Project I.G.I.](assets/simple-mod-menu.png)
-
-### Simple Mod Menu
 
 - Live rain, snow, or off selection and frame-rate selection (30, 60, or 120 FPS)
 - Weapon list and pickup for Glock 17, MP5SD, UZI, M16A2, AK-47, Dragunov SVD, Minimi, and Spas 12
@@ -64,9 +14,9 @@ Built for advanced experimentation, fleet management, and spatial manipulation (
 - Level selection for levels 1–14
 - SFX volume, screen-flash clearing, and engine performance logging
 
-![Advanced mod menu running in Project I.G.I.](assets/advanced-mod-menu.png)
-
 ### Advanced Mod Menu
+
+![Advanced mod menu running in Project I.G.I.](assets/advanced-mod-menu.png)
 
 - Everything in Simple Mod Menu
 - Unlimited ammo
@@ -85,6 +35,14 @@ This Direct3D 7/Dear ImGui implementation is hosted on the `feature/imgui-mod` b
 It hooks the game's Direct3D 7 render pipeline via [AndenDev/D3D7Imgui](https://github.com/AndenDev/D3D7Imgui),
 rendering a modern graphical overlay with interactive controls, theme selection, sliders,
 combo boxes, and buttons alongside the retail game display.
+
+### Heaven Mod Menu (Production)
+
+Heaven's Mod is the flagship production menu shipping 50 verified native gameplay controls across Weapons, Player, Camera, World, Vehicles, AI, and Live Target Selection. Available in both internal QVM and external DirectX 7 ImGui frontends, featuring 3D NPC movement, vehicle physics, weather control, and third-person crosshair.
+
+| ![AI & NPC Controls](assets/heaven-mod-npc-controls.png) | ![Vehicle Controls](assets/heaven-mod-vehicle-controls.png) | ![World Controls](assets/heaven-mod-world-controls.png) |
+|:---:|:---:|:---:|
+| **AI & NPC Controls** | **Vehicle & Fleet Controls** | **World & Weather Controls** |
 
 Target: the `European` version Windows x86 IGI 1 executable. 
 ```sh
