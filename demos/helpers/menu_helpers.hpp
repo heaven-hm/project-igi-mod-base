@@ -184,6 +184,10 @@ class NpcHelpers {
     bool reportStatus(IGI::Human *npc) const;
     bool standDownSoldier(IGI::Human *npc) const;
     bool reportSoldierParams(IGI::Human *npc) const;
+    // Walk/run the NPC towards the player through the retail HumanAI move calls.
+    // A move needs a graph destination, so the nearest AI graph node to the
+    // player is resolved first; the position refines the final approach.
+    bool moveTowardsPlayer(IGI::Human *npc, bool run) const;
     bool setMovementMode(IGI::Human *npc, bool run) const;
     bool clearMovement(IGI::Human *npc) const;
 

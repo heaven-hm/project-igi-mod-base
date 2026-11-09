@@ -39,6 +39,18 @@ int g_selectedCarTaskId = -1;
 int g_selectedHeliTaskId = -1;
 std::atomic<bool> g_thirdPersonCrosshairEnabled{false};
 
+// Retail Vec3d is three doubles (IGI-RE types.h). The bindings keep the type
+// opaque, so helpers pass positions through this explicitly sized mirror.
+struct RetailVec3d {
+    double x;
+    double y;
+    double z;
+};
+static_assert(sizeof(RetailVec3d) == 24);
+
+// Largest node id the retail graph accepts (Graph_AddNode rejects id >= 1000).
+constexpr int kMaxGraphNodes = 1000;
+
 struct WeaponTypeHudLayout {
     std::byte unused[0x61C];
     int sightDisplay;
@@ -784,10 +796,14 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
         if (!npc) {
             reportMissingNpcTarget("NPC movement");
         } else if (value == "Stop") {
-            if (!NpcHelpers(runtime).clearMovement(npc))
+            if (NpcHelpers(runtime).clearMovement(npc))
+                log(LogLevel::Info, "NPC movement stopped through the retail AI clear-move call");
+            else
                 log(LogLevel::Warning, "NPC stop rejected: selected NPC has no live HumanAI task");
-        } else if (!NpcHelpers(runtime).setMovementMode(npc, value == "Run")) {
-            log(LogLevel::Warning, "NPC movement rejected: selected NPC has no live HumanAI task");
+        } else if (NpcHelpers(runtime).moveTowardsPlayer(npc, value == "Run")) {
+            log(LogLevel::Info, "NPC movement applied through the retail AI move call");
+        } else {
+            log(LogLevel::Warning, "NPC movement rejected: the retail AI move call failed");
         }
     } else if (id == "npc_ground_state") {
         auto *npc =
@@ -795,10 +811,14 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
         if (!npc) {
             reportMissingNpcTarget("NPC ground state");
         } else if (value == "Ground") {
-            if (!NpcHelpers(runtime).snapToGround(npc))
+            if (NpcHelpers(runtime).snapToGround(npc))
+                log(LogLevel::Info, "NPC ground state set to Ground through the human native");
+            else
                 log(LogLevel::Warning,
                     "NPC ground state rejected: Human_SnapToGround was unavailable");
-        } else if (!EntityHelpers(runtime).leaveHumanGround(npc)) {
+        } else if (EntityHelpers(runtime).leaveHumanGround(npc)) {
+            log(LogLevel::Info, "NPC ground state set to Air through the human native");
+        } else {
             log(LogLevel::Warning, "NPC ground state rejected: Human_LeaveGround was unavailable");
         }
     } else if (id == "heli_target") {
@@ -1642,6 +1662,72 @@ bool NpcHelpers::reportSoldierParams(IGI::Human *npc) const {
            << " params " << params;
     log(LogLevel::Info, status.str());
     IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, status.str().c_str());
+    return true;
+}
+
+// The AI graph is the level's single graph task; moving needs a node id from it.
+static IGI::Graph *findAiGraphTask() {
+    const auto graphType = IGI::GRAPH::GET_TYPE();
+    if (graphType == 0)
+        return nullptr;
+    for (int id = 0; id < 4096; ++id) {
+        auto *task = IGI::TASK::FIND_BY_ID(id);
+        if (!task)
+            continue;
+        const auto type = reinterpret_cast<const IgiTaskLayout *>(task)->type;
+        if (type == graphType || IGI::TASK::IS_A(type, graphType) != 0)
+            return reinterpret_cast<IGI::Graph *>(task);
+    }
+    return nullptr;
+}
+
+bool NpcHelpers::moveTowardsPlayer(IGI::Human *npc, bool run) const {
+    if (!requireLiveGameThread(runtime_) || !npc)
+        return false;
+    auto *ai = npcAiTask(npc);
+    if (!ai) {
+        log(LogLevel::Warning, "NPC movement rejected: selected NPC has no live HumanAI task");
+        return false;
+    }
+    auto *player = reinterpret_cast<IGI::Human *>(IGI::GAME::GET_PLAYER(0));
+    if (!player)
+        return false;
+    IGI::HumanCameraInfo camera{};
+    IGI::HUMAN::GET_CAMERA_INFO(player, &camera);
+    RetailVec3d target{camera.position[0], camera.position[1], camera.position[2]};
+
+    auto *graph = findAiGraphTask();
+    if (!graph) {
+        log(LogLevel::Warning, "NPC movement rejected: no live AI graph task on this level");
+        return false;
+    }
+    int nearest = -1;
+    double nearestDistance = 0.0;
+    for (int id = 0; id < kMaxGraphNodes; ++id) {
+        auto *node = IGI::GRAPH::GET_NODE(graph, id);
+        if (!node)
+            continue;
+        RetailVec3d nodePos{};
+        IGI::GRAPH::GET_NODE_POS(reinterpret_cast<IGI::Vec3d *>(&nodePos), node);
+        const double dx = nodePos.x - target.x;
+        const double dy = nodePos.y - target.y;
+        const double dz = nodePos.z - target.z;
+        const double distance = dx * dx + dy * dy + dz * dz;
+        if (nearest < 0 || distance < nearestDistance) {
+            nearest = id;
+            nearestDistance = distance;
+        }
+    }
+    if (nearest < 0) {
+        log(LogLevel::Warning, "NPC movement rejected: the AI graph has no usable node");
+        return false;
+    }
+    auto *position = reinterpret_cast<const IGI::Vec3d *>(&target);
+    const char finished = run ? IGI::AI::RUN_TO(ai, nearest, position, 1)
+                              : IGI::AI::MOVE_TO(ai, nearest, position, 1);
+    log(LogLevel::Info, std::string("NPC ") + (run ? "run" : "walk") + " requested towards node " +
+                            std::to_string(nearest) + " (retail AI reported " +
+                            (finished ? "arrived" : "moving") + ")");
     return true;
 }
 

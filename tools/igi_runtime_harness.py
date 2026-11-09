@@ -180,6 +180,9 @@ LIVE_OBJECT_NATIVES = frozenset({
     "WEAPON::DROP",
     "AI::MOVE_TO",
     "AI::RUN_TO",
+    # Graph node accessors dereference the live level graph's node array.
+    "GRAPH::GET_NODE",
+    "GRAPH::GET_NODE_POS",
     # Soldier state-machine entries and parameter reads dereference the live
     # soldier state owned by that soldier instance, exactly like EXECUTE above.
     "SOLDIER::STAND_ENTER",
