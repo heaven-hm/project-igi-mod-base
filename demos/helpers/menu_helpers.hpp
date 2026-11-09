@@ -178,7 +178,10 @@ class VehicleHelpers {
 class NpcHelpers {
   public:
     explicit NpcHelpers(Runtime &runtime) : runtime_(runtime) {}
-    bool ensureWeapon(IGI::Human *npc) const;
+    // Gives the NPC a real weapon task and puts it in the retail slot 0.
+    // Soldier_EnsureWeapon alone does nothing unless the soldier already owns a
+    // weapon task, so the weapon is created first through WeaponGunPickup.
+    bool ensureWeapon(IGI::Human *npc, std::string_view weaponId, int ammo) const;
     bool resetDamage(IGI::Human *npc) const;
     bool snapToGround(IGI::Human *npc) const;
     bool setCollisionEnabled(IGI::Human *npc, bool enabled) const;
@@ -238,6 +241,11 @@ class AudioHelpers {
 void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::size_t item,
                              std::string_view value);
 bool refreshLiveTargetOptions(MenuConfig &config, Runtime &runtime);
+// The live task currently selected in the menu, re-validated at call time. The
+// demo adapter uses this for actions that need the menu's weapon table too.
+IGI::Human *selectedNpc(Runtime &runtime);
+IGI::Car *selectedCar(Runtime &runtime);
+IGI::Heli *selectedHeli(Runtime &runtime);
 
 bool setWeather(Runtime &runtime, std::string_view weather);
 bool setFps(Runtime &runtime, std::string_view value);

@@ -322,6 +322,6 @@ Read [`CREDITS.md`](CREDITS.md), [`NOTICE`](NOTICE) and `LICENSES/` before
 redistributing. Metadata is attributed and kept as address/signature
 research only.
 - SlickDaddy and BlankName — Project I.G.I. native research and information
-- Cukier for ImGUI DirectX 7 Wrapper project ([https://github.com/AndenDev/D3D7Imgui](https://github.com/AndenDev/D3D7Imgui))
+- Cukier for ImGUI DirectX 7 Wrapper project [https://github.com/AndenDev/D3D7Imgui](https://github.com/AndenDev/D3D7Imgui)
 - Artiom — QVM tools and compiler work
 - Inspired by BigBase V2 from GTA V modding community [https://github.com/BigBase/BigBase-V2](https://github.com/BigBase/BigBase-V2)

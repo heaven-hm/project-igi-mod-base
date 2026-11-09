@@ -108,7 +108,7 @@ assert all(native in HELPERS for native in ("IGI::AI::SET_WALK", "IGI::AI::SET_R
 # The weapon controls are resolved by the Heaven adapter, because only the demo
 # owns the retail weapon symbol table and its ammo counts.
 special_routes = {"weapon_pickup", "weapon_ammo", "weapon_refill", "weapon_refill_all",
-                  "weapon_all"}
+                  "weapon_all", "npc_ensure_weapon"}
 for item_id in ids:
     if item_id in special_routes:
         assert f'config.items[item].id == "{item_id}"' in HEAVEN
@@ -130,7 +130,6 @@ required_native_paths = {
     "vehicle_controls_reset": "VehicleHelpers(runtime).resetVehicleControls",
     "heli_info": "VehicleHelpers(runtime).reportHeliInfo",
     "npc_execute": "NpcHelpers(runtime).executeSoldier",
-    "npc_ensure_weapon": "NpcHelpers(runtime).ensureWeapon",
     "npc_snap_ground": "NpcHelpers(runtime).snapToGround",
     "npc_collision": "NpcHelpers(runtime).setCollisionEnabled",
     "npc_status": "NpcHelpers(runtime).reportStatus",
@@ -239,6 +238,15 @@ assert "g_refillAmmo" in HEAVEN and "g_selectedWeapon" in HEAVEN, (
 for stale in ("weapon_refill_glock", "weapon_refill_mp5sd", "weapon_refill_m16a2",
               "weapon_refill_ak47"):
     assert stale not in HEAVEN, f"per-weapon refill control {stale!r} must be removed"
+assert "NpcHelpers(runtime).ensureWeapon(npc, weapon.id, ammo)" in HEAVEN, (
+    "NPC equip must grant a real retail weapon task before claiming the slot"
+)
+assert "WeaponGunPickup" in HELPERS and "IGI::PLAYER::PICK_UP_WEAPON(npc, args)" in HELPERS, (
+    "NPC equip must create the weapon task on the NPC through WeaponGunPickup"
+)
+assert "IGI::SOLDIER::ENSURE_WEAPON(npc)" in HELPERS, (
+    "NPC equip must still claim retail weapon slot 0"
+)
 assert "IGI::WEAPON::DROP" in HELPERS and "WeaponHelpers::dropCurrentWeapon" in HELPERS, (
     "drop weapon must use the retail Weapon_Drop lifecycle"
 )

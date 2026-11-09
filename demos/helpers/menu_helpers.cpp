@@ -22,6 +22,9 @@
 
 namespace igi {
 static bool executeMenuCommandFor(IGI::Task *manager, std::string_view commandScript);
+IGI::Human *selectedNpc(Runtime &runtime);
+IGI::Car *selectedCar(Runtime &runtime);
+IGI::Heli *selectedHeli(Runtime &runtime);
 static bool requireLiveGameThread(Runtime &runtime);
 static bool refreshLiveMenu(Runtime &runtime, std::string_view effect);
 static bool executeMenuCommand(std::string_view commandScript);
@@ -738,16 +741,10 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
             log(LogLevel::Warning, "vehicle drive rejected: Car_Control native was unavailable");
         }
     } else if (id == "npc_ensure_weapon") {
-        auto *npc =
-            reinterpret_cast<IGI::Human *>(findLiveTarget(runtime, g_selectedNpcTaskId, isNpcTask));
-        if (!npc) {
-            reportMissingNpcTarget("NPC equip");
-        } else if (NpcHelpers(runtime).ensureWeapon(npc)) {
-            log(LogLevel::Info, "NPC weapon provisioned through the soldier native");
-        } else {
-            log(LogLevel::Warning,
-                "NPC weapon request rejected: Soldier_EnsureWeapon native was unavailable");
-        }
+        // The demo adapter owns the retail weapon table, so it grants the weapon
+        // itself; reaching here means the menu ran without a weapon selection.
+        log(LogLevel::Warning,
+            "NPC equip rejected: the demo adapter must supply the retail weapon");
     } else if (id == "npc_reset_damage") {
         auto *npc =
             reinterpret_cast<IGI::Human *>(findLiveTarget(runtime, g_selectedNpcTaskId, isNpcTask));
@@ -1068,6 +1065,18 @@ static bool executeMenuCommand(std::string_view commandScript) {
         return false;
     auto *manager = IGI::TASK::FIND_CHILD(root, IGI::MENU::GET_TYPE());
     return executeMenuCommandFor(manager, commandScript);
+}
+
+IGI::Human *selectedNpc(Runtime &runtime) {
+    return reinterpret_cast<IGI::Human *>(findLiveTarget(runtime, g_selectedNpcTaskId, isNpcTask));
+}
+
+IGI::Car *selectedCar(Runtime &runtime) {
+    return reinterpret_cast<IGI::Car *>(findLiveTarget(runtime, g_selectedCarTaskId, isCarTask));
+}
+
+IGI::Heli *selectedHeli(Runtime &runtime) {
+    return reinterpret_cast<IGI::Heli *>(findLiveTarget(runtime, g_selectedHeliTaskId, isHeliTask));
 }
 
 bool changeLevel(Runtime &runtime, int levelId) {
@@ -2208,9 +2217,28 @@ bool VehicleHelpers::resetControls(void *vehicle) const {
     IGI::VEHICLE::RESET_CONTROLS(vehicle);
     return true;
 }
-bool NpcHelpers::ensureWeapon(IGI::Human *npc) const {
-    if (!requireLiveGameThread(runtime_) || !npc || IGI::HUMAN::IS_PLAYER(npc))
+bool NpcHelpers::ensureWeapon(IGI::Human *npc, std::string_view weaponId, int ammo) const {
+    if (!requireLiveGameThread(runtime_) || !npc || weaponId.empty())
         return false;
+    if (IGI::HUMAN::IS_PLAYER(npc)) {
+        log(LogLevel::Warning, "NPC equip rejected: the player is not an NPC target");
+        return false;
+    }
+    if (IGI::HUMAN::IS_DEAD(npc)) {
+        log(LogLevel::Warning, "NPC equip rejected: the selected NPC is dead");
+        return false;
+    }
+    const int weapon = IGI::SCRIPT::EVAL_CONST(std::string(weaponId).c_str());
+    if (weapon == 0) {
+        log(LogLevel::Warning, "NPC equip rejected: retail weapon symbol did not resolve");
+        return false;
+    }
+    // WeaponGunPickup creates the weapon task on any human (Gun_New) or adds
+    // rounds when it is already carried; Soldier_EnsureWeapon then owns slot 0.
+    int args[] = {weapon, ammo};
+    log(LogLevel::Info, "NPC equip: granting " + std::string(weaponId) + " with " +
+                            std::to_string(ammo) + " rounds");
+    IGI::PLAYER::PICK_UP_WEAPON(npc, args);
     IGI::SOLDIER::ENSURE_WEAPON(npc);
     return true;
 }

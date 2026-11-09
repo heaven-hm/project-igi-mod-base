@@ -449,6 +449,21 @@ void runModMenu(const igi::MenuConfig &config, igi::Runtime &runtime, std::size_
                      std::to_string(ammo) + " rounds");
         return;
     }
+    if (inRange && config.items[item].id == "npc_ensure_weapon") {
+        auto *npc = igi::selectedNpc(runtime);
+        if (!npc) {
+            igi::log(igi::LogLevel::Warning, "NPC equip rejected: select a live NPC target first");
+            return;
+        }
+        const auto &weapon = kWeapons[g_selectedWeapon];
+        const int ammo = g_refillAmmo > 0 ? g_refillAmmo : weapon.ammo;
+        if (igi::NpcHelpers(runtime).ensureWeapon(npc, weapon.id, ammo))
+            igi::log(igi::LogLevel::Info, "NPC equipped with " + std::string(weapon.label) +
+                                              " and " + std::to_string(ammo) + " rounds");
+        else
+            igi::log(igi::LogLevel::Warning, "NPC equip rejected by the retail soldier path");
+        return;
+    }
     if (inRange && config.items[item].id == "weapon_refill") {
         const auto &weapon = kWeapons[g_selectedWeapon];
         const int ammo = g_refillAmmo > 0 ? g_refillAmmo : weapon.ammo;
