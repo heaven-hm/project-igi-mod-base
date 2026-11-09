@@ -242,6 +242,17 @@ for stale in ("weapon_refill_glock", "weapon_refill_mp5sd", "weapon_refill_m16a2
 assert "IGI::WEAPON::DROP" in HELPERS and "WeaponHelpers::dropCurrentWeapon" in HELPERS, (
     "drop weapon must use the retail Weapon_Drop lifecycle"
 )
+# Car_Control input[1] is a target speed in retail speed units, not a 0..1
+# throttle: the car AI cruises at 5 and up, and negative drives in reverse.
+assert '{"Stop", "Reverse", "Walk", "Run", "Full", "Brake"}' in HEAVEN, (
+    "car drive must expose the retail walk/run/reverse/stop control set"
+)
+for speed in ("targetSpeed = -6.0F", "targetSpeed = 5.0F", "targetSpeed = 15.0F",
+              "targetSpeed = 30.0F"):
+    assert speed in HELPERS, f"car drive must send a retail speed value ({speed})"
+assert "Quarter" not in HELPERS and "0.25F" not in HELPERS.split("driveCar")[1][:1200], (
+    "car drive must not send fractional throttles; retail expects a speed"
+)
 assert 'WeaponEntry{"Medipack", "WEAPON_ID_MEDIPACK", 50}' in HEAVEN, (
     "medipack pickup must carry the configured 50-charge bundle"
 )

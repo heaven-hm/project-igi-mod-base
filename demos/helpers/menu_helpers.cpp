@@ -714,24 +714,26 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
             log(LogLevel::Warning, "vehicle explode rejected: Car_Explode native was unavailable");
         }
     } else if (id == "vehicle_drive") {
-        float throttle = 0.0F;
+        // Retail speeds: the car AI cruises at 5 and up. Walk is a crawl, Run is a
+        // normal road speed and Full is flat out; Reverse is a negative speed.
+        float targetSpeed = 0.0F;
         bool brake = false;
         if (value == "Reverse")
-            throttle = -0.25F;
-        else if (value == "Quarter")
-            throttle = 0.25F;
-        else if (value == "Half")
-            throttle = 0.5F;
+            targetSpeed = -6.0F;
+        else if (value == "Walk")
+            targetSpeed = 5.0F;
+        else if (value == "Run")
+            targetSpeed = 15.0F;
         else if (value == "Full")
-            throttle = 1.0F;
+            targetSpeed = 30.0F;
         else if (value == "Brake")
             brake = true;
         auto *car =
             reinterpret_cast<IGI::Car *>(findLiveTarget(runtime, g_selectedCarTaskId, isCarTask));
         if (!car) {
             reportMissingCarTarget("vehicle drive");
-        } else if (VehicleHelpers(runtime).driveCar(car, throttle, brake)) {
-            log(LogLevel::Info, "vehicle drive: applied selected car control");
+        } else if (VehicleHelpers(runtime).driveCar(car, targetSpeed, brake)) {
+            log(LogLevel::Info, "vehicle drive: selected car set to " + std::string(value));
         } else {
             log(LogLevel::Warning, "vehicle drive rejected: Car_Control native was unavailable");
         }
@@ -2182,13 +2184,21 @@ bool VehicleHelpers::resetHeli(IGI::Heli *heli) const {
     IGI::VEHICLE::HELI_CONTROL(heli, &reset);
     return true;
 }
-bool VehicleHelpers::driveCar(IGI::Car *car, float throttle, bool brake) const {
-    if (!requireLiveGameThread(runtime_) || !car || throttle < -0.25F || throttle > 1.0F)
+// Retail Car_Control contract (IGI-RE rotor/car.c):
+//   input[0] = steer, input[1] = target speed, input[3] = brake (!= -1 brakes),
+//   and a non-zero arg->unk0 selects the drive path instead of the reset path.
+// target speed is a speed, not a 0..1 throttle: the retail car AI cruises at 5
+// and up, so small fractional values leave the car standing still. A negative
+// target speed drives in reverse.
+bool VehicleHelpers::driveCar(IGI::Car *car, float targetSpeed, bool brake) const {
+    if (!requireLiveGameThread(runtime_) || !car)
         return false;
     if (!isCallableNative(IGI::HASH::CAR_CONTROL, "void Car_Control(Car *o, CarControlArg *arg)"))
         return false;
-    float input[4] = {0.0F, throttle, 0.0F, brake ? 1.0F : -1.0F};
+    float input[4] = {0.0F, targetSpeed, 0.0F, brake ? 1.0F : -1.0F};
     IGI::CarControlArg drive{1, input};
+    log(LogLevel::Info, "vehicle drive: invoking Car_Control target speed " +
+                            std::to_string(targetSpeed) + (brake ? " with brake" : ""));
     IGI::VEHICLE::CAR_CONTROL(car, &drive);
     return true;
 }

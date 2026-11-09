@@ -248,7 +248,7 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
          "Selected Car Drive",
          "Vehicles",
          "CarDrive",
-         {"Stop", "Reverse", "Quarter", "Half", "Full", "Brake"}},
+         {"Stop", "Reverse", "Walk", "Run", "Full", "Brake"}},
         {"heli_target",
          igi::ModMenuItemKind::List,
          "Live Heli Target",

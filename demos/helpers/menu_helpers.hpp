@@ -162,7 +162,9 @@ class VehicleHelpers {
     bool resetVehicleControls(IGI::Task *vehicle) const;
     bool explodeAllCars() const;
     bool resetAllCars() const;
-    bool driveCar(IGI::Car *car, float throttle, bool brake = false) const;
+    // Car_Control takes a target speed in retail speed units (the AI cruises at
+    // 5+); it is not a 0..1 throttle, and a negative value drives in reverse.
+    bool driveCar(IGI::Car *car, float targetSpeed, bool brake = false) const;
     bool resetControls(void *vehicle) const;
     IGI::Task *heliDoor(IGI::Heli *heli) const;
     bool heliControlInfo(IGI::Heli *heli, int *out) const;
