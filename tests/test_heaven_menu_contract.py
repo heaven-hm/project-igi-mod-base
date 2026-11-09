@@ -44,6 +44,9 @@ assert not {"music", "sfx", "audio_info", "audio_rate"} & set(ids), (
 assert kinds.get("look", (None, None))[1] == "Camera", (
     "look control is a camera control and must not reappear in Player"
 )
+assert kinds.get("third_person_crosshair", (None, None))[1] == "Camera", (
+    "the third-person crosshair control must remain a camera control"
+)
 
 # Camera state must come from the retail camera-info handler, not a helper cache.
 assert "const int mode = active ? 2 : 1;" in HELPERS, (
@@ -51,6 +54,9 @@ assert "const int mode = active ? 2 : 1;" in HELPERS, (
 )
 assert "IGI::HUMAN::GET_CAMERA_INFO" in HELPERS, (
     "camera state must come from the retail camera-info handler, not a helper-owned cache"
+)
+assert "IGI::OTHER::DRAW_SPRITE_Z" in HELPERS and "IGI::OTHER::STATUS_SCREEN_GET" in HELPERS, (
+    "the third-person crosshair must use the retail HUD sprite draw path"
 )
 assert '"void Human_SnapToGround(Human *h)"' in HELPERS, (
     "ground recovery must refuse an unresolved native instead of reporting a false success"

@@ -10,6 +10,7 @@
 #include "ui/menu_script.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <charconv>
 #include <cmath>
 #include <cstddef>
@@ -34,6 +35,16 @@ constexpr std::size_t kMaxLiveTargets = kMaxMenuListChoices;
 int g_selectedNpcTaskId = -1;
 int g_selectedCarTaskId = -1;
 int g_selectedHeliTaskId = -1;
+std::atomic<bool> g_thirdPersonCrosshairEnabled{false};
+
+struct WeaponTypeHudLayout {
+    std::byte unused[0x61C];
+    int sightDisplay;
+};
+
+static_assert(offsetof(WeaponTypeHudLayout, sightDisplay) == 0x61C);
+
+constexpr std::size_t kStatusScreenCrossSpriteOffset = 0x74;
 
 struct RefreshOutcome {
     bool changed = false;
@@ -460,6 +471,55 @@ bool setPlayerThirdPersonView(Runtime &runtime, bool active) {
     return true;
 }
 
+bool setThirdPersonCrosshairEnabled(Runtime &runtime, bool enabled) {
+    if (!requireLiveGameThread(runtime))
+        return false;
+    g_thirdPersonCrosshairEnabled.store(enabled, std::memory_order_release);
+    const char *status = enabled ? "IGI MOD: Third-person crosshair enabled"
+                                 : "IGI MOD: Third-person crosshair disabled";
+    IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, status);
+    log(LogLevel::Info,
+        enabled ? "third-person crosshair enabled" : "third-person crosshair disabled");
+    return true;
+}
+
+bool renderThirdPersonCrosshair(Runtime &runtime) {
+    if (!g_thirdPersonCrosshairEnabled.load(std::memory_order_acquire) ||
+        !requireLiveGameThread(runtime))
+        return false;
+    auto *player = reinterpret_cast<IGI::Human *>(IGI::GAME::GET_PLAYER(0));
+    if (!player)
+        return false;
+    IGI::HumanCameraInfo camera{};
+    IGI::HUMAN::GET_CAMERA_INFO(player, &camera);
+    if (camera.mode != 2)
+        return false;
+    auto *weapon = IGI::HUMAN::GET_WEAPON(player);
+    if (!weapon)
+        return false;
+    auto *weaponType = IGI::WEAPON::WEAPON_GET_TYPE(weapon);
+    if (!weaponType || reinterpret_cast<const WeaponTypeHudLayout *>(weaponType)->sightDisplay != 1)
+        return false;
+    auto *statusScreen = IGI::OTHER::STATUS_SCREEN_GET();
+    auto *displayMode = IGI::OTHER::DISPLAY_GET_MODE();
+    if (!statusScreen || !displayMode || displayMode->width <= 0 || displayMode->height <= 0)
+        return false;
+    auto *cross = reinterpret_cast<IGI::Sprite *>(reinterpret_cast<std::byte *>(statusScreen) +
+                                                  kStatusScreenCrossSpriteOffset);
+    const int width = IGI::OTHER::SPRITE_WIDTH(cross);
+    const int height = IGI::OTHER::SPRITE_HEIGHT(cross);
+    if (width <= 0 || height <= 0)
+        return false;
+    const float centerX = static_cast<float>(displayMode->width) * 0.5F;
+    const float centerY = static_cast<float>(displayMode->height) * 0.5F;
+    const float halfWidth = static_cast<float>(width) * 0.5F;
+    const float halfHeight = static_cast<float>(height) * 0.5F;
+    const float x = centerX - std::nearbyint(halfWidth);
+    const float y = centerY - std::nearbyint(halfHeight);
+    IGI::OTHER::DRAW_SPRITE_Z(cross, x, y, 128.0F, 128.0F, 128.0F, 0, 0, 0, 1.0F);
+    return true;
+}
+
 bool refreshLiveTargetOptions(MenuConfig &config, Runtime &runtime) {
     if (!requireLiveGameThread(runtime) || !IGI::GAME::GET())
         return false;
@@ -592,6 +652,8 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
         setSfxVolume(runtime, vol);
     } else if (id == "view") {
         setPlayerThirdPersonView(runtime, value == "Third Person");
+    } else if (id == "third_person_crosshair") {
+        setThirdPersonCrosshairEnabled(runtime, value == "Enabled");
     } else if (id == "level") {
         int levelNum = 1;
         if (value.starts_with("Level ")) {

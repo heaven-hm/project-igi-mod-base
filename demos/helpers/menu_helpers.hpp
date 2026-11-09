@@ -243,5 +243,7 @@ bool setSfxVolume(Runtime &runtime, float volume);
 bool logFlowDiagnostics(Runtime &runtime);
 bool logPlayerState(Runtime &runtime);
 bool setPlayerThirdPersonView(Runtime &runtime, bool active);
+bool setThirdPersonCrosshairEnabled(Runtime &runtime, bool enabled);
+bool renderThirdPersonCrosshair(Runtime &runtime);
 bool changeLevel(Runtime &runtime, int levelId);
 } // namespace igi

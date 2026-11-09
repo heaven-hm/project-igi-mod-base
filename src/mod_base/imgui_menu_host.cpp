@@ -800,8 +800,13 @@ void renderImGuiModWindow() {
 }
 
 extern "C" void __cdecl onDisplayEndFrame() noexcept {
-    if (!runtime.initialized() || !menuVisible)
+    if (!runtime.initialized())
         return;
+    if (!menuVisible) {
+        if (menuConfig.renderEndFrame)
+            menuConfig.renderEndFrame(runtime);
+        return;
+    }
     if (!IGI::GAME::GET()) {
         (void)closeImGuiMenu();
         return;

@@ -144,6 +144,12 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
          "ViewCam",
          {"First Person", "Third Person"}},
         {"camera_info", igi::ModMenuItemKind::Action, "Camera Info", "Camera", "CameraInfo", {}},
+        {"third_person_crosshair",
+         igi::ModMenuItemKind::List,
+         "Third-Person Crosshair",
+         "Camera",
+         "ThirdPersonCrosshair",
+         {"Disabled", "Enabled"}},
         {"look",
          igi::ModMenuItemKind::List,
          "Look Control",
@@ -321,6 +327,9 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
 bool configureModMenu(igi::MenuConfig &config) {
     config.title = "Heaven's Mod";
     config.items = buildItems();
+    config.renderEndFrame = [](igi::Runtime &runtime) {
+        (void)igi::renderThirdPersonCrosshair(runtime);
+    };
     config.refreshLiveItems = [](igi::MenuConfig &liveConfig, igi::Runtime &runtime) {
         return igi::refreshLiveTargetOptions(liveConfig, runtime);
     };
