@@ -4,6 +4,30 @@ Project IGI Mod Base is a foundation for creating single-player mods and in-game
 
 ## Included mod menus
 
+### Heaven Mod Menu (Production Menu)
+
+Heaven's Mod is the flagship gameplay menu for Project I.G.I., featuring 50 verified native-backed gameplay controls organized across seven categories: Weapons, Player, Camera, World, Vehicles, AI / NPC, and Live Target Selection.
+
+- **Dual Frontend Architecture:**
+  - **Internal Menu (`igi-heaven-mod-internal.dll`)**: Runs inside the retail engine via the QVM `MenuManager` UI. Outsized control sets automatically generate a scrollable `ListBox` over a flattened command list so every option stays accessible within the retail frame.
+  - **External ImGui Menu (`igi-heaven-mod-external.dll`)**: Renders a rich Direct3D 7 Dear ImGui overlay with full mouse navigation, categories, and real-time readouts.
+- **50+ Verified Controls:**
+  - **Weapons**: Direct ammo refills for Glock 17, MP5SD, M16A2, and AK-47, all-weapon equips (including Binoculars and Medipack), weapon cycling, draw animations, and unlimited ammo.
+  - **Player**: Health/damage reset, ground snap, controller flag toggles, team/state readouts, and collision toggles.
+  - **Camera**: First/third-person camera toggling, weapon aiming angles, and native 3rd-person crosshair rendering via retail HUD sprites.
+  - **World**: Frame-rate presets (30 to 240 FPS), precipitation weather control (Rain, Snow, Off), mission warp (Levels 1–14), and flow performance diagnostics.
+  - **Vehicles**: Car driving controls (throttle/steering/brake), car reset, car explosion, and whole-level vehicle triggers (explode all cars, reset all cars).
+  - **AI / NPC**: Soldier stand-down, AI weapon equipping, alarm action clearing, and live status readouts.
+  - **Live Target Selection**: Tracks live NPCs, Cars/Tanks, and Helicopters by task ID (`Name [#taskId]`), refreshed dynamically from the running game's task table.
+
+### Heaven Advanced Mod Menu
+
+Built for advanced experimentation and spatial manipulation (`igi-heaven-mod-advanced-internal.dll` and `igi-heaven-mod-advanced-external.dll`):
+- **Live NPC Movement**: Move selected NPCs Forward (+5m), Backward (-5m), Left (-5m), Right (+5m), Elevate (+2m), and Snap to Ground using game-thread coordinate transformations.
+- **NPC Ground States**: Toggle selected NPC between `Ground` and `Air` (levitation) via native `Human_SnapToGround` and `Human_LeaveGround`.
+- **Player Ground States**: Toggle player between `Ground` and `Air`.
+- **Helicopter Reset**: Reset selected helicopter to initial setup using retail `tick = 0` control branch.
+
 ![Simple mod menu running in Project I.G.I.](assets/simple-mod-menu.png)
 
 ### Simple Mod Menu

@@ -1,31 +1,49 @@
 # Changelog
 
-## 0.3 — Heaven production menu: 45 gameplay controls
+## 0.3 — Heaven production menu & Heaven Advanced: 50+ verified gameplay controls
 
-- Heaven now ships 45 controls across six categories (Weapons, Player,
-  Camera, World, Vehicles, AI / NPC), all declared from one table so a
-  control cannot ship without a category or an action route.
-- The retail QVM menu fits only a handful of rows, so a control set that
-  outgrows the frame now generates one scrollable `ListBox` over a flattened
-  command list (`IGI_SDK_FillList/GetList/SetList(-1)`). Every option stays
-  reachable instead of being drawn past the frame edge; small control sets keep
-  the previous per-control layout.
-- Live NPC, car, and helicopter target lists render the retail task name plus a
-  stable task id (`HumanSoldier_2021 [#2021]`), refresh from the running game's
-  task table in both menu frontends, follow the selected target by task
-  identity, and drop a target that leaves the task table.
-- Added gameplay readouts backed by verified retail getters: player status,
-  camera info, NPC status, soldier parameters, car and helicopter info, level
-  tick, flow counters, game events, weapon events, and audio info/rate.
-- Added player position sync, player controller flag controls, all-weapon equip,
-  all-car explode/reset, and soldier stand-down.
-- Native verification found and fixed three defects before release:
-  `Task_Find`-by-name faulted without a populated type table (helicopters now
-  match the retail type name), `Level_GetTick` dereferenced an absent level
-  (now guarded), and `Vehicle_ResetControls` used a widened pointer signature.
-- Added `igi_heaven_layout` and route-audit tests that fail if the shipped
-  control set drops below 30 controls, loses a category, loses its dispatch
-  branch, or stops generating a complete compilable menu resource.
+- **Production Menu Expansion (50 Verified Controls):**
+  - Heaven ships 50 verified controls across six primary categories (Weapons,
+    Player, Camera, World, Vehicles, AI / NPC) plus dynamic target selection, all
+    declared from a unified definition table enforcing category and dispatch routes.
+  - The retail QVM menu fits only a handful of rows, so control sets that
+    outgrow the frame dynamically generate a scrollable `ListBox` over a flattened
+    command list (`IGI_SDK_FillList/GetList/SetList(-1)`). Every option stays
+    accessible within the frame; smaller control sets preserve individual controls.
+- **Heaven Advanced Targets:**
+  - Added dedicated Heaven Advanced DLL targets (`igi-heaven-mod-advanced-internal.dll`
+    and `igi-heaven-mod-advanced-external.dll`) powered by `IGI_HEAVEN_ADVANCED=1`.
+  - Added live NPC 3D movement controls: Move NPC Forward (+5m), Backward (-5m),
+    Left (-5m), Right (+5m), Elevate (+2m), and Snap to Ground via retail
+    `Human_SetPosition` and view forward/lateral matrix calculations.
+  - Added live NPC Ground State controls: switch selected NPC between `Ground`
+    and `Air` (levitation) via `Human_SnapToGround` and `Human_LeaveGround`.
+  - Added Player Ground State controls: toggle player between `Ground` and `Air`.
+  - Added Helicopter Reset control (`resetHeli`): resets selected helicopter state
+    via the retail `tick = 0` control branch.
+- **Weapons & HUD:**
+  - Added direct weapon ammo refill controls for Glock 17, MP5SD, M16A2, and AK-47.
+  - Added full weapon inventory equipping, weapon draw animations, and cycle weapon.
+  - Implemented 3rd-person crosshair rendering in both internal (retail QVM / sprite)
+    and external (Dear ImGui) Heaven menus using the native HUD sprite draw pipeline.
+- **Dynamic Live Target Tracking:**
+  - Live NPC, car/tank, and helicopter target lists render the retail task name plus
+    stable task id (`HumanSoldier_2021 [#2021]`), refresh from the running game's
+    task table in both menu frontends, track selected targets across menu refreshes,
+    and drop targets that leave the level.
+  - Identified tanks in live Car targets using the shared retail vehicle controller.
+- **World & Vehicle Controls:**
+  - Added high refresh frame cap presets (30, 60, 120, 144, 240 FPS).
+  - Added car driving controls with verified throttle/steering/braking inputs.
+  - Added whole-level explode all cars and reset all cars actions.
+- **Platform & Injection:**
+  - Fixed Wine module matching in `tools/igi_injector.cpp` by matching loaded
+    modules by DLL filename rather than strict full-path matching.
+- **Quality Assurance & Verification:**
+  - Added `igi_heaven_layout` and `igi_heaven_menu_contract` test suites that enforce:
+    - Normal Heaven ships exactly 50 working controls without dropping categories.
+    - Advanced controls are properly gated under `#if defined(IGI_HEAVEN_ADVANCED)`.
+    - Every menu action has a dedicated game-thread native execution branch.
 
 ## 0.2 — Restructure, Dear ImGui Direct3D 7, and runtime lifecycle
 
