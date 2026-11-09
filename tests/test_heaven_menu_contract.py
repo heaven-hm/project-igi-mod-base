@@ -36,7 +36,7 @@ assert MIN_OPTIONS <= len(ids) == NORMAL_OPTIONS, (
 ADVANCED_HEAVEN = HEAVEN.split("#if defined(IGI_HEAVEN_ADVANCED)", 1)[1]
 assert "#if defined(IGI_HEAVEN_ADVANCED)" in HEAVEN and all(
     marker in ADVANCED_HEAVEN
-    for marker in ('"npc_movement"', '"npc_ground_state"', '"heli_reset"')
+    for marker in ('"player_ground_state"', '"npc_movement"', '"npc_ground_state"', '"heli_reset"')
 ), (
     "Heaven Advanced must add its live NPC and helicopter controls without changing normal Heaven"
 )
@@ -94,6 +94,9 @@ assert 'id == "npc_movement"' in DISPATCHER, (
 )
 assert 'id == "npc_ground_state"' in DISPATCHER and "leaveHumanGround(npc)" in DISPATCHER, (
     "Heaven Advanced selected-NPC ground state must use the retail ground helpers"
+)
+assert 'id == "player_ground_state"' in DISPATCHER and "leaveHumanGround(player)" in DISPATCHER, (
+    "Heaven Advanced player ground state must use the retail ground helpers"
 )
 assert 'id == "heli_reset"' in DISPATCHER and "VehicleHelpers(runtime).resetHeli" in DISPATCHER, (
     "Heaven Advanced selected-helicopter reset must have a dedicated game-thread route"

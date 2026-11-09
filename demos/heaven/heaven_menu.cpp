@@ -345,6 +345,14 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
         items.push_back(std::move(item));
     }
 #if defined(IGI_HEAVEN_ADVANCED)
+    igi::ModMenuItemConfig playerGroundState;
+    playerGroundState.id = "player_ground_state";
+    playerGroundState.kind = igi::ModMenuItemKind::List;
+    playerGroundState.label = "Player Ground State";
+    playerGroundState.category = "Player";
+    playerGroundState.nativeAction = "HumanGroundState";
+    playerGroundState.values = {"Ground", "Air"};
+    items.push_back(std::move(playerGroundState));
     igi::ModMenuItemConfig movement;
     movement.id = "npc_movement";
     movement.kind = igi::ModMenuItemKind::List;

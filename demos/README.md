@@ -22,7 +22,7 @@ All public helpers live in `demos/helpers/menu_helpers.hpp`, with their only imp
 
 `resetDamage` calls retail `Human_ResetDamage` on the live local player. It clears the current damage total and restores the configured multipliers for all damage zones; Heaven exposes it as a recovery action only while a live player exists.
 
-`snapToGround` uses the game’s ground-probe and position flow for the local player. `setCollisionEnabled` changes the local player’s collision state through the corresponding game native; Heaven provides both options as immediate gameplay controls.
+`snapToGround` uses the game’s ground-probe and position flow for the local player. `setCollisionEnabled` changes the local player’s collision state through the corresponding game native; Heaven provides both options as immediate gameplay controls. Heaven Advanced also exposes `Ground`/`Air` by calling the same snap or leave-ground helper against the live player.
 
 ### WeaponHelpers
 
@@ -60,7 +60,7 @@ All public helpers live in `demos/helpers/menu_helpers.hpp`, with their only imp
 
 ## Menu scale
 
-Heaven ships 50 gameplay controls across six categories (Weapons, Player, Camera, World, Vehicles, AI / NPC). Heaven Advanced adds selected-NPC movement and ground state plus selected-helicopter reset without changing the normal menu. The retail QVM `MenuFrame` can only draw a handful of rows, so `igi::menuNeedsCommandList(config)` switches the generated screen to one scrollable `ListBox` over `igi::buildMenuCommands(config)`: every action becomes one runnable entry and every list value becomes its own entry. `IGI_SDK_FillList(-1)` / `IGI_SDK_GetList(-1)` / `IGI_SDK_SetList(-1, this.nActiveID)` serve that list, and `IGI_SDK_Apply()` runs the selected entry. A control set that fits keeps the direct per-control layout. `tests/HeavenLayoutTests.cpp` fails if the shipping set drops below 30 controls, loses a category, or stops generating a complete compilable resource.
+Heaven ships 50 gameplay controls across six categories (Weapons, Player, Camera, World, Vehicles, AI / NPC). Heaven Advanced adds player and selected-NPC ground state, selected-NPC movement, and selected-helicopter reset without changing the normal menu. The retail QVM `MenuFrame` can only draw a handful of rows, so `igi::menuNeedsCommandList(config)` switches the generated screen to one scrollable `ListBox` over `igi::buildMenuCommands(config)`: every action becomes one runnable entry and every list value becomes its own entry. `IGI_SDK_FillList(-1)` / `IGI_SDK_GetList(-1)` / `IGI_SDK_SetList(-1, this.nActiveID)` serve that list, and `IGI_SDK_Apply()` runs the selected entry. A control set that fits keeps the direct per-control layout. `tests/HeavenLayoutTests.cpp` fails if the shipping set drops below 30 controls, loses a category, or stops generating a complete compilable resource.
 
 ## Safe unload
 

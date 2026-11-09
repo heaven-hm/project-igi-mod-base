@@ -625,6 +625,18 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
         PlayerHelpers(runtime).resetDamage();
     } else if (id == "player_snap_ground") {
         PlayerHelpers(runtime).snapToGround();
+    } else if (id == "player_ground_state") {
+        auto *player = reinterpret_cast<IGI::Human *>(IGI::GAME::GET_PLAYER(0));
+        if (!player) {
+            log(LogLevel::Warning, "player ground state rejected: no live player was found");
+        } else if (value == "Ground") {
+            if (!PlayerHelpers(runtime).snapToGround())
+                log(LogLevel::Warning,
+                    "player ground state rejected: Human_SnapToGround was unavailable");
+        } else if (!EntityHelpers(runtime).leaveHumanGround(player)) {
+            log(LogLevel::Warning,
+                "player ground state rejected: Human_LeaveGround was unavailable");
+        }
     } else if (id == "player_collision") {
         PlayerHelpers(runtime).setCollisionEnabled(value == "Enabled");
     } else if (id == "input") {
