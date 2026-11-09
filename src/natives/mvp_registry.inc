@@ -1149,3 +1149,26 @@ if (!catalogue.add({0x004b6ce0, "Sprite_Width", "IGI-RE", "entry", "int Sprite_W
 if (!catalogue.add({0x004b6d00, "Sprite_Height", "IGI-RE", "entry", "int Sprite_Height(Sprite *s)",
                     NativeVerification::Exposed}))
     return false;
+// Recovered after the generated set was frozen (IGI-RE catalogue entries).
+if (!catalogue.add({0x004f2390, "Weapon_Drop", "IGI-RE", "entry", "Task *Weapon_Drop(Task *w)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f2060, "WeaponSlots_Get", "IGI-RE", "entry",
+                    "Task *WeaponSlots_Get(Task **slots, int i)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f2070, "WeaponSlots_Set", "IGI-RE", "entry",
+                    "void WeaponSlots_Set(Task **slots, int i, Task *w)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004518e0, "HumanAI_MoveTo", "IGI-RE", "entry",
+                    "char HumanAI_MoveTo(HumanAI *ai, int dest, const Vec3d *pos, char replan)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004522a0, "HumanAI_RunTo", "IGI-RE", "entry",
+                    "char HumanAI_RunTo(HumanAI *ai, int dest, const Vec3d *pos, char replan)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00489f00, "Human_StopWeaponAnim", "IGI-RE", "entry",
+                    "void Human_StopWeaponAnim(Human *h, float time)",
+                    NativeVerification::Exposed}))
+    return false;

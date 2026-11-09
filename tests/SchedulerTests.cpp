@@ -15,7 +15,6 @@
 #include "ui/menu_script_bridge.hpp"
 #include "ui/menu_resource.hpp"
 #include "config/menu_config.hpp"
-#include "natives/extra_natives.hpp"
 #include "natives/native_catalogue.hpp"
 
 #include <cassert>
@@ -235,8 +234,7 @@ int main() {
     igi::NativeCatalogue catalogue;
     igi::NativeCatalogue exposed;
     assert(igi::loadIgiVerifiedNativeRegistry(exposed));
-    assert(exposed.size() >= 300 &&
-           exposed.size() == IGI::NativeBindingCount() + IGI::ExtraBindingCount());
+    assert(exposed.size() >= 300 && exposed.size() == IGI::NativeBindingCount());
     // The hand-maintained bindings must resolve like the generated ones.
     assert(exposed.findByAddress(0x004f2390) &&
            exposed.findByAddress(0x004518e0)->name == "HumanAI_MoveTo" &&

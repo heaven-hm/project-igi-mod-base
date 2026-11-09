@@ -87,6 +87,13 @@ struct Vec3d;
 struct Vec3f;
 struct WeaponType;
 namespace HASH {
+// Recovered after the generated set was frozen (same IGI-RE catalogue).
+inline constexpr std::uint32_t WEAPON_DROP = 0x004f2390;
+inline constexpr std::uint32_t WEAPON_SLOTS_GET = 0x004f2060;
+inline constexpr std::uint32_t WEAPON_SLOTS_SET = 0x004f2070;
+inline constexpr std::uint32_t HUMAN_AI_MOVE_TO = 0x004518e0;
+inline constexpr std::uint32_t HUMAN_AI_RUN_TO = 0x004522a0;
+inline constexpr std::uint32_t HUMAN_STOP_WEAPON_ANIM = 0x00489f00;
 inline constexpr std::uint32_t FRAMES_SET = 0x00402820;
 inline constexpr std::uint32_t GAME_SET_RAINING = 0x00416110;
 inline constexpr std::uint32_t HUMAN_PLAYER_SET_UNLIMITED_AMMO = 0x00410360;
@@ -518,6 +525,8 @@ NATIVE_DECL void UNLOCK_INPUT(Human *h);
 NATIVE_DECL void ENABLE_LOOK(Human *h);
 NATIVE_DECL void DISABLE_LOOK(Human *h);
 NATIVE_DECL void VIEW_CAM(Human *h, int mode);
+// Stops the current weapon animation, which recovers a stuck draw/reload.
+NATIVE_DECL void STOP_WEAPON_ANIM(Human *h, float time);
 } // namespace HUMAN
 namespace SOLDIER {
 NATIVE_DECL void GET_PARAMS(Human *h, void **out);
@@ -557,6 +566,11 @@ NATIVE_DECL char GET_STATE_EVENT();
 NATIVE_DECL char GET_MOVE_EVENT();
 NATIVE_DECL char GET_TRIGGER_EVENT();
 NATIVE_DECL char WEAPON_GET_EVENT3();
+// Detaches a weapon task through the retail drop handler.
+NATIVE_DECL Task *DROP(Task *w);
+// Carried-weapon slots owned by a Human (IGI-RE: h->weapons, offset 0x4C4).
+NATIVE_DECL Task *SLOT_GET(Task **slots, int index);
+NATIVE_DECL void SLOT_SET(Task **slots, int index, Task *weapon);
 } // namespace WEAPON
 namespace CAMERA {
 NATIVE_DECL void SET_WEAPON_TARGET(HumanView *v, float pitch, float yaw, float pitchSpeed,
@@ -646,6 +660,9 @@ NATIVE_DECL ScriptValue *SET_ALARM_CONTROL_ID(ScriptValue *out, void *data, void
 NATIVE_DECL ScriptValue *SET_ALARM_ACCESS(ScriptValue *out, void *data, void *args);
 NATIVE_DECL ScriptValue *SET_GUNNER_ID(ScriptValue *out, void *data, void *args);
 NATIVE_DECL ScriptValue *SET_ANIMATION_INTERVAL(ScriptValue *out, void *data, void *args);
+// Walk/run the AI along its graph. `dest` is a graph node id.
+NATIVE_DECL char MOVE_TO(HumanAI *ai, int dest, const Vec3d *pos, char replan);
+NATIVE_DECL char RUN_TO(HumanAI *ai, int dest, const Vec3d *pos, char replan);
 } // namespace AI
 namespace AUDIO {
 NATIVE_DECL void MUSIC_SET_VOLUME(float music, float master);

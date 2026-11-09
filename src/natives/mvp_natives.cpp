@@ -353,6 +353,10 @@ NATIVE_DECL void VIEW_CAM(Human *h, int mode) {
     return NATIVE_INVOKE<Void>(HASH::HUMAN_VIEW_CAM, "void HumanViewCam(Human *h, int mode)", h,
                                mode);
 }
+NATIVE_DECL void STOP_WEAPON_ANIM(Human *h, float time) {
+    return NATIVE_INVOKE<Void>(HASH::HUMAN_STOP_WEAPON_ANIM,
+                               "void Human_StopWeaponAnim(Human *h, float time)", h, time);
+}
 } // namespace HUMAN
 namespace SOLDIER {
 NATIVE_DECL void GET_PARAMS(Human *h, void **out) {
@@ -483,6 +487,18 @@ NATIVE_DECL char GET_TRIGGER_EVENT() {
 }
 NATIVE_DECL char WEAPON_GET_EVENT3() {
     return NATIVE_INVOKE<char>(HASH::WEAPON_GET_EVENT3, "char Weapon_GetEvent3(void)");
+}
+NATIVE_DECL Task *DROP(Task *w) {
+    return NATIVE_INVOKE<Task *>(HASH::WEAPON_DROP, "Task *Weapon_Drop(Task *w)", w);
+}
+NATIVE_DECL Task *SLOT_GET(Task **slots, int index) {
+    return NATIVE_INVOKE<Task *>(HASH::WEAPON_SLOTS_GET,
+                                 "Task *WeaponSlots_Get(Task **slots, int i)", slots, index);
+}
+NATIVE_DECL void SLOT_SET(Task **slots, int index, Task *weapon) {
+    return NATIVE_INVOKE<Void>(HASH::WEAPON_SLOTS_SET,
+                               "void WeaponSlots_Set(Task **slots, int i, Task *w)", slots, index,
+                               weapon);
 }
 } // namespace WEAPON
 namespace CAMERA {
@@ -848,6 +864,18 @@ NATIVE_DECL ScriptValue *SET_ANIMATION_INTERVAL(ScriptValue *out, void *data, vo
         HASH::AI_FUNCTION_SET_ANIMATION_INTERVAL,
         "ScriptValue *AIFunction_SetAnimationInterval(ScriptValue *out, void *data, void *args)",
         out, data, args);
+}
+NATIVE_DECL char MOVE_TO(HumanAI *ai, int dest, const Vec3d *pos, char replan) {
+    return NATIVE_INVOKE<char>(HASH::HUMAN_AI_MOVE_TO,
+                               "char HumanAI_MoveTo(HumanAI *ai, int dest, const Vec3d *pos, char "
+                               "replan)",
+                               ai, dest, pos, replan);
+}
+NATIVE_DECL char RUN_TO(HumanAI *ai, int dest, const Vec3d *pos, char replan) {
+    return NATIVE_INVOKE<char>(HASH::HUMAN_AI_RUN_TO,
+                               "char HumanAI_RunTo(HumanAI *ai, int dest, const Vec3d *pos, char "
+                               "replan)",
+                               ai, dest, pos, replan);
 }
 } // namespace AI
 namespace AUDIO {
@@ -1438,7 +1466,7 @@ NATIVE_DECL int SPRITE_HEIGHT(Sprite *sprite) {
 }
 } // namespace OTHER
 std::size_t NativeBindingCount() noexcept {
-    return 336;
+    return 342;
 }
 } // namespace IGI
 #undef NATIVE_INVOKE

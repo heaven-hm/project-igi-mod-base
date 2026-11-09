@@ -91,7 +91,6 @@ add_library(mod_base STATIC
     src/natives/native_catalogue.cpp
     src/natives/native_caller.cpp
     src/natives/mvp_natives.cpp
-    src/natives/extra_natives.cpp
     src/natives/igi_native_registry.cpp
     src/natives/domains/flow/flow.cpp
     src/natives/native_runner.cpp

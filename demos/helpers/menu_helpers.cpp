@@ -4,7 +4,6 @@
 #include "mod_base/menu_host.hpp"
 #include "natives/igi_hashes/hashes.hpp"
 #include "natives/igi_native_registry.hpp"
-#include "natives/extra_natives.hpp"
 #include "natives/mvp_natives.hpp"
 #include "natives/native_caller.hpp"
 #include "ui/menu_resource.hpp"
