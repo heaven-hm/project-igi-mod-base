@@ -3,10 +3,33 @@
 #include <algorithm>
 
 namespace igi {
+std::size_t MenuValues::choiceCountFor(const ModMenuItemConfig &item) const {
+    if (item.kind == ModMenuItemKind::List)
+        return item.values.size();
+    if (item.kind == ModMenuItemKind::Input)
+        return inputSamples(item).size();
+    return 0;
+}
+
+std::string MenuValues::choiceLabelFor(const ModMenuItemConfig &item, std::size_t index) const {
+    if (item.kind == ModMenuItemKind::List)
+        return index < item.values.size() ? item.values[index] : std::string{};
+    if (item.kind == ModMenuItemKind::Input) {
+        const auto samples = inputSamples(item);
+        return index < samples.size() ? std::to_string(samples[index]) : std::string{};
+    }
+    return {};
+}
+
 MenuValues::MenuValues(const MenuConfig &config)
     : items_(config.items), selected_(items_.size(), 0), toggles_(items_.size(), false),
-      committedSelected_(items_.size(), 0), committedToggles_(items_.size(), false) {
+      committedSelected_(items_.size(), 0), committedToggles_(items_.size(), false),
+      inputLabels_(items_.size()) {
     for (std::size_t i = 0; i < items_.size(); ++i) {
+        if (items_[i].kind == ModMenuItemKind::Input) {
+            for (const int sample : inputSamples(items_[i]))
+                inputLabels_[i].push_back(std::to_string(sample));
+        }
         toggles_[i] = items_[i].defaultToggle;
         committedToggles_[i] = items_[i].defaultToggle;
         if (items_[i].kind == ModMenuItemKind::List &&
@@ -56,15 +79,20 @@ bool MenuValues::setToggle(std::size_t item, bool value) noexcept {
 }
 
 std::size_t MenuValues::choiceCount(std::size_t item) const noexcept {
-    if (item >= items_.size() || items_[item].kind != ModMenuItemKind::List)
+    if (item >= items_.size())
         return 0;
-    return items_[item].values.size();
+    return choiceCountFor(items_[item]);
 }
 
 std::optional<std::string_view> MenuValues::choice(std::size_t item,
                                                    std::size_t index) const noexcept {
     if (index >= choiceCount(item))
         return std::nullopt;
+    if (items_[item].kind == ModMenuItemKind::Input) {
+        const auto &labels = inputLabels_[item];
+        return index < labels.size() ? std::optional<std::string_view>(labels[index])
+                                     : std::nullopt;
+    }
     return items_[item].values[index];
 }
 
@@ -82,6 +110,7 @@ bool MenuValues::select(std::size_t item, std::size_t index) noexcept {
 }
 
 bool MenuValues::resync(const MenuConfig &config) {
+    inputLabels_.assign(items_.size(), {});
     if (config.items.size() != items_.size()) {
         // A different control set needs a new bridge and screen, not a resync.
         return false;
@@ -109,8 +138,12 @@ bool MenuValues::fill(std::size_t item,
     const auto count = choiceCount(item);
     if (count == 0 || !addItem)
         return false;
-    for (std::size_t index = 0; index < count; ++index)
-        addItem(items_[item].values[index], static_cast<int>(index));
+    for (std::size_t index = 0; index < count; ++index) {
+        const auto label = choice(item, index);
+        if (!label)
+            return false;
+        addItem(*label, static_cast<int>(index));
+    }
     return true;
 }
 } // namespace igi

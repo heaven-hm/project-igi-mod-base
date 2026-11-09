@@ -92,7 +92,7 @@ bool writeMenuScript(std::ostream &out, const MenuConfig &config, bool standalon
         const auto index = &item - config.items.data();
         const auto widgetId =
             config.screenId >= 0 ? (config.screenId + 1 + static_cast<int>(index)) : -1;
-        if (item.kind == ModMenuItemKind::List) {
+        if (item.kind == ModMenuItemKind::List || item.kind == ModMenuItemKind::Input) {
             out << ", Task_New(-1, \"MenuFrame\", ";
             quoted(out, item.id);
             out << ", \"\", " << config.x << ", " << config.y << ", " << config.width

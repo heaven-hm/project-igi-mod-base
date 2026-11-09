@@ -1,6 +1,7 @@
 #pragma once
 
 #include "config/menu_config.hpp"
+#include "ui/menu_commands.hpp"
 
 #include <cstddef>
 #include <functional>
@@ -36,7 +37,13 @@ class MenuValues final {
     bool toggleChanged(std::size_t item) const noexcept;
 
   private:
+    // Number of choices a control exposes to the retail ListBox. A numeric input
+    // exposes its sample values because QVM menus have no text widget.
+    std::size_t choiceCountFor(const ModMenuItemConfig &item) const;
+    std::string choiceLabelFor(const ModMenuItemConfig &item, std::size_t index) const;
+
     std::vector<ModMenuItemConfig> items_;
+    std::vector<std::vector<std::string>> inputLabels_;
     std::vector<std::size_t> selected_;
     std::vector<bool> toggles_;
     std::vector<std::size_t> committedSelected_;

@@ -89,6 +89,7 @@ class WeaponHelpers {
     bool selectCategory() const;
     bool reportFlashReset() const;
     bool reportEvents() const;
+    bool dropCurrentWeapon() const;
     std::optional<int> hasAmmo(void *weaponTask) const;
     IGI::WeaponType *type(void *weaponTask) const;
     std::optional<unsigned> fireEvent() const;

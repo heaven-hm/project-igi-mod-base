@@ -4,6 +4,7 @@
 #include "mod_base/menu_host.hpp"
 #include "natives/igi_hashes/hashes.hpp"
 #include "natives/igi_native_registry.hpp"
+#include "natives/extra_natives.hpp"
 #include "natives/mvp_natives.hpp"
 #include "natives/native_caller.hpp"
 #include "ui/menu_resource.hpp"
@@ -940,6 +941,11 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
             log(LogLevel::Info, "weapon category selection requested");
         else
             log(LogLevel::Warning, "weapon category selection rejected: player unavailable");
+    } else if (id == "weapon_drop") {
+        if (WeaponHelpers(runtime).dropCurrentWeapon())
+            log(LogLevel::Info, "selected weapon dropped through the retail weapon lifecycle");
+        else
+            log(LogLevel::Warning, "drop weapon rejected: no droppable weapon task was found");
     } else if (id == "weapon_events") {
         if (WeaponHelpers(runtime).reportEvents())
             log(LogLevel::Info, "weapon events reported from the retail weapon event getters");
@@ -1773,6 +1779,31 @@ bool WeaponHelpers::cycle(int force) const {
 bool WeaponHelpers::reportFlashReset() const {
     return restorePlayerVisualFeedback(runtime_);
 }
+// Drops the player's current weapon through the retail weapon lifecycle.
+// Weapon_Drop detaches the weapon task and hands it back to the level, which is
+// the same path the game takes when a weapon is thrown away.
+bool WeaponHelpers::dropCurrentWeapon() const {
+    if (!requireLiveGameThread(runtime_))
+        return false;
+    auto *player = reinterpret_cast<IGI::Human *>(IGI::GAME::GET_PLAYER(0));
+    if (!player) {
+        log(LogLevel::Warning, "drop weapon: player is unavailable");
+        return false;
+    }
+    auto *weapon = IGI::HUMAN::GET_WEAPON(player);
+    if (!weapon) {
+        log(LogLevel::Info, "drop weapon: the player is not carrying a weapon task");
+        return false;
+    }
+    log(LogLevel::Info,
+        "drop weapon: invoking Weapon_Drop for task #" + std::to_string(IGI::TASK::GET_ID(weapon)));
+    if (!IGI::WEAPON::DROP(weapon)) {
+        log(LogLevel::Warning, "drop weapon: Weapon_Drop rejected the weapon task");
+        return false;
+    }
+    return true;
+}
+
 bool WeaponHelpers::reportEvents() const {
     if (!requireLiveGameThread(runtime_))
         return false;

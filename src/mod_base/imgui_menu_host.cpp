@@ -60,6 +60,7 @@ struct ExternalImGuiMenuState {
     std::vector<int> listSelections;
     std::vector<bool> toggleValues;
     std::vector<int> sliderValues;
+    std::vector<int> inputValues;
     std::string lastStatusMessage;
     std::atomic<std::uint64_t> frameCount{0};
     std::atomic<bool> safeToShutdown{true};
@@ -85,6 +86,7 @@ auto &menuConfig = g_menu.menuConfig;
 auto &listSelections = g_menu.listSelections;
 auto &toggleValues = g_menu.toggleValues;
 auto &sliderValues = g_menu.sliderValues;
+auto &inputValues = g_menu.inputValues;
 auto &lastStatusMessage = g_menu.lastStatusMessage;
 auto &frameCount = g_menu.frameCount;
 auto &safeToShutdown = g_menu.safeToShutdown;
@@ -138,10 +140,12 @@ void initializeMenuStateBuffers() {
     listSelections.assign(menuConfig.items.size(), 0);
     toggleValues.resize(menuConfig.items.size(), false);
     sliderValues.assign(menuConfig.items.size(), 0);
+    inputValues.assign(menuConfig.items.size(), 0);
     for (std::size_t index = 0; index < menuConfig.items.size(); ++index) {
         const auto &item = menuConfig.items[index];
         toggleValues[index] = item.defaultToggle;
         sliderValues[index] = item.sliderDefault;
+        inputValues[index] = item.inputValue;
         if (item.defaultSelection < item.values.size())
             listSelections[index] = static_cast<int>(item.defaultSelection);
     }
@@ -220,6 +224,12 @@ void refreshControlValuesFromGame() {
                         ((offset + item.sliderStep / 2) / item.sliderStep) * item.sliderStep,
                     item.sliderMinimum, item.sliderMaximum);
             }
+            break;
+        }
+        case igi::ModMenuItemKind::Input: {
+            int value = 0;
+            if (index < inputValues.size() && parseInteger(*current, value))
+                inputValues[index] = std::clamp(value, item.inputMinimum, item.inputMaximum);
             break;
         }
         case igi::ModMenuItemKind::Action:
@@ -737,6 +747,22 @@ void renderImGuiModWindow() {
                 ImGui::SameLine();
                 if (ImGui::Button("Apply") && !item.values.empty()) {
                     queueMenuAction(index, item.values[static_cast<std::size_t>(current)]);
+                }
+                break;
+            }
+            case igi::ModMenuItemKind::Input: {
+                if (index >= inputValues.size())
+                    inputValues.resize(menuConfig.items.size(), 0);
+                int value = inputValues[index];
+                ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.35f);
+                if (ImGui::InputInt(item.label.c_str(), &value,
+                                    item.inputStep > 0 ? item.inputStep : 1,
+                                    item.inputStep > 0 ? item.inputStep * 10 : 100)) {
+                    inputValues[index] = std::clamp(value, item.inputMinimum, item.inputMaximum);
+                }
+                ImGui::SameLine();
+                if (ImGui::Button(("Apply##input" + item.id).c_str())) {
+                    queueMenuAction(index, std::to_string(inputValues[index]));
                 }
                 break;
             }

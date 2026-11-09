@@ -25,4 +25,7 @@ std::size_t menuRowCapacity(const MenuConfig &config);
 bool menuNeedsCommandList(const MenuConfig &config);
 // Flattens every control into command entries, grouped by category.
 std::vector<MenuCommand> buildMenuCommands(const MenuConfig &config);
+// The retail QVM menu cannot host a text box, so a numeric input is offered as
+// discrete values instead. The ImGui frontend renders the real text box.
+std::vector<int> inputSamples(const ModMenuItemConfig &item);
 } // namespace igi

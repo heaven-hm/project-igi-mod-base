@@ -3,6 +3,7 @@
 #include "logging/logging.hpp"
 
 #include <array>
+#include <charconv>
 #include <cstddef>
 #include <string>
 #include <string_view>
@@ -30,6 +31,10 @@ constexpr std::array kWeapons = {
 constexpr std::array kWeaponLabels = {"Glock 17",   "MP5SD",        "Uzi",    "M16A2",
                                       "AK-47",      "Dragunov SVD", "Minimi", "SPAS-12",
                                       "Binoculars", "Medipack"};
+
+// Selected weapon index and the ammo amount the user typed into the text box.
+std::size_t g_selectedWeapon = 0;
+int g_refillAmmo = 120;
 
 constexpr std::array kLevelLabels = {"Level 1",  "Level 2",  "Level 3",  "Level 4", "Level 5",
                                      "Level 6",  "Level 7",  "Level 8",  "Level 9", "Level 10",
@@ -59,31 +64,26 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
     const MenuItemDef definitions[] = {
         // Weapons
         {"ammo", igi::ModMenuItemKind::Action, "Unlimited Ammo", "Weapons", "UnlimitedAmmo", {}},
-        {"weapon_pickup", igi::ModMenuItemKind::List, "Equip / Refill Weapon Ammo", "Weapons",
-         "PickUpWeapon", weaponValues},
-        {"weapon_refill_glock",
+        {"weapon_pickup", igi::ModMenuItemKind::List, "Selected Weapon", "Weapons", "SelectWeapon",
+         weaponValues},
+        {"weapon_ammo", igi::ModMenuItemKind::Input, "Ammo Amount", "Weapons", "SetRefillAmmo", {}},
+        {"weapon_refill",
          igi::ModMenuItemKind::Action,
-         "Refill Glock 17 Ammo",
+         "Refill Selected Weapon",
          "Weapons",
-         "RefillGlockAmmo",
+         "RefillWeapon",
          {}},
-        {"weapon_refill_mp5sd",
+        {"weapon_refill_all",
          igi::ModMenuItemKind::Action,
-         "Refill MP5SD Ammo",
+         "Refill All Weapons With Ammo",
          "Weapons",
-         "RefillMp5sdAmmo",
+         "RefillAllWeapons",
          {}},
-        {"weapon_refill_m16a2",
+        {"weapon_drop",
          igi::ModMenuItemKind::Action,
-         "Refill M16A2 Ammo",
+         "Drop Selected Weapon",
          "Weapons",
-         "RefillM16a2Ammo",
-         {}},
-        {"weapon_refill_ak47",
-         igi::ModMenuItemKind::Action,
-         "Refill AK-47 Ammo",
-         "Weapons",
-         "RefillAk47Ammo",
+         "DropWeapon",
          {}},
         {"weapon_cycle",
          igi::ModMenuItemKind::Action,
@@ -342,6 +342,13 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
         item.category = std::string(definition.category);
         item.nativeAction = std::string(definition.action);
         item.values = definition.values;
+        if (item.kind == igi::ModMenuItemKind::Input) {
+            // Ammo text box: typed exactly by the user, applied on demand.
+            item.inputValue = 120;
+            item.inputMinimum = 1;
+            item.inputMaximum = 9999;
+            item.inputStep = 30;
+        }
         items.push_back(std::move(item));
     }
 #if defined(IGI_HEAVEN_ADVANCED)
@@ -399,23 +406,56 @@ bool configureModMenu(igi::MenuConfig &config) {
 
 void runModMenu(const igi::MenuConfig &config, igi::Runtime &runtime, std::size_t item,
                 std::string_view value) {
-    const auto refill = [&runtime](std::string_view weaponId, int ammo) {
-        (void)igi::WeaponHelpers(runtime).pickup(weaponId, ammo);
-    };
-    if (item < config.items.size() && config.items[item].id == "weapon_refill_glock") {
-        refill("WEAPON_ID_GLOCK", 30);
+    const auto inRange = item < config.items.size();
+    // The menu adapter owns the retail weapon table, so the selected weapon and
+    // the typed ammo amount live here instead of in a helper cache.
+    if (inRange && config.items[item].id == "weapon_pickup") {
+        for (std::size_t index = 0; index < kWeapons.size(); ++index) {
+            if (kWeapons[index].label != value)
+                continue;
+            g_selectedWeapon = index;
+            const int ammo = g_refillAmmo > 0 ? g_refillAmmo : kWeapons[index].ammo;
+            (void)igi::WeaponHelpers(runtime).pickup(kWeapons[index].id, ammo);
+            igi::log(igi::LogLevel::Info, "weapon selected: " + std::string(kWeapons[index].label) +
+                                              " ammo " + std::to_string(ammo));
+            return;
+        }
+        igi::log(igi::LogLevel::Warning, "weapon selection rejected: unknown weapon label");
         return;
     }
-    if (item < config.items.size() && config.items[item].id == "weapon_refill_mp5sd") {
-        refill("WEAPON_ID_MP5SD", 90);
+    if (inRange && config.items[item].id == "weapon_ammo") {
+        int ammo = 0;
+        const auto parsed = std::from_chars(value.data(), value.data() + value.size(), ammo);
+        if (parsed.ec != std::errc{} || ammo <= 0) {
+            igi::log(igi::LogLevel::Warning,
+                     "ammo amount rejected: '" + std::string(value) + "' is not a positive number");
+            return;
+        }
+        g_refillAmmo = ammo;
+        igi::log(igi::LogLevel::Info, "ammo amount set to " + std::to_string(ammo));
         return;
     }
-    if (item < config.items.size() && config.items[item].id == "weapon_refill_m16a2") {
-        refill("WEAPON_ID_M16A2", 120);
+    if (inRange && config.items[item].id == "weapon_refill_all") {
+        const int ammo = g_refillAmmo > 0 ? g_refillAmmo : 120;
+        std::size_t granted = 0;
+        for (const auto &weapon : kWeapons) {
+            // Binoculars and the medipack carry no rounds; use their own counts.
+            const int rounds = weapon.ammo == 0 ? 0 : ammo;
+            if (igi::WeaponHelpers(runtime).pickup(weapon.id, rounds))
+                ++granted;
+        }
+        igi::log(granted > 0 ? igi::LogLevel::Info : igi::LogLevel::Warning,
+                 "refill all weapons: " + std::to_string(granted) + " weapons set to " +
+                     std::to_string(ammo) + " rounds");
         return;
     }
-    if (item < config.items.size() && config.items[item].id == "weapon_refill_ak47") {
-        refill("WEAPON_ID_AK47", 120);
+    if (inRange && config.items[item].id == "weapon_refill") {
+        const auto &weapon = kWeapons[g_selectedWeapon];
+        const int ammo = g_refillAmmo > 0 ? g_refillAmmo : weapon.ammo;
+        const bool granted = igi::WeaponHelpers(runtime).pickup(weapon.id, ammo);
+        igi::log(granted ? igi::LogLevel::Info : igi::LogLevel::Warning,
+                 "weapon refill: " + std::string(weapon.label) + " with " + std::to_string(ammo) +
+                     " rounds " + (granted ? "applied" : "rejected"));
         return;
     }
     if (item < config.items.size() && config.items[item].id == "weapon_all") {

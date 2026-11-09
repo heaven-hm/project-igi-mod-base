@@ -16,7 +16,7 @@ namespace igi {
 class Runtime;
 struct MenuConfig;
 
-enum class ModMenuItemKind { Action, Toggle, List, Slider };
+enum class ModMenuItemKind { Action, Toggle, List, Slider, Input };
 enum class ImGuiTheme { Dark, Light, Classic };
 
 inline constexpr std::size_t kMaxMenuListChoices = 64;
@@ -36,6 +36,13 @@ struct ModMenuItemConfig {
     int sliderMaximum = 100;
     int sliderStep = 1;
     int sliderDefault = 0;
+    // Numeric text box: the user types an exact value and applies it. The
+    // retail QVM menu has no text widget, so its generated screen offers the
+    // sample values from inputSamples() instead.
+    int inputValue = 0;
+    int inputMinimum = 0;
+    int inputMaximum = 9999;
+    int inputStep = 1;
     std::string category;
     // Optional game-thread reader used by renderers to synchronize display state
     // with a value changed outside the menu or rejected by game-side logic.

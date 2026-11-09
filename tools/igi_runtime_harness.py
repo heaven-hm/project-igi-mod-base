@@ -59,6 +59,10 @@ def discover_re_root() -> Path:
 RE_ROOT = discover_re_root()
 NATIVES_HEADER = ROOT / "src" / "natives" / "mvp_natives.hpp"
 NATIVES_SOURCE = ROOT / "src" / "natives" / "mvp_natives.cpp"
+# Hand-maintained bindings recovered after the generated set was frozen. They are
+# audited exactly like the generated ones, so they cannot ship unverified.
+EXTRA_NATIVES_HEADER = ROOT / "src" / "natives" / "extra_natives.hpp"
+EXTRA_NATIVES_SOURCE = ROOT / "src" / "natives" / "extra_natives.cpp"
 EXE = os.environ.get("IGI_EXE", "")
 DLL = os.environ.get("IGI_DLL", str(ROOT / "build-win32-release" / "igi-basic-mod-internal.dll"))
 
@@ -171,6 +175,11 @@ LIVE_OBJECT_NATIVES = frozenset({
     "VEHICLE::GET_SOUND_INFO",
     "SOLDIER::ENSURE_WEAPON",
     "SOLDIER::EXECUTE",
+    # Weapon_Drop detaches a weapon task owned by a live human; the AI move calls
+    # dereference the live HumanAI graph, node grid and route queue.
+    "WEAPON::DROP",
+    "AI::MOVE_TO",
+    "AI::RUN_TO",
     # Soldier state-machine entries and parameter reads dereference the live
     # soldier state owned by that soldier instance, exactly like EXECUTE above.
     "SOLDIER::STAND_ENTER",
@@ -661,17 +670,23 @@ def load_native_catalogue(header: Path = NATIVES_HEADER, source: Path = NATIVES_
     Returns an empty dict when the generated files are unavailable; the caller
     reports that instead of guessing addresses.
     """
-    if not header.is_file() or not source.is_file():
+    headers = [header]
+    sources = [source]
+    if header == NATIVES_HEADER:
+        headers.append(EXTRA_NATIVES_HEADER)
+        sources.append(EXTRA_NATIVES_SOURCE)
+    if not all(path.is_file() for path in headers + sources):
         return {}
 
     hash_addresses: dict[str, int] = {}
-    for match in _HASH_RE.finditer(header.read_text()):
-        hash_addresses[match.group(1)] = int(match.group(2), 16)
+    for header_path in headers:
+        for match in _HASH_RE.finditer(header_path.read_text()):
+            hash_addresses[match.group(1)] = int(match.group(2), 16)
 
     # Parse parameter lists from the header so run_native can build valid
     # arguments; without them the natives dereference null pointers.
     signature_params: dict[str, list[str]] = {}
-    header_text = header.read_text()
+    header_text = "".join(path.read_text() for path in headers)
     for match in _SIGNATURE_RE.finditer(header_text):
         sig_name = match.group(1)
         raw = match.group(2).strip()
@@ -691,7 +706,7 @@ def load_native_catalogue(header: Path = NATIVES_HEADER, source: Path = NATIVES_
         if domain != "?":
             signature_params[f"{domain}::{sig_name}"] = params
 
-    text = source.read_text()
+    text = "\n".join(path.read_text() for path in sources)
     catalogue: dict[str, dict] = {}
 
     # mvp_natives.cpp defines natives as NATIVE_DECL ... NAME(...) { ... } blocks

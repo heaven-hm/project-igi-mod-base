@@ -30,6 +30,24 @@ bool menuNeedsCommandList(const MenuConfig &config) {
     return config.items.size() > menuRowCapacity(config);
 }
 
+std::vector<int> inputSamples(const ModMenuItemConfig &item) {
+    std::vector<int> samples;
+    const int low = item.inputMinimum;
+    const int high = item.inputMaximum;
+    if (high < low)
+        return samples;
+    const int step = item.inputStep > 0 ? item.inputStep : 1;
+    for (int value = low; value <= high;) {
+        samples.push_back(value);
+        if (samples.size() >= kMaxMenuListChoices - 1)
+            break;
+        value += step;
+    }
+    if (samples.empty() || samples.back() != high)
+        samples.push_back(high);
+    return samples;
+}
+
 std::vector<MenuCommand> buildMenuCommands(const MenuConfig &config) {
     std::vector<MenuCommand> commands;
     for (std::size_t index = 0; index < config.items.size(); ++index) {
@@ -68,6 +86,12 @@ std::vector<MenuCommand> buildMenuCommands(const MenuConfig &config) {
             }
             break;
         }
+        case ModMenuItemKind::Input:
+            for (const int sample : inputSamples(item)) {
+                commands.push_back({index, prefix + item.label + ": " + std::to_string(sample),
+                                    std::to_string(sample)});
+            }
+            break;
         case ModMenuItemKind::Action:
             commands.push_back({index, prefix + item.label, std::string{}});
             break;

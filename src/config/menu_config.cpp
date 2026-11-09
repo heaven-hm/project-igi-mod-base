@@ -156,6 +156,13 @@ bool validateMenuItemConfig(const MenuConfig &config, std::string *reason) {
     };
 
     for (const auto &item : config.items) {
+        if (item.kind == ModMenuItemKind::Input) {
+            if (item.inputMinimum > item.inputMaximum)
+                return reject("menu input '" + item.id + "' has an inverted range");
+            if (item.inputValue < item.inputMinimum || item.inputValue > item.inputMaximum)
+                return reject("menu input '" + item.id + "' has an out-of-range value");
+            continue;
+        }
         if (item.kind != ModMenuItemKind::List)
             continue;
         if (item.values.empty())
