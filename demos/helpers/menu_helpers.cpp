@@ -658,9 +658,22 @@ bool setFreecamEnabled(Runtime &runtime, bool enabled) {
 }
 
 bool updateFreecam(Runtime &runtime) {
-    // The retail BODY_FLY run handler moves the player every frame on its own; no
-    // per-frame work is needed here.
-    (void)runtime;
+    // The retail BODY_FLY run handler moves the player every frame on its own.
+    // This tick only verifies the state stuck and reports the live input bits so
+    // a dead fly mode is diagnosable from the log instead of silent.
+    if (!requireLiveGameThread(runtime) || !IGI::GAME::GET())
+        return false;
+    auto *player = reinterpret_cast<IGI::Human *>(IGI::GAME::GET_PLAYER(0));
+    const auto *state = smState(player);
+    const auto *input = smInput(player);
+    if (!state || !input)
+        return false;
+    static int reportedState = -1;
+    if (reportedState != *state) {
+        reportedState = *state;
+        log(LogLevel::Info, "fly mode: body state now " + std::to_string(*state) +
+                                " (48 = BODY_FLY), input bits " + std::to_string(*input));
+    }
     return true;
 }
 
