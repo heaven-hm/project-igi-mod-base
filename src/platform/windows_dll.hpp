@@ -7,6 +7,9 @@ namespace igi {
 struct DllMenuCallbacks {
     bool (*initialize)() = nullptr;
     bool (*toggle)() = nullptr;
+    // Closes the menu and never opens it. The end key uses this so a repeated key
+    // edge cannot re-open the menu instead of ejecting.
+    bool (*closeMenu)() = nullptr;
     bool (*requestShutdown)() = nullptr;
     bool (*canUnload)() = nullptr;
     void (*shutdown)() = nullptr;

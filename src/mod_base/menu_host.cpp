@@ -286,17 +286,24 @@ bool isConfiguredMenuScreenActive() {
 // open behind a dead screen). Must run before the QVM resource is released.
 void releaseInjectedMenuScreen() {
 #if defined(_WIN32)
-    auto *screen = IGI::TASK::FIND_BY_ID(menuConfig.screenId);
-    if (!screen) {
-        if (menuScreenCreated)
-            igi::log(igi::LogLevel::Info,
-                     "internal unload: injected menu screen already detached from task id " +
-                         std::to_string(menuConfig.screenId));
-        return;
+    bool removed = false;
+    const auto pages = igi::menuPageCount(menuConfig);
+    for (std::size_t page = 0; page < pages; ++page) {
+        const int id = igi::menuPageScreenId(menuConfig, page);
+        auto *screen = IGI::TASK::FIND_BY_ID(id);
+        if (!screen)
+            continue;
+        igi::log(igi::LogLevel::Info,
+                 "internal unload: deleting leftover menu screen task id " + std::to_string(id));
+        IGI::TASK::DELETE_TASK(screen);
+        removed = true;
     }
-    igi::log(igi::LogLevel::Info, "internal unload: deleting leftover menu screen task id " +
-                                      std::to_string(menuConfig.screenId));
-    IGI::TASK::DELETE_TASK(screen);
+    if (!removed && menuScreenCreated)
+        igi::log(igi::LogLevel::Info,
+                 "internal unload: injected menu screen already detached from id " +
+                     std::to_string(igi::menuPageScreenId(menuConfig, menuConfig.pageIndex)));
+#else
+    (void)0;
 #endif
 }
 
@@ -419,10 +426,23 @@ void processPendingMenuTransition() {
         return;
     }
     menuScreenAttached = false;
-    safeToShutdown.store(true, std::memory_order_release);
+    menuScreenCreated = false;
     (void)igi::resumeFromMenu(runtime);
-    igi::log(igi::LogLevel::Error,
-             "internal menu reopen: retail screen did not transition; game input recovered");
+    igi::log(igi::LogLevel::Warning,
+             "internal menu reopen: retail screen did not transition; forcing a fresh attach");
+    // The retail manager can be left pointing at a screen task that no longer
+    // exists. Detach everything and let the frame tick build the screen again,
+    // which also clears any wedged state instead of leaving the game stuck.
+    menuRegistration.stop();
+    menuCallbacks.reset();
+    menuBridge.reset();
+    menuResource.release();
+    reopenResource.release();
+    closeResource.release();
+    if (rebuildMenuResources()) {
+        initialAttachPending.store(true, std::memory_order_release);
+        safeToShutdown.store(false, std::memory_order_release);
+    }
 }
 
 bool writeMenuResourceFile() {
@@ -456,9 +476,11 @@ bool rebuildMenuResources() {
     std::vector<std::uint8_t> close;
     std::string error;
     if (!igi::compileIgiMenuScreenScript(menuConfig, screen, error) ||
-        !igi::compileIgiMenuCommandScript("MenuManager_RequestScreen(" +
-                                              std::to_string(menuConfig.screenId) + ", FALSE);",
-                                          reopen, error) ||
+        !igi::compileIgiMenuCommandScript(
+            "MenuManager_RequestScreen(" +
+                std::to_string(igi::menuPageScreenId(menuConfig, menuConfig.pageIndex)) +
+                ", FALSE);",
+            reopen, error) ||
         !igi::compileIgiMenuCommandScript(closeCommandScript(), close, error)) {
         igi::log(igi::LogLevel::Error,
                  std::string("internal menu resource compilation failed: ") + error);
@@ -683,6 +705,11 @@ bool reopenMenuScreen() {
 }
 
 bool toggleMenuScreenOnGameThread() {
+    if (pendingTransition != MenuTransition::None) {
+        igi::log(igi::LogLevel::Info,
+                 "internal menu toggle: ignored while a retail screen transition is in flight");
+        return false;
+    }
     if (!IGI::GAME::GET()) {
         igi::log(igi::LogLevel::Warning, "internal menu toggle: menu requires an active game");
         return false;
@@ -882,6 +909,20 @@ extern "C" IGI_DEMO_EXPORT std::uint64_t IGI_MenuManager_Internal_TickCount() {
 #endif
 }
 
+extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_Internal_CloseMenu() {
+#if defined(_WIN32)
+    if (!runtime.initialized())
+        return false;
+    runtime.scheduler().enqueueOnce([] {
+        if (menuScreenAttached || isConfiguredMenuScreenActive())
+            (void)closeMenuScreen();
+    });
+    return true;
+#else
+    return false;
+#endif
+}
+
 extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_Internal_HooksResident() {
 #if defined(_WIN32)
     return runtime.hooksResident();
@@ -936,10 +977,11 @@ extern "C" IGI_DEMO_EXPORT void IGI_MenuManager_Internal_Shutdown() {
 namespace igi {
 const DllMenuCallbacks &getDllMenuCallbacks() noexcept {
     static const DllMenuCallbacks callbacks{
-        &IGI_MenuManager_Internal_Initialize,      &IGI_MenuManager_Internal_Toggle,
-        &IGI_MenuManager_Internal_RequestShutdown, &IGI_MenuManager_Internal_CanUnload,
-        &IGI_MenuManager_Internal_Shutdown,        &IGI_MenuManager_Internal_EnsureTick,
-        &IGI_MenuManager_Internal_TickCount,       &IGI_MenuManager_Internal_HooksResident,
+        &IGI_MenuManager_Internal_Initialize,    &IGI_MenuManager_Internal_Toggle,
+        &IGI_MenuManager_Internal_CloseMenu,     &IGI_MenuManager_Internal_RequestShutdown,
+        &IGI_MenuManager_Internal_CanUnload,     &IGI_MenuManager_Internal_Shutdown,
+        &IGI_MenuManager_Internal_EnsureTick,    &IGI_MenuManager_Internal_TickCount,
+        &IGI_MenuManager_Internal_HooksResident,
     };
     return callbacks;
 }

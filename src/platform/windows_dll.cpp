@@ -242,7 +242,7 @@ DWORD WINAPI igiSdkMainThread(void *rawModule) {
             // game keeps its own pause/main menus and the start key re-opens this
             // menu, so no re-injection is needed.
             if (g_state.initialized) {
-                const bool closed = callbacks.toggle ? callbacks.toggle() : false;
+                const bool closed = callbacks.closeMenu ? callbacks.closeMenu() : false;
                 g_state.disabled = true;
                 igi::log(closed ? igi::LogLevel::Info : igi::LogLevel::Warning,
                          closed ? "internal menu: disabled by the configured end key; press the "

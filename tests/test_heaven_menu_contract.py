@@ -29,7 +29,7 @@ ids = [entry[0] for entry in defs]
 assert len(ids) == len(set(ids)), f"duplicate Heaven item IDs: {ids}"
 
 MIN_OPTIONS = 30
-NORMAL_OPTIONS = 51
+NORMAL_OPTIONS = 52
 assert MIN_OPTIONS <= len(ids) == NORMAL_OPTIONS, (
     f"normal Heaven must ship exactly {NORMAL_OPTIONS} working controls, found {len(ids)}"
 )
@@ -277,17 +277,31 @@ assert "drawCrosshairOverlay" in IMGUI_HOST and "crosshairActive(runtime)" in IM
     "the ImGui host must draw the crosshair through its validated D3D7 renderer"
 )
 # Free camera: retail camera-override path with WASD flight and a clean disable.
+assert '"debug_keys"' in HEAVEN and '"Debug Keys / Fly Mode"' in HEAVEN, (
+    "Heaven must expose the retail debug keys / fly mode toggle"
+)
+assert "LCtrl+LShift+" in HELPERS, (
+    "the debug keys control must document the retail key chord"
+)
 assert '"freecam"' in HEAVEN and '"Free Camera (WASD)"' in HEAVEN, (
     "Heaven must expose the free camera in both frontends"
 )
 assert "setFreecamEnabled" in HELPERS and "updateFreecam" in HELPERS, (
     "the free camera needs an enable path and a per-frame update"
 )
-assert "kHumanViewCamOverrideOffset = 0x13A" in HELPERS, (
-    "disabling the free camera must clear HumanView.camOverride at its real offset"
+# The renderer reads the real Camera object (Game+0x60), not HumanView.camOverride:
+# driving only the override changed HUD info and left the view frozen.
+assert "kGameCameraOffset = 0x60" in HELPERS and "IGI::CAMERA::SET(" in HELPERS, (
+    "the free camera must drive the game render camera through Camera_Set"
 )
-assert "IGI::CAMERA::SET_CAMERA" in HELPERS and "lockHumanInput" in HELPERS, (
-    "the free camera drives the retail view override and locks player input"
+assert "lockHumanInput" in HELPERS and "unlockHumanInput" in HELPERS, (
+    "the free camera freezes the player while it is active"
+)
+assert "zSign" in HELPERS and "recoverWorldBasis" in HELPERS, (
+    "the view basis is calibrated so the camera is never mirrored"
+)
+assert "VK_SHIFT" in HELPERS and "'W'" in HELPERS, (
+    "the free camera uses the game's default move keys (WASD plus Space/Ctrl)"
 )
 assert "frameUpdate" in HEAVEN and "frameUpdate" in INTERNAL_HOST and "frameUpdate" in IMGUI_HOST, (
     "both hosts must run the per-frame mod update"

@@ -1055,6 +1055,20 @@ extern "C" IGI_DEMO_EXPORT std::uint64_t IGI_MenuManager_External_TickCount() {
 #endif
 }
 
+extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_External_CloseMenu() {
+#if defined(_WIN32)
+    if (!runtime.initialized())
+        return false;
+    runtime.scheduler().enqueueOnce([] {
+        if (menuVisible)
+            (void)closeImGuiMenu();
+    });
+    return true;
+#else
+    return false;
+#endif
+}
+
 extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_External_HooksResident() {
 #if defined(_WIN32)
     return runtime.hooksResident();
@@ -1152,10 +1166,11 @@ extern "C" IGI_DEMO_EXPORT void IGI_MenuManager_Internal_Shutdown() {
 namespace igi {
 const DllMenuCallbacks &getDllMenuCallbacks() noexcept {
     static const DllMenuCallbacks callbacks{
-        &IGI_MenuManager_External_Initialize,      &IGI_MenuManager_External_Toggle,
-        &IGI_MenuManager_External_RequestShutdown, &IGI_MenuManager_External_CanUnload,
-        &IGI_MenuManager_External_Shutdown,        &IGI_MenuManager_External_EnsureTick,
-        &IGI_MenuManager_External_TickCount,       &IGI_MenuManager_External_HooksResident,
+        &IGI_MenuManager_External_Initialize,    &IGI_MenuManager_External_Toggle,
+        &IGI_MenuManager_External_CloseMenu,     &IGI_MenuManager_External_RequestShutdown,
+        &IGI_MenuManager_External_CanUnload,     &IGI_MenuManager_External_Shutdown,
+        &IGI_MenuManager_External_EnsureTick,    &IGI_MenuManager_External_TickCount,
+        &IGI_MenuManager_External_HooksResident,
     };
     return callbacks;
 }

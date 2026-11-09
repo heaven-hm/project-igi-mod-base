@@ -16,12 +16,22 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <optional>
 #include <sstream>
 #include <vector>
 
 #if defined(_WIN32)
 #include <windows.h>
+#else
+// Virtual-key codes are only used by the Windows-only free camera.
+constexpr int VK_LEFT = 0x25;
+constexpr int VK_UP = 0x26;
+constexpr int VK_RIGHT = 0x27;
+constexpr int VK_DOWN = 0x28;
+constexpr int VK_SPACE = 0x20;
+constexpr int VK_CONTROL = 0x11;
+constexpr int VK_SHIFT = 0x10;
 #endif
 
 namespace igi {
@@ -533,22 +543,38 @@ void reportCrosshairState(std::string_view reason) {
 } // namespace
 
 namespace {
-// Human.view (IGI-RE humanbasetypes.h) and HumanView.camOverride (viewcamtypes.h).
+// Human.view (IGI-RE humanbasetypes.h).
 constexpr std::size_t kHumanViewOffset = 0x4EC;
-constexpr std::size_t kHumanViewCamOverrideOffset = 0x13A;
-// Free camera pose owned by the mod, in retail units per frame/second.
+// Retail Game owns the render camera: Game.camera is a CameraTask and the Camera
+// object it drives is passed as gGame->unk60 (IGI-RE game.c HumanCamera_New).
+constexpr std::size_t kGameCameraOffset = 0x60;
+// Camera struct offsets (IGI-RE haze/hazetypes.h): Matrix axes, Vec3d pos, fov,
+// aspect, priority, frame, count, owner, unk58, unk5C.
+constexpr std::size_t kCameraAxesOffset = 0x00;
+constexpr std::size_t kCameraPosOffset = 0x24;
+constexpr std::size_t kCameraFovOffset = 0x3C;
+constexpr std::size_t kCameraAspectOffset = 0x40;
+constexpr std::size_t kCameraFrameOffset = 0x48;
+// Retail HumanCamera renders its basis through rotX(-90 degrees) before handing
+// it to Camera_Set (IGI-RE camera/humancamera.c set_view). Rows are mapped with
+// (x, -z, y); the inverse recovers world axes from a live camera matrix.
+constexpr float kFreecamPriority = 5000.0f;
+
 struct FreecamState {
     bool active = false;
+    void *camera = nullptr;
     IGI::HumanView *view = nullptr;
-    RetailVec3d position{};
-    // Camera basis as the retail matrix stores it: column 0 right, column 1
-    // forward, column 2 up (HumanView_GetForward reads m[1], m[4], m[7]).
-    double right[3] = {1.0, 0.0, 0.0};
+    double pos[3] = {0.0, 0.0, 0.0};
+    // World basis, Y up, orthonormal.
     double forward[3] = {0.0, 0.0, 1.0};
+    double right[3] = {1.0, 0.0, 0.0};
     double up[3] = {0.0, 1.0, 0.0};
+    // +1 or -1, decided at enable so the view is never mirrored.
+    double zSign = 1.0;
+    float fov = 0.0F;
+    float aspect = 1.0F;
 };
 FreecamState g_freecam;
-std::atomic<bool> g_freecamRequested{false};
 
 IGI::HumanView *humanView(IGI::Human *human) {
     if (!human)
@@ -557,55 +583,88 @@ IGI::HumanView *humanView(IGI::Human *human) {
         *reinterpret_cast<void **>(reinterpret_cast<std::uint8_t *>(human) + kHumanViewOffset));
 }
 
-void setCamOverride(IGI::HumanView *view, bool enabled) {
-    if (!view)
+void *gameCamera() {
+    auto *game = IGI::GAME::GET();
+    if (!game)
+        return nullptr;
+    return *reinterpret_cast<void **>(reinterpret_cast<std::uint8_t *>(game) + kGameCameraOffset);
+}
+
+const float *cameraAxes(void *camera) {
+    return reinterpret_cast<const float *>(reinterpret_cast<const std::uint8_t *>(camera) +
+                                           kCameraAxesOffset);
+}
+
+int cameraFrame(void *camera) {
+    return *reinterpret_cast<const int *>(reinterpret_cast<const std::uint8_t *>(camera) +
+                                          kCameraFrameOffset);
+}
+
+double dot3(const double *a, const double *b) {
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+void normalise3(double *v) {
+    const double length = std::sqrt(dot3(v, v));
+    if (length <= 0.0)
         return;
-    *reinterpret_cast<std::uint8_t *>(reinterpret_cast<std::uint8_t *>(view) +
-                                      kHumanViewCamOverrideOffset) = enabled ? 1 : 0;
+    for (int i = 0; i < 3; ++i)
+        v[i] /= length;
+}
+
+void cross3(double *out, const double *a, const double *b) {
+    out[0] = a[1] * b[2] - a[2] * b[1];
+    out[1] = a[2] * b[0] - a[0] * b[2];
+    out[2] = a[0] * b[1] - a[1] * b[0];
+}
+
+// Rows of the live camera matrix are the retail view basis (already rotX(-90)).
+void recoverWorldBasis(const float *m, double zSign) {
+    auto &state = g_freecam;
+    // row0 = right, row1 = up, row2 = forward, inverse of (x, -z, y).
+    state.right[0] = m[0];
+    state.right[1] = m[2] * zSign;
+    state.right[2] = -m[1] * zSign;
+    state.up[0] = m[3];
+    state.up[1] = m[5] * zSign;
+    state.up[2] = -m[4] * zSign;
+    state.forward[0] = m[6];
+    state.forward[1] = m[8] * zSign;
+    state.forward[2] = -m[7] * zSign;
+    normalise3(state.right);
+    normalise3(state.up);
+    normalise3(state.forward);
+}
+
+// Rebuild the retail view matrix rows from the world basis.
+void buildViewMatrix(float *m, double zSign) {
+    auto &state = g_freecam;
+    const double rows[3][3] = {{state.right[0], state.right[1], state.right[2]},
+                               {state.up[0], state.up[1], state.up[2]},
+                               {state.forward[0], state.forward[1], state.forward[2]}};
+    for (int i = 0; i < 3; ++i) {
+        m[i * 3 + 0] = static_cast<float>(rows[i][0]);
+        m[i * 3 + 1] = static_cast<float>(-rows[i][2] * zSign);
+        m[i * 3 + 2] = static_cast<float>(rows[i][1] * zSign);
+    }
 }
 
 void orthonormaliseFreecam() {
     auto &state = g_freecam;
-    // Keep the basis orthonormal so the retail view matrices stay valid.
-    const double fl =
-        std::sqrt(state.forward[0] * state.forward[0] + state.forward[1] * state.forward[1] +
-                  state.forward[2] * state.forward[2]);
-    if (fl > 0.0) {
-        for (double &value : state.forward)
-            value /= fl;
-    }
-    // right = up x forward
-    state.right[0] = state.up[1] * state.forward[2] - state.up[2] * state.forward[1];
-    state.right[1] = state.up[2] * state.forward[0] - state.up[0] * state.forward[2];
-    state.right[2] = state.up[0] * state.forward[1] - state.up[1] * state.forward[0];
-    const double rl = std::sqrt(state.right[0] * state.right[0] + state.right[1] * state.right[1] +
-                                state.right[2] * state.right[2]);
-    if (rl > 0.0) {
-        for (double &value : state.right)
-            value /= rl;
-    }
-    // up = forward x right
-    state.up[0] = state.forward[1] * state.right[2] - state.forward[2] * state.right[1];
-    state.up[1] = state.forward[2] * state.right[0] - state.forward[0] * state.right[2];
-    state.up[2] = state.forward[0] * state.right[1] - state.forward[1] * state.right[0];
-}
-
-void freecamMatrix(float *out) {
-    // Column layout matches HumanView_GetForward / HumanView_GetMatrix.
-    out[0] = static_cast<float>(g_freecam.right[0]);
-    out[3] = static_cast<float>(g_freecam.right[1]);
-    out[6] = static_cast<float>(g_freecam.right[2]);
-    out[1] = static_cast<float>(g_freecam.forward[0]);
-    out[4] = static_cast<float>(g_freecam.forward[1]);
-    out[7] = static_cast<float>(g_freecam.forward[2]);
-    out[2] = static_cast<float>(g_freecam.up[0]);
-    out[5] = static_cast<float>(g_freecam.up[1]);
-    out[8] = static_cast<float>(g_freecam.up[2]);
+    normalise3(state.forward);
+    cross3(state.right, state.up, state.forward);
+    normalise3(state.right);
+    cross3(state.up, state.forward, state.right);
+    normalise3(state.up);
 }
 
 #if defined(_WIN32)
 bool keyDown(int virtualKey) {
     return (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
+}
+#else
+bool keyDown(int) {
+    return false;
 }
 #endif
 } // namespace
@@ -617,107 +676,116 @@ bool freecamEnabled() {
 bool setFreecamEnabled(Runtime &runtime, bool enabled) {
     if (!requireLiveGameThread(runtime))
         return false;
-    auto *player = reinterpret_cast<IGI::Human *>(IGI::GAME::GET_PLAYER(0));
-    auto *view = humanView(player);
-    if (!view) {
-        log(LogLevel::Warning, "free camera rejected: the player view is unavailable");
-        return false;
-    }
     if (enabled == g_freecam.active) {
         log(LogLevel::Info,
             std::string("free camera already ") + (enabled ? "enabled" : "disabled"));
         return true;
     }
+    auto *player = reinterpret_cast<IGI::Human *>(IGI::GAME::GET_PLAYER(0));
+    auto *view = humanView(player);
+    auto *camera = gameCamera();
     if (!enabled) {
-        setCamOverride(view, false);
+        // The retail human camera writes its own pose every frame, so simply stop
+        // overriding and it takes the view back on the next frame.
         g_freecam = FreecamState{};
-        g_freecamRequested.store(false, std::memory_order_release);
         (void)unlockHumanInput();
-        log(LogLevel::Info, "free camera disabled: view returned to the player camera");
+        log(LogLevel::Info, "free camera disabled: the game camera takes over again");
         return true;
     }
+    if (!camera) {
+        log(LogLevel::Warning, "free camera rejected: the game camera object is unavailable");
+        return false;
+    }
 
-    // Start from the current camera so enabling the free camera does not jump.
-    IGI::HumanCameraInfo info{};
-    IGI::HUMAN::GET_CAMERA_INFO(player, &info);
-    RetailMatrix matrix{};
-    IGI::CAMERA::GET_MATRIX(reinterpret_cast<IGI::Matrix *>(&matrix), view);
+    // Start exactly where the game camera is, so enabling never jumps or mirrors.
+    const float *axes = cameraAxes(camera);
     g_freecam = FreecamState{};
+    g_freecam.camera = camera;
     g_freecam.view = view;
-    g_freecam.position = {info.position[0], info.position[1], info.position[2]};
-    g_freecam.right[0] = matrix.m[0];
-    g_freecam.right[1] = matrix.m[3];
-    g_freecam.right[2] = matrix.m[6];
-    g_freecam.forward[0] = matrix.m[1];
-    g_freecam.forward[1] = matrix.m[4];
-    g_freecam.forward[2] = matrix.m[7];
-    g_freecam.up[0] = matrix.m[2];
-    g_freecam.up[1] = matrix.m[5];
-    g_freecam.up[2] = matrix.m[8];
+    std::memcpy(g_freecam.pos, reinterpret_cast<const std::uint8_t *>(camera) + kCameraPosOffset,
+                sizeof(g_freecam.pos));
+    g_freecam.fov = *reinterpret_cast<const float *>(
+        reinterpret_cast<const std::uint8_t *>(camera) + kCameraFovOffset);
+    g_freecam.aspect = *reinterpret_cast<const float *>(
+        reinterpret_cast<const std::uint8_t *>(camera) + kCameraAspectOffset);
+
+    // Calibrate the axis mapping against the player's own look direction.
+    double eye[3] = {0.0, 0.0, 0.0};
+    double look[3] = {0.0, 0.0, 1.0};
+    if (view) {
+        float forward[3] = {0.0F, 0.0F, 1.0F};
+        IGI::CAMERA::GET_FORWARD(forward, view);
+        look[0] = forward[0];
+        look[1] = forward[1];
+        look[2] = forward[2];
+        IGI::CAMERA::GET_EYE(eye, view);
+        normalise3(look);
+    }
+    recoverWorldBasis(axes, 1.0);
+    if (dot3(g_freecam.forward, look) < 0.0) {
+        g_freecam.zSign = -1.0;
+        recoverWorldBasis(axes, g_freecam.zSign);
+    }
     orthonormaliseFreecam();
     g_freecam.active = true;
-    // The player must not walk while the camera is detached.
     (void)lockHumanInput();
-    log(LogLevel::Info, "free camera enabled: WASD moves, arrows turn, Space/Ctrl lift");
+    log(LogLevel::Info, "free camera enabled: W/S forward-back, A/D strafe, Space/Ctrl up-down, "
+                        "arrows turn, Shift 4x");
     return true;
 }
 
 bool updateFreecam(Runtime &runtime) {
     if (!g_freecam.active || !requireLiveGameThread(runtime))
         return false;
-    auto *view = g_freecam.view;
-    if (!view) {
+    auto *camera = g_freecam.camera;
+    if (!camera) {
         g_freecam = FreecamState{};
         return false;
     }
-#if defined(_WIN32)
-    // Arrows rotate the basis, WASD flies, Space/Ctrl lift.
-    constexpr double kTurn = 0.035;
+    auto &state = g_freecam;
+    // Retail fly camera turns with the arrow keys; the game's default move keys
+    // (W/A/S/D) fly it. Word keys come from the same defaults the game ships with.
+    constexpr double kTurn = 0.030;
     const double yaw = (keyDown(VK_LEFT) ? kTurn : 0.0) - (keyDown(VK_RIGHT) ? kTurn : 0.0);
     const double pitch = (keyDown(VK_UP) ? kTurn : 0.0) - (keyDown(VK_DOWN) ? kTurn : 0.0);
     if (yaw != 0.0 || pitch != 0.0) {
-        auto &state = g_freecam;
         const double cosYaw = std::cos(yaw);
         const double sinYaw = std::sin(yaw);
-        // Rotate forward/right around the world Y axis.
-        const double fx = state.forward[0];
-        const double fz = state.forward[2];
-        state.forward[0] = fx * cosYaw - fz * sinYaw;
-        state.forward[2] = fx * sinYaw + fz * cosYaw;
-        const double rx = state.right[0];
-        const double rz = state.right[2];
-        state.right[0] = rx * cosYaw - rz * sinYaw;
-        state.right[2] = rx * sinYaw + rz * cosYaw;
-        // Pitch around the right axis.
+        const auto rotateYaw = [cosYaw, sinYaw](double *v) {
+            const double x = v[0];
+            const double z = v[2];
+            v[0] = x * cosYaw - z * sinYaw;
+            v[2] = x * sinYaw + z * cosYaw;
+        };
+        rotateYaw(state.forward);
+        rotateYaw(state.right);
         const double cosPitch = std::cos(pitch);
         const double sinPitch = std::sin(pitch);
-        for (int axis = 0; axis < 3; ++axis) {
-            const double f = state.forward[axis];
-            const double u = state.up[axis];
-            state.forward[axis] = f * cosPitch + u * sinPitch;
-            state.up[axis] = u * cosPitch - f * sinPitch;
+        for (int i = 0; i < 3; ++i) {
+            const double f = state.forward[i];
+            const double u = state.up[i];
+            state.forward[i] = f * cosPitch + u * sinPitch;
+            state.up[i] = u * cosPitch - f * sinPitch;
         }
         orthonormaliseFreecam();
     }
 
-    const double fast = keyDown(VK_SHIFT) ? 4.0 : 1.0;
-    constexpr double kSpeed = 0.9;
-    const double step = kSpeed * fast;
-    const double moveForward = (keyDown('W') ? step : 0.0) - (keyDown('S') ? step : 0.0);
-    const double moveRight = (keyDown('D') ? step : 0.0) - (keyDown('A') ? step : 0.0);
+    const double speed = 1.0 * (keyDown(VK_SHIFT) ? 4.0 : 1.0);
+    const double moveForward = (keyDown('W') ? speed : 0.0) - (keyDown('S') ? speed : 0.0);
+    const double moveRight = (keyDown('D') ? speed : 0.0) - (keyDown('A') ? speed : 0.0);
     const double moveUp =
-        (keyDown(VK_SPACE) ? step : 0.0) - ((keyDown(VK_CONTROL) || keyDown('C')) ? step : 0.0);
-    g_freecam.position.x += moveForward * g_freecam.forward[0] + moveRight * g_freecam.right[0];
-    g_freecam.position.y +=
-        moveForward * g_freecam.forward[1] + moveRight * g_freecam.right[1] + moveUp;
-    g_freecam.position.z += moveForward * g_freecam.forward[2] + moveRight * g_freecam.right[2];
-#endif
-    // Apply the pose through the retail camera-override path every frame.
-    RetailMatrix rotation{};
-    freecamMatrix(rotation.m);
-    const double position[3] = {g_freecam.position.x, g_freecam.position.y, g_freecam.position.z};
-    IGI::CAMERA::SET_CAMERA(view, position, reinterpret_cast<const IGI::Matrix *>(&rotation));
-    setCamOverride(view, true);
+        (keyDown(VK_SPACE) ? speed : 0.0) - ((keyDown(VK_CONTROL) || keyDown('C')) ? speed : 0.0);
+    for (int axis = 0; axis < 3; ++axis) {
+        state.pos[axis] += moveForward * state.forward[axis] + moveRight * state.right[axis];
+    }
+    state.pos[1] += moveUp;
+
+    RetailMatrix view{};
+    buildViewMatrix(view.m, state.zSign);
+    IGI::CAMERA::SET(reinterpret_cast<IGI::Camera *>(camera),
+                     reinterpret_cast<const IGI::Vec3d *>(state.pos),
+                     reinterpret_cast<const IGI::Matrix *>(&view), state.fov, state.aspect,
+                     kFreecamPriority, cameraFrame(camera), nullptr, 0, 0);
     return true;
 }
 
@@ -953,6 +1021,20 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
         setSfxVolume(runtime, vol);
     } else if (id == "view") {
         setPlayerThirdPersonView(runtime, value == "Third Person");
+    } else if (id == "debug_keys") {
+        // The retail debug keys are LCtrl + LShift + KEY. Fly mode (F) is the same
+        // free camera, so this control enables it and reports the retail chart.
+        const bool enabled = value == "Enabled";
+        if (setFreecamEnabled(runtime, enabled)) {
+            log(LogLevel::Info, std::string("debug keys ") + (enabled ? "enabled" : "disabled") +
+                                    "; retail chart: LCtrl+LShift+ F fly, Q/E cycle camera, "
+                                    "A default camera, F9 unlock missions, F11 position, "
+                                    "F12 next mission, P all weapons, R restart, I invincible, "
+                                    "Numpad +/- zoom, Numpad Enter zoom reset, Numpad * third "
+                                    "person, Numpad 8/2 pitch, 4/6 yaw, 9/3 distance");
+        } else {
+            log(LogLevel::Warning, "debug keys request rejected: the game camera is unavailable");
+        }
     } else if (id == "freecam") {
         if (setFreecamEnabled(runtime, value == "Enabled"))
             log(LogLevel::Info, "free camera state applied");
