@@ -260,9 +260,9 @@ bool isConfiguredMenuScreenActive() {
     auto *manager = static_cast<const RetailMenuManagerLayout *>(IGI::OTHER::FLOW_GET_SCREEN());
     if (!manager)
         return false;
-    const int pages = static_cast<int>(igi::menuPageCount(menuConfig));
-    for (int page = 0; page < pages; ++page) {
-        const int id = menuConfig.screenId + page;
+    const auto pages = igi::menuPageCount(menuConfig);
+    for (std::size_t page = 0; page < pages; ++page) {
+        const int id = igi::menuPageScreenId(menuConfig, page);
         if (manager->currentScreenId == id && IGI::TASK::FIND_BY_ID(id) != nullptr)
             return true;
     }
@@ -438,12 +438,12 @@ bool isTaskIdRangeFree(std::int32_t baseId, std::size_t itemCount) {
 }
 
 bool selectFreeMenuScreenId() {
-    if (isTaskIdRangeFree(menuConfig.screenId, menuConfig.items.size()))
+    if (isTaskIdRangeFree(menuConfig.screenId, igi::menuScreenIdSpan(menuConfig)))
         return true;
     const auto occupied = menuConfig.screenId;
-    const auto span = static_cast<std::int32_t>(menuConfig.items.size());
+    const auto span = static_cast<std::int32_t>(igi::menuScreenIdSpan(menuConfig));
     for (std::int32_t candidate = 4095 - span; candidate >= 3000; --candidate) {
-        if (!isTaskIdRangeFree(candidate, menuConfig.items.size()))
+        if (!isTaskIdRangeFree(candidate, igi::menuScreenIdSpan(menuConfig)))
             continue;
         menuConfig.screenId = candidate;
         if (!rebuildMenuResources())

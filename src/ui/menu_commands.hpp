@@ -23,9 +23,17 @@ std::size_t menuRowCapacity(const MenuConfig &config);
 // One retail page shows this many control rows; larger menus are split across
 // several MenuScreens inside the same resource, so every control keeps the rich
 // row layout (label plus ListBox/ToggleBox/button) instead of a one-line list.
-inline constexpr std::size_t kMenuRowsPerPage = 14;
+inline constexpr std::size_t kMenuRowsPerPage = 10;
+// Id block per page: one screen id plus its widgets, nav row and button row.
+// Pages are spaced by this stride so a page screen id can never equal another
+// page's widget id (that collision crashed the retail task table).
+inline constexpr std::int32_t kPageScreenStride = 20;
 // Number of pages a configured control set needs.
 std::size_t menuPageCount(const MenuConfig &config);
+// Screen id of a page.
+std::int32_t menuPageScreenId(const MenuConfig &config, std::size_t page);
+// Ids the menu reserves in the retail task table (all pages and their widgets).
+std::size_t menuScreenIdSpan(const MenuConfig &config);
 // Pixel height needed to draw one row per control plus the title and button row.
 int menuRequiredHeight(const MenuConfig &config);
 // Top coordinate that keeps the configured bottom edge when the frame grows.

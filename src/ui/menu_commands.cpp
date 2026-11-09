@@ -32,9 +32,21 @@ std::size_t menuPageCount(const MenuConfig &config) {
     return pages == 0 ? 1 : pages;
 }
 
+std::int32_t menuPageScreenId(const MenuConfig &config, std::size_t page) {
+    return config.screenId + static_cast<std::int32_t>(page) * kPageScreenStride;
+}
+
+std::size_t menuScreenIdSpan(const MenuConfig &config) {
+    return menuPageCount(config) * static_cast<std::size_t>(kPageScreenStride);
+}
+
 int menuRequiredHeight(const MenuConfig &config) {
-    const auto rows = static_cast<int>(config.items.size()) + 2;
-    return rows * static_cast<int>(kRowHeight + kRowSpacing) + 8;
+    // Only one page is visible at a time, so the frame is sized for the rows on a
+    // page plus the title, navigation and button rows.
+    const bool paged = menuPageCount(config) > 1;
+    const std::size_t rowsOnPage = std::min(config.items.size(), kMenuRowsPerPage);
+    const auto rows = rowsOnPage + 2 + (paged ? 1 : 0);
+    return static_cast<int>(rows) * static_cast<int>(kRowHeight + kRowSpacing) + 8;
 }
 
 int menuLayoutY(const MenuConfig &config) {

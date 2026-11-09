@@ -57,12 +57,16 @@ bool writeMenuScript(std::ostream &out, const MenuConfig &config, bool standalon
     const bool paged = pageCount > 1;
     const int frameY = menuLayoutY(config);
     const int frameHeight = menuRequiredHeight(config);
-    const int firstScreenId = config.screenId;
-    const int lastScreenId = config.screenId + static_cast<int>(pageCount) - 1;
+    const int firstScreenId = igi::menuPageScreenId(config, 0);
+    const int lastScreenId = igi::menuPageScreenId(config, pageCount - 1);
+    const int screenTop = frameY;
+    // The MenuScreen rectangle is the visible background, so it must cover the
+    // grown row frame instead of the smaller configured rect.
+    const int screenBottom = frameY + frameHeight;
 
     const auto pageScreen = [&](std::size_t page) {
         std::ostringstream pageOut;
-        const int pageScreenId = config.screenId + static_cast<int>(page);
+        const int pageScreenId = igi::menuPageScreenId(config, page);
         const std::size_t firstRow = page * rowsPerPage;
         const std::size_t lastRow = std::min(firstRow + rowsPerPage, config.items.size());
         pageOut
@@ -125,8 +129,10 @@ bool writeMenuScript(std::ostream &out, const MenuConfig &config, bool standalon
             }
         }
         if (paged) {
-            const int nextScreen = page + 1 < pageCount ? pageScreenId + 1 : firstScreenId;
-            const int prevScreen = page > 0 ? pageScreenId - 1 : lastScreenId;
+            const int nextScreen =
+                page + 1 < pageCount ? igi::menuPageScreenId(config, page + 1) : firstScreenId;
+            const int prevScreen =
+                page > 0 ? igi::menuPageScreenId(config, page - 1) : lastScreenId;
             pageOut << ", Task_New(-1, \"MenuFrame\", \"PageFrame\", \"\", " << config.x << ", "
                     << frameY << ", " << config.width
                     << ", 25, 8, 20, 4, TRUE, Task_New(-1, \"MenuText\", \"page_prev\", "

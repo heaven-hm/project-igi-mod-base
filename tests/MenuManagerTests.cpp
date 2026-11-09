@@ -467,7 +467,7 @@ void menuCommandListTest() {
     assert(generated.find("Prev Page") != std::string::npos);
     assert(igi::menuPageCount(config) > 1);
     for (std::size_t page = 0; page < igi::menuPageCount(config); ++page) {
-        const auto screenId = std::to_string(config.screenId + static_cast<int>(page));
+        const auto screenId = std::to_string(igi::menuPageScreenId(config, page));
         assert(generated.find("Task_New(" + screenId + ", \"MenuScreen\"") != std::string::npos);
     }
 

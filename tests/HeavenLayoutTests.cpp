@@ -108,11 +108,18 @@ int main() {
            text.find("IGI_SDK_Action(") != std::string::npos);
     assert(text.find("Next Page >") != std::string::npos);
     assert(text.find("Prev Page") != std::string::npos);
-    // Each page is its own MenuScreen task inside the same resource.
+    // Each page is its own MenuScreen task inside the same resource, spaced so a
+    // page's screen id can never collide with another page's widget ids.
     for (std::size_t page = 0; page < pages; ++page) {
-        const auto screenId = std::to_string(config.screenId + static_cast<int>(page));
+        const auto screenId = std::to_string(igi::menuPageScreenId(config, page));
         assert(text.find("Task_New(" + screenId + ", \"MenuScreen\"") != std::string::npos);
     }
+    assert(igi::menuPageScreenId(config, 1) > config.screenId + static_cast<std::int32_t>(
+                                                                  igi::kMenuRowsPerPage));
+    assert(igi::menuScreenIdSpan(config) > config.items.size());
+    // The visible background must cover the grown row frame.
+    const int backgroundBottom = igi::menuLayoutY(config) + igi::menuRequiredHeight(config);
+    assert(text.find(std::to_string(backgroundBottom)) != std::string::npos);
     // A page switch is a retail screen request, not host-side state.
     assert(text.find("MenuManager_RequestScreen(") != std::string::npos);
 
