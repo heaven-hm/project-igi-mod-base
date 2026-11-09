@@ -22,6 +22,9 @@ enum class ImGuiTheme { Dark, Light, Classic };
 inline constexpr std::size_t kMaxMenuListChoices = 64;
 using MenuCurrentValueReader = std::function<std::optional<std::string>(Runtime &)>;
 using MenuLiveItemRefresher = std::function<bool(MenuConfig &, Runtime &)>;
+// Asked once per frame by the ImGui host. Returning true draws the mod crosshair
+// over the game view (the retail HUD hides it in third person).
+using MenuCrosshairQuery = std::function<bool(Runtime &)>;
 using MenuEndFrameRenderer = std::function<void(Runtime &)>;
 
 struct ModMenuItemConfig {
@@ -109,6 +112,8 @@ struct MenuConfig {
     // Optional game-thread callback for a demo to replace runtime-backed list
     // choices (for example, live task targets) before a menu is displayed.
     MenuLiveItemRefresher refreshLiveItems;
+    // Optional: the demo reports whether its crosshair should be drawn now.
+    MenuCrosshairQuery crosshairActive;
     MenuEndFrameRenderer renderEndFrame;
 };
 

@@ -21,12 +21,19 @@ inline constexpr std::uint32_t WEAPON_DROP_HANDLER = 0x004f2390;
 // 0x004522A0). `dest` is a graph node id; `pos` refines the destination.
 inline constexpr std::uint32_t HUMAN_AI_MOVE_TO_HANDLER = 0x004518e0;
 inline constexpr std::uint32_t HUMAN_AI_RUN_TO_HANDLER = 0x004522a0;
+// Human_StopWeaponAnim: clears a stuck weapon animation (0x00489F00).
+inline constexpr std::uint32_t HUMAN_STOP_WEAPON_ANIM_HANDLER = 0x00489f00;
 } // namespace HASH
 
 namespace WEAPON {
 // Returns the dropped weapon task, or null when the drop was rejected.
 NATIVE_DECL Task *DROP(Task *w);
 } // namespace WEAPON
+
+namespace HUMAN {
+// Stops the current weapon animation, which recovers a stuck draw/reload.
+NATIVE_DECL void STOP_WEAPON_ANIM(Human *h, float time);
+} // namespace HUMAN
 
 namespace AI {
 // Both return non-zero once the AI has finished the move, matching retail use.

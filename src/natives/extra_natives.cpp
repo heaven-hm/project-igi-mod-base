@@ -72,8 +72,15 @@ NATIVE_DECL char RUN_TO(HumanAI *ai, int dest, const Vec3d *pos, char replan) {
 }
 } // namespace AI
 
+namespace HUMAN {
+NATIVE_DECL void STOP_WEAPON_ANIM(Human *h, float time) {
+    InvokeExtraNative<void>(HASH::HUMAN_STOP_WEAPON_ANIM_HANDLER,
+                            "void Human_StopWeaponAnim(Human *h, float time)", h, time);
+}
+} // namespace HUMAN
+
 std::size_t ExtraBindingCount() noexcept {
-    return 3;
+    return 4;
 }
 
 bool loadExtraNativeBindings(igi::NativeCatalogue &catalogue) {
@@ -84,9 +91,12 @@ bool loadExtraNativeBindings(igi::NativeCatalogue &catalogue) {
                         "char HumanAI_MoveTo(HumanAI *ai, int dest, const Vec3d *pos, char replan)",
                         igi::NativeVerification::Exposed}))
         return false;
-    return catalogue.add(
-        {HASH::HUMAN_AI_RUN_TO_HANDLER, "HumanAI_RunTo", "IGI-RE", "entry",
-         "char HumanAI_RunTo(HumanAI *ai, int dest, const Vec3d *pos, char replan)",
-         igi::NativeVerification::Exposed});
+    if (!catalogue.add({HASH::HUMAN_AI_RUN_TO_HANDLER, "HumanAI_RunTo", "IGI-RE", "entry",
+                        "char HumanAI_RunTo(HumanAI *ai, int dest, const Vec3d *pos, char replan)",
+                        igi::NativeVerification::Exposed}))
+        return false;
+    return catalogue.add({HASH::HUMAN_STOP_WEAPON_ANIM_HANDLER, "Human_StopWeaponAnim", "IGI-RE",
+                          "entry", "void Human_StopWeaponAnim(Human *h, float time)",
+                          igi::NativeVerification::Exposed});
 }
 } // namespace IGI

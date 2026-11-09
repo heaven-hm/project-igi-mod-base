@@ -825,10 +825,60 @@ void renderImGuiModWindow() {
     }
 }
 
+// The retail HUD hides the crosshair in third person, so the mod draws it over
+// the game view. This uses the validated Direct3D 7 ImGui renderer that already
+// draws the menu, which is why it does not depend on the retail sprite pass.
+void drawCrosshairOverlay() {
+    if (!ensureImGuiBackend())
+        return;
+    ImGui_ImplWin32_NewFrame();
+    ImGui_ImplDX7_NewFrame();
+    ImGuiIO &io = ImGui::GetIO();
+    D3DVIEWPORT7 vp{};
+    if (g_menu.boundDevice && SUCCEEDED(g_menu.boundDevice->GetViewport(&vp)) && vp.dwWidth > 0 &&
+        vp.dwHeight > 0) {
+        io.DisplaySize = ImVec2(static_cast<float>(vp.dwWidth), static_cast<float>(vp.dwHeight));
+    }
+    io.MouseDrawCursor = false;
+    for (bool &down : io.MouseDown)
+        down = false;
+
+    ImGui::NewFrame();
+    ImGui::GetIO().WantCaptureMouse = false;
+    const ImVec2 centre(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f);
+    ImDrawList *draw = ImGui::GetBackgroundDrawList();
+    constexpr float kGap = 4.0f;
+    constexpr float kLength = 10.0f;
+    // Two passes: a dark outline then the bright line, so the crosshair stays
+    // readable over bright and dark scenes.
+    for (int pass = 0; pass < 2; ++pass) {
+        const ImU32 colour = pass == 0 ? IM_COL32(0, 0, 0, 170) : IM_COL32(240, 240, 240, 235);
+        const float thickness = pass == 0 ? 3.0f : 1.5f;
+        draw->AddLine(ImVec2(centre.x - kGap - kLength, centre.y),
+                      ImVec2(centre.x - kGap, centre.y), colour, thickness);
+        draw->AddLine(ImVec2(centre.x + kGap, centre.y),
+                      ImVec2(centre.x + kGap + kLength, centre.y), colour, thickness);
+        draw->AddLine(ImVec2(centre.x, centre.y - kGap - kLength),
+                      ImVec2(centre.x, centre.y - kGap), colour, thickness);
+        draw->AddLine(ImVec2(centre.x, centre.y + kGap),
+                      ImVec2(centre.x, centre.y + kGap + kLength), colour, thickness);
+    }
+    ImGui::EndFrame();
+    ImGui::Render();
+    ImGui_ImplDX7_RenderDrawData(ImGui::GetDrawData());
+    restoreIgiRenderCacheAndFpu();
+}
+
 extern "C" void __cdecl onDisplayEndFrame() noexcept {
     if (!runtime.initialized())
         return;
     if (!menuVisible) {
+        if (menuConfig.crosshairActive) {
+            // The mod reports whether its crosshair belongs on screen right now.
+            if (menuConfig.crosshairActive(runtime))
+                drawCrosshairOverlay();
+            return;
+        }
         if (menuConfig.renderEndFrame)
             menuConfig.renderEndFrame(runtime);
         return;

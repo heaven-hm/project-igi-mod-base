@@ -11,12 +11,21 @@ bool menuScriptSymbolMatches(const IgiScriptSymbol *symbol, ScriptCallback callb
 }
 
 bool MenuScriptBridge::fillList(int item,
-                                const std::function<void(std::string_view, int)> &addItem) const {
+                                const std::function<void(std::string_view, int)> &addItem) {
     if (item == kCommandList) {
         if (commands_.empty() || !addItem)
             return false;
-        for (std::size_t index = 0; index < commands_.size(); ++index)
-            addItem(commands_[index].label, static_cast<int>(index));
+        if (commandPage_ >= commandPageCount())
+            commandPage_ = commandPageCount() - 1;
+        const std::size_t first = commandPage_ * kCommandsPerPage;
+        const std::size_t last = std::min(first + kCommandsPerPage, commands_.size());
+        int id = 0;
+        for (std::size_t index = first; index < last; ++index)
+            addItem(commands_[index].label, id++);
+        if (commandPageCount() > 1) {
+            addItem(commandPage_ + 1 < commandPageCount() ? "Next page >" : "First page", id++);
+            addItem(commandPage_ > 0 ? "< Previous page" : "Last page", id);
+        }
         return true;
     }
     return item >= 0 && values_.fill(static_cast<std::size_t>(item), addItem);
@@ -29,7 +38,25 @@ bool MenuScriptBridge::resync(const MenuConfig &config) {
     commands_ = std::move(rebuilt);
     if (selectedCommand_ && *selectedCommand_ >= commands_.size())
         selectedCommand_.reset();
+    if (commandPage_ >= commandPageCount())
+        commandPage_ = commandPageCount() > 0 ? commandPageCount() - 1 : 0;
     return valuesChanged || commandsChanged;
+}
+
+void MenuScriptBridge::refreshScreen() {
+#if defined(_WIN32) && (defined(__i386__) || defined(_M_IX86))
+    if (screenId_ < 0 || igiNativeCaller() == nullptr)
+        return;
+    auto *screen = IGI::TASK::FIND_BY_ID(screenId_);
+    if (!screen)
+        return;
+    using GetChangedEvent = std::uint8_t(__cdecl *)();
+    using Broadcast = void(__cdecl *)(IGI::Task *, std::uint8_t, void *);
+    const auto changedEvent =
+        reinterpret_cast<GetChangedEvent>(igi::re::HASH::Param_GetChangedEvent)();
+    char changed = 1;
+    reinterpret_cast<Broadcast>(igi::re::HASH::Task_Broadcast)(screen, changedEvent, &changed);
+#endif
 }
 
 bool MenuScriptBridge::runSelectedCommand() {
@@ -41,8 +68,14 @@ bool MenuScriptBridge::runSelectedCommand() {
 }
 
 int MenuScriptBridge::getList(int item) const noexcept {
-    if (item == kCommandList)
-        return selectedCommand_ ? static_cast<int>(*selectedCommand_) : -1;
+    if (item == kCommandList) {
+        if (!selectedCommand_)
+            return -1;
+        const std::size_t first = commandPage_ * kCommandsPerPage;
+        return *selectedCommand_ >= first && *selectedCommand_ < first + kCommandsPerPage
+                   ? static_cast<int>(*selectedCommand_ - first)
+                   : -1;
+    }
     if (item < 0)
         return -1;
     const auto value = values_.selected(static_cast<std::size_t>(item));
@@ -76,9 +109,22 @@ bool MenuScriptBridge::setToggle(int item, int value) {
 
 bool MenuScriptBridge::setList(int item, int value) {
     if (item == kCommandList) {
-        if (value < 0 || static_cast<std::size_t>(value) >= commands_.size())
+        if (value < 0)
             return false;
-        selectedCommand_ = static_cast<std::size_t>(value);
+        const std::size_t first = commandPage_ * kCommandsPerPage;
+        const std::size_t visible = std::min(kCommandsPerPage, commands_.size() - first);
+        if (static_cast<std::size_t>(value) >= visible) {
+            // Page navigation: the retail list is repopulated in place, so no
+            // screen teardown or menu transition is involved.
+            const bool next = static_cast<std::size_t>(value) == visible;
+            if (commandPageCount() > 1)
+                commandPage_ = next ? (commandPage_ + 1) % commandPageCount()
+                                    : (commandPage_ + commandPageCount() - 1) % commandPageCount();
+            selectedCommand_.reset();
+            refreshScreen();
+            return true;
+        }
+        selectedCommand_ = first + static_cast<std::size_t>(value);
         // The retail ListBox reports every selection change, so an immediate
         // frontend runs the entry right away while a deferred one waits for
         // Apply and keeps the selection visible for the following frame.

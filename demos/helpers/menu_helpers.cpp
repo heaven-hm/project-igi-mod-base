@@ -521,6 +521,27 @@ void reportCrosshairState(std::string_view reason) {
 }
 } // namespace
 
+bool thirdPersonCrosshairActive(Runtime &runtime) {
+    if (!g_thirdPersonCrosshairEnabled.load(std::memory_order_acquire) ||
+        !requireLiveGameThread(runtime))
+        return false;
+    auto *player = reinterpret_cast<IGI::Human *>(IGI::GAME::GET_PLAYER(0));
+    if (!player)
+        return false;
+    IGI::HumanCameraInfo camera{};
+    IGI::HUMAN::GET_CAMERA_INFO(player, &camera);
+    if (camera.mode != 2)
+        return false;
+    auto *weapon = IGI::HUMAN::GET_WEAPON(player);
+    if (!weapon)
+        return false;
+    auto *weaponType = IGI::WEAPON::WEAPON_GET_TYPE(weapon);
+    if (!weaponType)
+        return false;
+    return reinterpret_cast<const WeaponTypeHudLayout *>(weaponType)->sightDisplay ==
+           kSightDisplayCrosshair;
+}
+
 bool renderThirdPersonCrosshair(Runtime &runtime) {
     if (!g_thirdPersonCrosshairEnabled.load(std::memory_order_acquire) ||
         !requireLiveGameThread(runtime))
@@ -1043,6 +1064,16 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
             log(LogLevel::Info, "selected weapon dropped through the retail weapon lifecycle");
         else
             log(LogLevel::Warning, "drop weapon rejected: no droppable weapon task was found");
+    } else if (id == "weapon_info") {
+        if (WeaponHelpers(runtime).reportWeaponInfo())
+            log(LogLevel::Info, "weapon info reported from the retail weapon task");
+        else
+            log(LogLevel::Warning, "weapon info rejected: player unavailable");
+    } else if (id == "weapon_stop_anim") {
+        if (WeaponHelpers(runtime).stopWeaponAnimation())
+            log(LogLevel::Info, "weapon animation stopped through the retail native");
+        else
+            log(LogLevel::Warning, "weapon animation reset rejected: player unavailable");
     } else if (id == "weapon_events") {
         if (WeaponHelpers(runtime).reportEvents())
             log(LogLevel::Info, "weapon events reported from the retail weapon event getters");
@@ -1977,6 +2008,38 @@ bool WeaponHelpers::dropCurrentWeapon() const {
         log(LogLevel::Warning, "drop weapon: Weapon_Drop rejected the weapon task");
         return false;
     }
+    return true;
+}
+
+// Current weapon readout: the retail weapon task id and its remaining rounds.
+bool WeaponHelpers::reportWeaponInfo() const {
+    if (!requireLiveGameThread(runtime_))
+        return false;
+    auto *player = reinterpret_cast<IGI::Human *>(IGI::GAME::GET_PLAYER(0));
+    if (!player)
+        return false;
+    auto *weapon = IGI::HUMAN::GET_WEAPON(player);
+    if (!weapon) {
+        log(LogLevel::Info, "weapon info: no weapon task in hand");
+        IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, "IGI MOD: no weapon in hand");
+        return true;
+    }
+    std::ostringstream status;
+    status << "Weapon #" << IGI::TASK::GET_ID(weapon) << ": rounds "
+           << IGI::WEAPON::HAS_AMMO(weapon);
+    log(LogLevel::Info, status.str());
+    IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, status.str().c_str());
+    return true;
+}
+
+// Clears a stuck draw/reload animation on the player's current weapon.
+bool WeaponHelpers::stopWeaponAnimation() const {
+    if (!requireLiveGameThread(runtime_))
+        return false;
+    auto *player = reinterpret_cast<IGI::Human *>(IGI::GAME::GET_PLAYER(0));
+    if (!player)
+        return false;
+    IGI::HUMAN::STOP_WEAPON_ANIM(player, 0.0F);
     return true;
 }
 

@@ -183,6 +183,8 @@ LIVE_OBJECT_NATIVES = frozenset({
     # Graph node accessors dereference the live level graph's node array.
     "GRAPH::GET_NODE",
     "GRAPH::GET_NODE_POS",
+    # Stopping a weapon animation touches the live weapon task animation state.
+    "HUMAN::STOP_WEAPON_ANIM",
     # Soldier state-machine entries and parameter reads dereference the live
     # soldier state owned by that soldier instance, exactly like EXECUTE above.
     "SOLDIER::STAND_ENTER",

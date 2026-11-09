@@ -36,10 +36,13 @@ std::vector<int> inputSamples(const ModMenuItemConfig &item) {
     const int high = item.inputMaximum;
     if (high < low)
         return samples;
+    // The retail screen offers a few presets only; the ImGui frontend has the
+    // real text box, so a long sample list would just bloat the retail list.
+    constexpr std::size_t kMaxInputSamples = 5;
     const int step = item.inputStep > 0 ? item.inputStep : 1;
     for (int value = low; value <= high;) {
         samples.push_back(value);
-        if (samples.size() >= kMaxMenuListChoices - 1)
+        if (samples.size() >= kMaxInputSamples)
             break;
         value += step;
     }

@@ -404,6 +404,7 @@ int main() {
     // The flattened command list is item -1: every configured control becomes a
     // runnable entry so a control set larger than the retail frame stays usable.
     assert(listBridge.getList(-1) == -1 && !listBridge.fillList(-1, {}));
+    assert(listBridge.commandPageCount() >= 1);
     const auto &commands = listBridge.commands();
     assert(!commands.empty());
     std::vector<std::string> commandLabels;
@@ -413,9 +414,20 @@ int main() {
     }));
     assert(commandLabels.size() == commands.size());
     assert(commandLabels[0] == "Rain: off");
-    assert(!listBridge.setList(-1, static_cast<int>(commands.size())));
+    assert(!listBridge.setList(-1, -5));
     assert(listBridge.setList(-1, 1) && listBridge.getList(-1) == 1);
     assert(selectedWeather == "on");
+    // A page change repopulates the retail list in place and clears the selection.
+    if (listBridge.commandPageCount() > 1) {
+        assert(listBridge.setList(-1, static_cast<int>(igi::MenuScriptBridge::kCommandsPerPage)));
+        assert(listBridge.getList(-1) == -1);
+        std::vector<std::string> secondPage;
+        assert(listBridge.fillList(-1, [&](std::string_view label, int) {
+            secondPage.emplace_back(label);
+        }));
+        assert(!secondPage.empty());
+        assert(secondPage.back() == "< Previous page");
+    }
     // Cancel drops the pending command so a dismissed screen runs nothing.
     listBridge.cancel(false);
     assert(listBridge.getList(-1) == -1);

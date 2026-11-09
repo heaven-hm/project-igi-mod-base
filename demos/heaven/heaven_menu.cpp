@@ -66,18 +66,23 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
         {"ammo", igi::ModMenuItemKind::Action, "Unlimited Ammo", "Weapons", "UnlimitedAmmo", {}},
         {"weapon_pickup", igi::ModMenuItemKind::List, "Selected Weapon", "Weapons", "SelectWeapon",
          weaponValues},
-        {"weapon_ammo", igi::ModMenuItemKind::Input, "Ammo Amount", "Weapons", "SetRefillAmmo", {}},
-        {"weapon_refill",
-         igi::ModMenuItemKind::Action,
-         "Refill Selected Weapon",
+        {"weapon_ammo",
+         igi::ModMenuItemKind::Input,
+         "Ammo Amount",
          "Weapons",
-         "RefillWeapon",
+         "RefillWithAmmo",
          {}},
-        {"weapon_refill_all",
+        {"weapon_info",
          igi::ModMenuItemKind::Action,
-         "Refill All Weapons With Ammo",
+         "Selected Weapon Info",
          "Weapons",
-         "RefillAllWeapons",
+         "WeaponInfo",
+         {}},
+        {"weapon_stop_anim",
+         igi::ModMenuItemKind::Action,
+         "Reset Weapon Animation",
+         "Weapons",
+         "StopWeaponAnim",
          {}},
         {"weapon_drop",
          igi::ModMenuItemKind::Action,
@@ -398,6 +403,9 @@ bool configureModMenu(igi::MenuConfig &config) {
     config.renderEndFrame = [](igi::Runtime &runtime) {
         (void)igi::renderThirdPersonCrosshair(runtime);
     };
+    config.crosshairActive = [](igi::Runtime &runtime) {
+        return igi::thirdPersonCrosshairActive(runtime);
+    };
     config.refreshLiveItems = [](igi::MenuConfig &liveConfig, igi::Runtime &runtime) {
         return igi::refreshLiveTargetOptions(liveConfig, runtime);
     };
@@ -432,7 +440,13 @@ void runModMenu(const igi::MenuConfig &config, igi::Runtime &runtime, std::size_
             return;
         }
         g_refillAmmo = ammo;
-        igi::log(igi::LogLevel::Info, "ammo amount set to " + std::to_string(ammo));
+        // The text box's Apply button is the refill action: it applies the typed
+        // amount to the selected weapon, so no separate Refill control is needed.
+        const auto &weapon = kWeapons[g_selectedWeapon];
+        const bool applied = igi::WeaponHelpers(runtime).pickup(weapon.id, ammo);
+        igi::log(applied ? igi::LogLevel::Info : igi::LogLevel::Warning,
+                 "ammo " + std::to_string(ammo) + " applied to " + std::string(weapon.label) +
+                     (applied ? "" : " (rejected)"));
         return;
     }
     if (inRange && config.items[item].id == "weapon_refill_all") {

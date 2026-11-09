@@ -20,7 +20,13 @@ class MenuScriptBridge final {
           deferUntilApply_(deferUntilApply), screenId_(config.screenId) {}
     // Item index used by the generated script for the flattened command list.
     static constexpr int kCommandList = -1;
-    bool fillList(int item, const std::function<void(std::string_view, int)> &addItem) const;
+    // The retail ListBox is a fixed-size widget, so the flattened command list is
+    // shown one page at a time with Prev/Next entries instead of one huge list.
+    static constexpr std::size_t kCommandsPerPage = 16;
+    std::size_t commandPageCount() const noexcept {
+        return commands_.empty() ? 0 : (commands_.size() + kCommandsPerPage - 1) / kCommandsPerPage;
+    }
+    bool fillList(int item, const std::function<void(std::string_view, int)> &addItem);
     // Aligns the script-visible choices with the live menu config. The retail
     // menu host calls this from the frame tick while its screen is attached.
     bool resync(const MenuConfig &config);
@@ -44,10 +50,13 @@ class MenuScriptBridge final {
   private:
     // Runs the command entry the retail ListBox last selected.
     bool runSelectedCommand();
+    // Asks the attached retail screen to re-collect its list after a page change.
+    void refreshScreen();
 
     MenuValues values_;
     std::vector<MenuCommand> commands_;
     std::optional<std::size_t> selectedCommand_;
+    std::size_t commandPage_ = 0;
     SelectionHandler onSelection_;
     CloseHandler onClose_;
     bool deferUntilApply_ = false;

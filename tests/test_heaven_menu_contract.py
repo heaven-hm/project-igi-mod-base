@@ -229,11 +229,22 @@ assert 'config.items[item].id == "weapon_ammo"' in HEAVEN and '"weapon_ammo"' in
 assert "igi::ModMenuItemKind::Input" in HEAVEN, (
     "the ammo amount control must be a numeric text box, not a fixed action"
 )
-assert '"weapon_refill"' in HEAVEN and "Refill Selected Weapon" in HEAVEN, (
-    "Heaven must apply the typed ammo to the selected weapon"
+# The ammo text box's Apply button refills the selected weapon, so no separate
+# Refill control exists in the menu at all.
+assert "Refill Selected Weapon" not in HEAVEN and "Refill All Weapons" not in HEAVEN, (
+    "the standalone Refill controls must stay removed; Apply on the text box refills"
+)
+assert '"RefillWithAmmo"' in HEAVEN, (
+    "the ammo text box must apply the typed amount to the selected weapon"
 )
 assert "g_refillAmmo" in HEAVEN and "g_selectedWeapon" in HEAVEN, (
     "the weapon refill path must keep the typed ammo and selected weapon"
+)
+# The retail ListBox is a fixed-size widget: the command list must be paged in
+# place instead of being filled with one huge list (which crashed the screen).
+BRIDGE = (ROOT / "src/ui/menu_script_bridge.cpp").read_text(encoding="utf-8")
+assert "kCommandsPerPage" in BRIDGE and "refreshScreen()" in BRIDGE, (
+    "the retail command list must be paged and re-collected in place"
 )
 for stale in ("weapon_refill_glock", "weapon_refill_mp5sd", "weapon_refill_m16a2",
               "weapon_refill_ak47"):
@@ -257,7 +268,13 @@ assert "std::byte unused[0x61C]" not in HELPERS, (
     "the stale sightDisplay offset must not come back"
 )
 assert "IGI::OTHER::DRAW_SPRITE_Z" in HELPERS and "kStatusScreenCrossSpriteOffset = 0x74" in HELPERS, (
-    "the crosshair must draw the retail STATUSSCREEN:cross sprite at 0x74"
+    "the internal menu host draws the retail STATUSSCREEN:cross sprite at 0x74"
+)
+assert "thirdPersonCrosshairActive" in HELPERS and "thirdPersonCrosshairActive" in HEAVEN, (
+    "the demo must report when its crosshair is active"
+)
+assert "drawCrosshairOverlay" in IMGUI_HOST and "crosshairActive(runtime)" in IMGUI_HOST, (
+    "the ImGui host must draw the crosshair through its validated D3D7 renderer"
 )
 assert "IGI::WEAPON::DROP" in HELPERS and "WeaponHelpers::dropCurrentWeapon" in HELPERS, (
     "drop weapon must use the retail Weapon_Drop lifecycle"

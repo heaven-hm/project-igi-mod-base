@@ -89,6 +89,8 @@ class WeaponHelpers {
     bool selectCategory() const;
     bool reportFlashReset() const;
     bool reportEvents() const;
+    bool reportWeaponInfo() const;
+    bool stopWeaponAnimation() const;
     bool dropCurrentWeapon() const;
     std::optional<int> hasAmmo(void *weaponTask) const;
     IGI::WeaponType *type(void *weaponTask) const;
@@ -262,6 +264,10 @@ bool logFlowDiagnostics(Runtime &runtime);
 bool logPlayerState(Runtime &runtime);
 bool setPlayerThirdPersonView(Runtime &runtime, bool active);
 bool setThirdPersonCrosshairEnabled(Runtime &runtime, bool enabled);
+// True when the mod crosshair should be drawn: the toggle is on, the camera is
+// in third person and the equipped weapon uses the crosshair sight type.
+bool thirdPersonCrosshairActive(Runtime &runtime);
+// Retail-sprite draw for the QVM menu host (no Dear ImGui there).
 bool renderThirdPersonCrosshair(Runtime &runtime);
 bool changeLevel(Runtime &runtime, int levelId);
 } // namespace igi
