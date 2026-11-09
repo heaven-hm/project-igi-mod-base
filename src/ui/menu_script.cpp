@@ -55,6 +55,7 @@ bool writeMenuScript(std::ostream &out, const MenuConfig &config, bool standalon
     const std::size_t pageCount = menuPageCount(config);
     const std::size_t rowsPerPage = kMenuRowsPerPage;
     const bool paged = pageCount > 1;
+    const std::size_t activePage = std::min(config.pageIndex, pageCount - 1);
     const int frameY = menuLayoutY(config);
     const int frameHeight = menuRequiredHeight(config);
     const int firstScreenId = igi::menuPageScreenId(config, 0);
@@ -137,10 +138,10 @@ bool writeMenuScript(std::ostream &out, const MenuConfig &config, bool standalon
                     << frameY << ", " << config.width
                     << ", 25, 8, 20, 4, TRUE, Task_New(-1, \"MenuText\", \"page_prev\", "
                        "\"< Prev Page\", \"font3.fnt\", 2, ";
-            quoted(pageOut, "MenuManager_RequestScreen(" + std::to_string(prevScreen) + ", FALSE)");
+            quoted(pageOut, "IGI_SDK_Page(-1)");
             pageOut << ", \"\"), Task_New(-1, \"MenuText\", \"page_next\", \"Next Page >\", "
                        "\"font3.fnt\", 2, ";
-            quoted(pageOut, "MenuManager_RequestScreen(" + std::to_string(nextScreen) + ", FALSE)");
+            quoted(pageOut, "IGI_SDK_Page(1)");
             pageOut << ", \"\"))";
         }
         pageOut << ", Task_New(-1, \"MenuFrame\", \"ControlsFrame\", \"\", " << config.x << ", "
@@ -156,32 +157,16 @@ bool writeMenuScript(std::ostream &out, const MenuConfig &config, bool standalon
         return pageOut.str();
     };
 
-    const auto pageStatements = [&]() {
-        std::string text;
-        for (std::size_t page = 0; page < pageCount; ++page) {
-            if (page > 0)
-                text += "\n";
-            text += pageScreen(page) + ";";
-        }
-        return text;
-    }();
-
     if (standaloneManager) {
         out << "Task_DeclareParameters(\"MenuManager\", \"Current menuscreen\", \"Int32\", "
                "\"Resource path\", \"String256\", \"isOwnDisplay\", \"bool8\");\n"
                "Task_New(-1, \"MenuManager\", \"IGI SDK\", "
-            << firstScreenId << ", \"LOCAL:menusystem/ingamemenu.res\", FALSE, " << pageScreen(0)
-            << ");\n";
-        if (paged) {
-            // Extra pages are sibling MenuScreen tasks; the manager adopts them
-            // because the script runs in its context.
-            std::string remainder;
-            for (std::size_t page = 1; page < pageCount; ++page)
-                remainder += pageScreen(page) + ";\n";
-            out << remainder;
-        }
+            << firstScreenId << ", \"LOCAL:menusystem/ingamemenu.res\", FALSE, "
+            << pageScreen(activePage) << ");\n";
     } else {
-        out << pageStatements << "\n";
+        // Exactly one MenuScreen task exists per attachment, so closing the menu
+        // never leaves an orphaned screen behind in the retail manager.
+        out << pageScreen(activePage) << ";\n";
         out << "MenuManager_RequestScreen(" << firstScreenId << ", FALSE);\n";
     }
     return static_cast<bool>(out);

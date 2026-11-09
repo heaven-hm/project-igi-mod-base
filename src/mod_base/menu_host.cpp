@@ -84,6 +84,9 @@ struct InternalMenuState {
     bool menuScreenCreated = false;
     bool menuScreenAttached = false;
     MenuTransition pendingTransition = MenuTransition::None;
+    // Page navigation closes the current page screen and re-attaches with the
+    // next page, so only one MenuScreen task ever exists in the retail manager.
+    int pendingPageDelta = 0;
     std::uint64_t transitionDeadlineFrame = 0;
     std::atomic<bool> initialAttachPending{false};
 #if defined(_WIN32)
@@ -112,6 +115,7 @@ auto &shutdownPending = g_menu.shutdownPending;
 auto &menuScreenCreated = g_menu.menuScreenCreated;
 auto &menuScreenAttached = g_menu.menuScreenAttached;
 auto &pendingTransition = g_menu.pendingTransition;
+auto &pendingPageDelta = g_menu.pendingPageDelta;
 auto &transitionDeadlineFrame = g_menu.transitionDeadlineFrame;
 auto &initialAttachPending = g_menu.initialAttachPending;
 
@@ -222,7 +226,11 @@ bool installMenuScriptCallbacks() {
             igi::log(igi::LogLevel::Info,
                      "internal menu close: awaiting retail screen transition before resuming");
         },
-        /*deferUntilApply=*/true);
+        /*deferUntilApply=*/true,
+        [](int delta) {
+            if (delta != 0)
+                pendingPageDelta = delta;
+        });
     menuCallbacks = std::make_unique<igi::MenuScriptCallbacks>(*menuBridge, script);
     if (!menuRegistration.start(*menuCallbacks, registry)) {
         menuCallbacks.reset();
@@ -289,6 +297,8 @@ void releaseInjectedMenuScreen() {
 #endif
 }
 
+bool rebuildMenuResources();
+
 void completeShutdownOnGameThread() {
 #if defined(_WIN32)
     unregisterEndFrameCallback();
@@ -311,9 +321,50 @@ void completeShutdownOnGameThread() {
     igi::log(igi::LogLevel::Info, "internal unload: game-thread cleanup finished");
 }
 
+// Applies a queued page change: the old screen is already off the retail stack,
+// so its task is deleted, resources are rebuilt for the new page and the frame
+// tick attaches that page as a fresh screen.
+bool startPageSwitch() {
+    if (pendingPageDelta == 0)
+        return false;
+    const auto pages = static_cast<int>(igi::menuPageCount(menuConfig));
+    int page = static_cast<int>(menuConfig.pageIndex) + pendingPageDelta;
+    pendingPageDelta = 0;
+    if (pages <= 1)
+        return false;
+    page = ((page % pages) + pages) % pages;
+    if (page == static_cast<int>(menuConfig.pageIndex))
+        return false;
+    menuConfig.pageIndex = static_cast<std::size_t>(page);
+    releaseInjectedMenuScreen();
+    menuRegistration.stop();
+    menuCallbacks.reset();
+    menuBridge.reset();
+    menuResource.release();
+    reopenResource.release();
+    closeResource.release();
+    menuScreenCreated = false;
+    menuScreenAttached = false;
+    if (!rebuildMenuResources()) {
+        igi::log(igi::LogLevel::Error, "internal menu page switch: resource rebuild failed");
+        return false;
+    }
+    initialAttachPending.store(true, std::memory_order_release);
+    safeToShutdown.store(false, std::memory_order_release);
+    igi::log(igi::LogLevel::Info, "internal menu page switch: now showing page " +
+                                      std::to_string(page + 1) + " of " + std::to_string(pages));
+    return true;
+}
+
 void completeCloseTransition() {
     pendingTransition = MenuTransition::None;
     menuScreenAttached = false;
+    if (pendingPageDelta != 0) {
+        if (menuBridge)
+            menuBridge->cancel(false);
+        if (startPageSwitch())
+            return;
+    }
     if (menuBridge)
         menuBridge->cancel(false);
     if (!igi::resumeFromMenu(runtime))

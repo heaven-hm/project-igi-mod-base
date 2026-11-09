@@ -25,6 +25,8 @@ using MenuLiveItemRefresher = std::function<bool(MenuConfig &, Runtime &)>;
 // Asked once per frame by the ImGui host. Returning true draws the mod crosshair
 // over the game view (the retail HUD hides it in third person).
 using MenuCrosshairQuery = std::function<bool(Runtime &)>;
+// Reports a page navigation request from the retail menu (delta -1 or +1).
+using MenuPageHandler = std::function<void(int)>;
 using MenuEndFrameRenderer = std::function<void(Runtime &)>;
 
 struct ModMenuItemConfig {
@@ -91,6 +93,10 @@ struct MenuConfig {
     // backwards-compatible parsing; `direct` is ignored by the menu host.
     bool directNativeMode = false;
     std::int32_t screenId = 990;
+    // Page shown by the current screen resource. Only one page exists as a task
+    // at a time: page switches re-attach with the next page (a retail ListBox
+    // cannot scroll, and leftover page screens crash the retail manager).
+    std::size_t pageIndex = 0;
     std::int32_t x = 95;
     std::int32_t y = 185;
     std::int32_t width = 455;

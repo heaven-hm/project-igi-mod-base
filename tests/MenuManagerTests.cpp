@@ -460,15 +460,21 @@ void menuCommandListTest() {
     std::ostringstream script;
     assert(igi::writeIgiMenuScreenScript(script, config));
     const auto generated = script.str();
-    // Large menus keep the row layout and are paged across MenuScreen tasks.
+    // Large menus keep the row layout and page one screen at a time: leftover page
+    // screens crash the retail manager, so only the active page is emitted.
     assert(generated.find("\"commands\"") == std::string::npos);
     assert(generated.find("IGI_SDK_FillList(-1)") == std::string::npos);
     assert(generated.find("Next Page >") != std::string::npos);
     assert(generated.find("Prev Page") != std::string::npos);
+    assert(generated.find("IGI_SDK_Page(1)") != std::string::npos);
     assert(igi::menuPageCount(config) > 1);
+    const auto activeId = std::to_string(igi::menuPageScreenId(config, config.pageIndex));
+    assert(generated.find("Task_New(" + activeId + ", \"MenuScreen\"") != std::string::npos);
     for (std::size_t page = 0; page < igi::menuPageCount(config); ++page) {
-        const auto screenId = std::to_string(igi::menuPageScreenId(config, page));
-        assert(generated.find("Task_New(" + screenId + ", \"MenuScreen\"") != std::string::npos);
+        if (page == config.pageIndex)
+            continue;
+        const auto otherId = std::to_string(igi::menuPageScreenId(config, page));
+        assert(generated.find("Task_New(" + otherId + ", \"MenuScreen\"") == std::string::npos);
     }
 
     // The generated resource must still compile for the retail script runtime.

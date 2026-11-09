@@ -321,8 +321,11 @@ SCRIPT = (ROOT / "src/ui/menu_script.cpp").read_text(encoding="utf-8")
 assert "menuPageCount(config)" in SCRIPT and "kMenuRowsPerPage" in SCRIPT, (
     "the generator must page large control sets instead of drawing a single line"
 )
-assert "Next Page >" in SCRIPT and "MenuManager_RequestScreen(" in SCRIPT, (
-    "page navigation must be baked into the generated retail script"
+assert "Next Page >" in SCRIPT and "IGI_SDK_Page(" in SCRIPT, (
+    "page navigation must be a registered SDK symbol so the host can switch pages"
+)
+assert "pageScreen(activePage)" in SCRIPT, (
+    "only the active page may be emitted, so no page screen is ever orphaned"
 )
 # The host must recognise every page screen and pop the whole pushed range.
 assert "igi::menuPageCount(menuConfig)" in INTERNAL_HOST, (

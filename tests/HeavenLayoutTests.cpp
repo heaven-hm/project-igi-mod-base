@@ -8,6 +8,7 @@
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -95,6 +96,9 @@ int main() {
 
     std::ostringstream script;
     assert(igi::writeIgiMenuScreenScript(script, config));
+    if (const char *dump = std::getenv("IGI_DUMP_MENU_SCRIPT"))
+        std::fprintf(stderr, "%s\n", script.str().c_str());
+    (void)0;
     const auto text = script.str();
     // Every control keeps the rich row layout; large menus are paged instead of
     // collapsing into a one-line selector.
@@ -108,12 +112,20 @@ int main() {
            text.find("IGI_SDK_Action(") != std::string::npos);
     assert(text.find("Next Page >") != std::string::npos);
     assert(text.find("Prev Page") != std::string::npos);
-    // Each page is its own MenuScreen task inside the same resource, spaced so a
-    // page's screen id can never collide with another page's widget ids.
+    // Only the current page is emitted: closed pages must never be left behind as
+    // orphaned MenuScreen tasks (that crashed the retail manager).
+    std::size_t screenCount = 0;
     for (std::size_t page = 0; page < pages; ++page) {
         const auto screenId = std::to_string(igi::menuPageScreenId(config, page));
-        assert(text.find("Task_New(" + screenId + ", \"MenuScreen\"") != std::string::npos);
+        if (text.find("Task_New(" + screenId + ", \"MenuScreen\"") != std::string::npos)
+            ++screenCount;
     }
+    assert(screenCount == 1);
+    const auto activeId = std::to_string(igi::menuPageScreenId(config, config.pageIndex));
+    assert(text.find("Task_New(" + activeId + ", \"MenuScreen\"") != std::string::npos);
+    // Page navigation is a registered SDK symbol, so the host owns the switch.
+    assert(text.find("IGI_SDK_Page(1)") != std::string::npos);
+    assert(text.find("IGI_SDK_Page(-1)") != std::string::npos);
     assert(igi::menuPageScreenId(config, 1) > config.screenId + static_cast<std::int32_t>(
                                                                   igi::kMenuRowsPerPage));
     assert(igi::menuScreenIdSpan(config) > config.items.size());

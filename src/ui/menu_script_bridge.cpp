@@ -171,6 +171,11 @@ bool MenuScriptBridge::activate(int item) {
     return true;
 }
 
+void MenuScriptBridge::page(int delta) {
+    if (delta != 0 && onPage_)
+        onPage_(delta);
+}
+
 void MenuScriptBridge::close() {
     if (onClose_)
         onClose_();
@@ -272,6 +277,12 @@ IgiScriptValue *MenuScriptCallbacks::action(IgiScriptValue *output, void *args) 
         return result(output, 0);
     return result(output, bridge_.activate(api_.getInt(args, 0)) ? 1 : 0);
 }
+IgiScriptValue *MenuScriptCallbacks::page(IgiScriptValue *output, void *args) {
+    if (!output || !args || !api_.getInt)
+        return result(output, 0);
+    bridge_.page(api_.getInt(args, 0));
+    return result(output, 1);
+}
 IgiScriptValue *MenuScriptCallbacks::close(IgiScriptValue *output, void *) {
     bridge_.close();
     return result(output, 1);
@@ -340,6 +351,15 @@ IgiScriptValue *actionCallback(IgiScriptValue *out, void *context, void *args) {
         return result(out, 0);
     }
 }
+IgiScriptValue *pageCallback(IgiScriptValue *out, void *context, void *args) {
+    try {
+        return context ? static_cast<MenuScriptCallbacks *>(context)->page(out, args)
+                       : result(out, 0);
+    } catch (...) {
+        log(LogLevel::Error, "IGI_SDK_Page: callback threw");
+        return result(out, 0);
+    }
+}
 IgiScriptValue *closeCallback(IgiScriptValue *out, void *context, void *args) {
     try {
         return context ? static_cast<MenuScriptCallbacks *>(context)->close(out, args)
@@ -390,6 +410,7 @@ bool registerMenuScriptCallbacks(MenuScriptCallbacks &callbacks,
     registry.registerFunction("IGI_SDK_CloseMenu", closeCallback, &callbacks, 0);
     registry.registerFunction("IGI_SDK_Apply", applyCallback, &callbacks, 0);
     registry.registerFunction("IGI_SDK_Cancel", cancelCallback, &callbacks, 0);
+    registry.registerFunction("IGI_SDK_Page", pageCallback, &callbacks, 1);
     return true;
 }
 
@@ -410,6 +431,8 @@ void unregisterMenuScriptCallbacks(MenuScriptCallbacks &callbacks,
         registry.removeSymbol("IGI_SDK_SetToggle");
     if (registry.matchesSymbol("IGI_SDK_Action", actionCallback, &callbacks))
         registry.removeSymbol("IGI_SDK_Action");
+    if (registry.matchesSymbol("IGI_SDK_Page", pageCallback, &callbacks))
+        registry.removeSymbol("IGI_SDK_Page");
     if (registry.matchesSymbol("IGI_SDK_CloseMenu", closeCallback, &callbacks))
         registry.removeSymbol("IGI_SDK_CloseMenu");
     if (registry.matchesSymbol("IGI_SDK_Apply", applyCallback, &callbacks))
