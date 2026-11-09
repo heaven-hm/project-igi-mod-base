@@ -135,8 +135,11 @@ std::optional<DWORD> findLoadedModule(DWORD pid, const std::wstring& dllPath) {
 
     MODULEENTRY32W entry{};
     entry.dwSize = sizeof(entry);
+    const wchar_t* requestedName = std::wcsrchr(dllPath.c_str(), L'\\');
+    requestedName = requestedName ? requestedName + 1 : dllPath.c_str();
     for (BOOL more = Module32FirstW(snapshot, &entry); more; more = Module32NextW(snapshot, &entry)) {
-        if (_wcsicmp(entry.szExePath, dllPath.c_str()) == 0) {
+        if (_wcsicmp(entry.szExePath, dllPath.c_str()) == 0 ||
+            _wcsicmp(entry.szModule, requestedName) == 0) {
             const DWORD base = reinterpret_cast<DWORD>(entry.modBaseAddr);
             CloseHandle(snapshot);
             return base;
