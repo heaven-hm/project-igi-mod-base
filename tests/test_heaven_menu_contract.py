@@ -78,7 +78,8 @@ dispatched = set(re.findall(r'id == "([a-z0-9_]+)"', DISPATCHER))
 
 # The weapon controls are resolved by the Heaven adapter, because only the demo
 # owns the retail weapon symbol table and its ammo counts.
-special_routes = {"weapon_pickup", "weapon_all"}
+special_routes = {"weapon_pickup", "weapon_all", "weapon_refill_glock", "weapon_refill_mp5sd",
+                  "weapon_refill_m16a2", "weapon_refill_ak47"}
 for item_id in ids:
     if item_id in special_routes:
         assert f'config.items[item].id == "{item_id}"' in HEAVEN
@@ -191,6 +192,15 @@ assert "Task_Broadcast" in INTERNAL_HOST and "live target lists refreshed" in IN
 assert 'WeaponEntry{"Binoculars", "WEAPON_ID_BINOCULARS", 0}' in HEAVEN, (
     "binocular pickup must use its retail symbol with no invented ammo count"
 )
+for item_id, weapon_id in {
+    "weapon_refill_glock": "WEAPON_ID_GLOCK",
+    "weapon_refill_mp5sd": "WEAPON_ID_MP5SD",
+    "weapon_refill_m16a2": "WEAPON_ID_M16A2",
+    "weapon_refill_ak47": "WEAPON_ID_AK47",
+}.items():
+    assert f'config.items[item].id == "{item_id}"' in HEAVEN and weapon_id in HEAVEN, (
+        f"{item_id} must refill through its retail weapon symbol"
+    )
 assert 'WeaponEntry{"Medipack", "WEAPON_ID_MEDIPACK", 50}' in HEAVEN, (
     "medipack pickup must carry the configured 50-charge bundle"
 )

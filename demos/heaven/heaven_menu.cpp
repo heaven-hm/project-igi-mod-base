@@ -59,8 +59,32 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
     const MenuItemDef definitions[] = {
         // Weapons
         {"ammo", igi::ModMenuItemKind::Action, "Unlimited Ammo", "Weapons", "UnlimitedAmmo", {}},
-        {"weapon_pickup", igi::ModMenuItemKind::List, "Equip Weapon", "Weapons", "PickUpWeapon",
-         weaponValues},
+        {"weapon_pickup", igi::ModMenuItemKind::List, "Equip / Refill Weapon Ammo", "Weapons",
+         "PickUpWeapon", weaponValues},
+        {"weapon_refill_glock",
+         igi::ModMenuItemKind::Action,
+         "Refill Glock 17 Ammo",
+         "Weapons",
+         "RefillGlockAmmo",
+         {}},
+        {"weapon_refill_mp5sd",
+         igi::ModMenuItemKind::Action,
+         "Refill MP5SD Ammo",
+         "Weapons",
+         "RefillMp5sdAmmo",
+         {}},
+        {"weapon_refill_m16a2",
+         igi::ModMenuItemKind::Action,
+         "Refill M16A2 Ammo",
+         "Weapons",
+         "RefillM16a2Ammo",
+         {}},
+        {"weapon_refill_ak47",
+         igi::ModMenuItemKind::Action,
+         "Refill AK-47 Ammo",
+         "Weapons",
+         "RefillAk47Ammo",
+         {}},
         {"weapon_cycle",
          igi::ModMenuItemKind::Action,
          "Cycle Weapon",
@@ -338,6 +362,25 @@ bool configureModMenu(igi::MenuConfig &config) {
 
 void runModMenu(const igi::MenuConfig &config, igi::Runtime &runtime, std::size_t item,
                 std::string_view value) {
+    const auto refill = [&runtime](std::string_view weaponId, int ammo) {
+        (void)igi::WeaponHelpers(runtime).pickup(weaponId, ammo);
+    };
+    if (item < config.items.size() && config.items[item].id == "weapon_refill_glock") {
+        refill("WEAPON_ID_GLOCK", 30);
+        return;
+    }
+    if (item < config.items.size() && config.items[item].id == "weapon_refill_mp5sd") {
+        refill("WEAPON_ID_MP5SD", 90);
+        return;
+    }
+    if (item < config.items.size() && config.items[item].id == "weapon_refill_m16a2") {
+        refill("WEAPON_ID_M16A2", 120);
+        return;
+    }
+    if (item < config.items.size() && config.items[item].id == "weapon_refill_ak47") {
+        refill("WEAPON_ID_AK47", 120);
+        return;
+    }
     if (item < config.items.size() && config.items[item].id == "weapon_all") {
         auto weapons = igi::WeaponHelpers(runtime);
         std::size_t granted = 0;
