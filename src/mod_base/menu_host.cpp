@@ -430,6 +430,7 @@ void processPendingMenuTransition() {
     (void)igi::resumeFromMenu(runtime);
     igi::log(igi::LogLevel::Warning,
              "internal menu reopen: retail screen did not transition; forcing a fresh attach");
+    releaseInjectedMenuScreen();
     // The retail manager can be left pointing at a screen task that no longer
     // exists. Detach everything and let the frame tick build the screen again,
     // which also clears any wedged state instead of leaving the game stuck.
@@ -516,6 +517,15 @@ bool isTaskIdRangeFree(std::int32_t baseId, std::size_t itemCount) {
 bool selectFreeMenuScreenId() {
     if (isTaskIdRangeFree(menuConfig.screenId, igi::menuScreenIdSpan(menuConfig)))
         return true;
+    // Our own leftover page screens must not push the base id around: the retail
+    // manager keeps pointing at the id the running script was built with, so
+    // migrating the base wedges it. Remove them and re-check before relocating.
+    releaseInjectedMenuScreen();
+    if (isTaskIdRangeFree(menuConfig.screenId, igi::menuScreenIdSpan(menuConfig))) {
+        igi::log(igi::LogLevel::Info,
+                 "internal menu screen: id range freed by removing the previous page screens");
+        return true;
+    }
     const auto occupied = menuConfig.screenId;
     const auto span = static_cast<std::int32_t>(igi::menuScreenIdSpan(menuConfig));
     for (std::int32_t candidate = 4095 - span; candidate >= 3000; --candidate) {
@@ -697,6 +707,7 @@ bool reopenMenuScreen() {
         igi::log(igi::LogLevel::Warning,
                  "internal menu reopen: reopen script failed; falling back to fresh attach");
     }
+    releaseInjectedMenuScreen();
     menuScreenCreated = false;
     menuScreenAttached = false;
     initialAttachPending.store(true, std::memory_order_release);

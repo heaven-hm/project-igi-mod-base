@@ -409,6 +409,16 @@ assert "igi::menuPageCount(menuConfig)" in INTERNAL_HOST, (
 assert "closeCommandScript" in INTERNAL_HOST and "MenuManager_PopScreen(FALSE);" in INTERNAL_HOST, (
     "closing must pop every page screen the menu pushed"
 )
+# A fresh attach must delete the previous page screens before building the new
+# one, or the base id migrates while old page scripts persist and the retail
+# manager wedges on a screen id that no longer exists.
+assert "releaseInjectedMenuScreen();" in INTERNAL_HOST and INTERNAL_HOST.count(
+    "releaseInjectedMenuScreen()") >= 3, (
+    "reopen and the missed-deadline recovery must clear old page screens first"
+)
+assert "id range freed by removing the previous page screens" in INTERNAL_HOST, (
+    "the id search must clear our own leftovers before relocating the base"
+)
 
 print(
     f"PASS Heaven routes {len(ids)} production controls across {len(categories)} categories"
