@@ -48,106 +48,136 @@ bool writeMenuScript(std::ostream &out, const MenuConfig &config, bool standalon
            "Resource\", \"String32\", \"Width\", \"Int32\", \"Collect Items Script\", "
            "\"VarString\", \"Get Data Script\", \"VarString\", \"Set Data Script\", \"VarString\", "
            "\"Modify Data Script\", \"VarString\");\n";
-    if (standaloneManager)
+    // One retail page holds kMenuRowsPerPage rows. Larger menus are emitted as
+    // several MenuScreen tasks in this same resource so every control keeps the
+    // rich row layout (label plus ListBox/ToggleBox/button). Page navigation is
+    // baked into the script, so the retail manager performs the switch itself.
+    const std::size_t pageCount = menuPageCount(config);
+    const std::size_t rowsPerPage = kMenuRowsPerPage;
+    const bool paged = pageCount > 1;
+    const int frameY = menuLayoutY(config);
+    const int frameHeight = menuRequiredHeight(config);
+    const int firstScreenId = config.screenId;
+    const int lastScreenId = config.screenId + static_cast<int>(pageCount) - 1;
+
+    const auto pageScreen = [&](std::size_t page) {
+        std::ostringstream pageOut;
+        const int pageScreenId = config.screenId + static_cast<int>(page);
+        const std::size_t firstRow = page * rowsPerPage;
+        const std::size_t lastRow = std::min(firstRow + rowsPerPage, config.items.size());
+        pageOut
+            << "Task_New(" << pageScreenId << ", \"MenuScreen\", \"IGI SDK\", \"\", " << config.x
+            << ", " << config.y << ", " << config.x + config.width << ", "
+            << config.y + config.height
+            << ", \"IGI_SDK_Cancel() - MenuManager_PopScreen(FALSE)\", \"\", \"\", Task_New(-1, "
+               "\"MenuFrame\", \"\", \"\", "
+            << config.x << ", " << frameY << ", " << config.width << ", " << frameHeight
+            << ", 1, 4, 4, FALSE";
+        if (!config.title.empty()) {
+            pageOut << ", Task_New(-1, \"MenuText\", \"title\", ";
+            quoted(pageOut, paged ? std::string(config.title) + " (" + std::to_string(page + 1) +
+                                        "/" + std::to_string(pageCount) + ")"
+                                  : std::string(config.title));
+            pageOut << ", \"font3.fnt\", 2, \"\", \"\")";
+        }
+        for (std::size_t index = firstRow; index < lastRow; ++index) {
+            const auto &item = config.items[index];
+            const auto widgetId = pageScreenId + 1 + static_cast<int>(index - firstRow);
+            if (item.kind == ModMenuItemKind::List || item.kind == ModMenuItemKind::Input) {
+                pageOut << ", Task_New(-1, \"MenuFrame\", ";
+                quoted(pageOut, item.id);
+                pageOut << ", \"\", " << config.x << ", " << frameY << ", " << config.width
+                        << ", 25, 8, 20, 4, TRUE, Task_New(-1, \"MenuText\", \"\", ";
+                quoted(pageOut, item.label);
+                pageOut << ", \"font3.fnt\", 2, \"\", \"\"), Task_New(" << widgetId
+                        << ", \"ListBox\", \"\", \"slide\", \"font1.fnt\", 140, ";
+                quoted(pageOut, "IGI_SDK_FillList(" + std::to_string(index) + ")");
+                pageOut << ", ";
+                quoted(pageOut, "IGI_SDK_GetList(" + std::to_string(index) + ")");
+                pageOut << ", ";
+                quoted(pageOut, "IGI_SDK_SetList(" + std::to_string(index) + ",this.nActiveID)");
+                pageOut << ", ";
+                quoted(pageOut, "IGI_SDK_SetList(" + std::to_string(index) + ",this.nActiveID)");
+                pageOut << "))";
+            } else if (item.kind == ModMenuItemKind::Toggle) {
+                pageOut << ", Task_New(-1, \"MenuFrame\", ";
+                quoted(pageOut, item.id);
+                pageOut << ", \"\", " << config.x << ", " << frameY << ", " << config.width
+                        << ", 25, 8, 20, 4, TRUE, Task_New(-1, \"MenuText\", \"\", ";
+                quoted(pageOut, item.label);
+                pageOut << ", \"font3.fnt\", 2, \"\", \"\"), Task_New(" << widgetId
+                        << ", \"ToggleBox\", \"\", ";
+                quoted(pageOut, "IGI_SDK_GetToggle(" + std::to_string(index) + ")");
+                pageOut << ", ";
+                quoted(pageOut, "IGI_SDK_SetToggle(" + std::to_string(index) + ",this.isOn)");
+                pageOut << "))";
+            } else {
+                pageOut << ", Task_New(-1, \"MenuText\", ";
+                quoted(pageOut, item.id);
+                pageOut << ", ";
+                quoted(pageOut, item.label);
+                pageOut << ", \"font3.fnt\", 2, ";
+                if (item.kind == ModMenuItemKind::Action)
+                    quoted(pageOut, "IGI_SDK_Action(" + std::to_string(index) + ")");
+                else
+                    quoted(pageOut, "");
+                pageOut << ", \"\")";
+            }
+        }
+        if (paged) {
+            const int nextScreen = page + 1 < pageCount ? pageScreenId + 1 : firstScreenId;
+            const int prevScreen = page > 0 ? pageScreenId - 1 : lastScreenId;
+            pageOut << ", Task_New(-1, \"MenuFrame\", \"PageFrame\", \"\", " << config.x << ", "
+                    << frameY << ", " << config.width
+                    << ", 25, 8, 20, 4, TRUE, Task_New(-1, \"MenuText\", \"page_prev\", "
+                       "\"< Prev Page\", \"font3.fnt\", 2, ";
+            quoted(pageOut, "MenuManager_RequestScreen(" + std::to_string(prevScreen) + ", FALSE)");
+            pageOut << ", \"\"), Task_New(-1, \"MenuText\", \"page_next\", \"Next Page >\", "
+                       "\"font3.fnt\", 2, ";
+            quoted(pageOut, "MenuManager_RequestScreen(" + std::to_string(nextScreen) + ", FALSE)");
+            pageOut << ", \"\"))";
+        }
+        pageOut << ", Task_New(-1, \"MenuFrame\", \"ControlsFrame\", \"\", " << config.x << ", "
+                << frameY << ", " << config.width
+                << ", 25, 8, 20, 4, TRUE, "
+                   "Task_New(-1, \"MenuText\", \"restart\", \"Restart\", \"font3.fnt\", 2, "
+                   "\"IGI_SDK_Cancel() - MenuManager_LeaveMenus(900, 12)\", \"menu_ok\"), "
+                   "Task_New(-1, \"MenuText\", \"okay\", \"Okay\", \"font3.fnt\", 2, "
+                   "\"IGI_SDK_Apply() - MenuManager_LeaveMenus(900, 9)\", \"menu_ok\"), "
+                   "Task_New(-1, \"MenuText\", \"cancel\", \"Cancel\", \"font3.fnt\", 2, "
+                   "\"IGI_SDK_Cancel() - MenuManager_LeaveMenus(900, 9)\", \"menu_cancel\"))";
+        pageOut << "))";
+        return pageOut.str();
+    };
+
+    const auto pageStatements = [&]() {
+        std::string text;
+        for (std::size_t page = 0; page < pageCount; ++page) {
+            if (page > 0)
+                text += "\n";
+            text += pageScreen(page) + ";";
+        }
+        return text;
+    }();
+
+    if (standaloneManager) {
         out << "Task_DeclareParameters(\"MenuManager\", \"Current menuscreen\", \"Int32\", "
                "\"Resource path\", \"String256\", \"isOwnDisplay\", \"bool8\");\n"
                "Task_New(-1, \"MenuManager\", \"IGI SDK\", "
-            << config.screenId << ", \"LOCAL:menusystem/ingamemenu.res\", FALSE, ";
-    const bool commandList = menuNeedsCommandList(config);
-    // One row per control needs more height than the configured frame for most
-    // menus, so the frame is grown upwards to keep every control on screen.
-    const int frameY = commandList ? config.y : menuLayoutY(config);
-    const int frameHeight = commandList ? config.height : menuRequiredHeight(config);
-    out << "Task_New(" << config.screenId << ", \"MenuScreen\", \"IGI SDK\", \"\", " << config.x
-        << ", " << config.y << ", " << config.x + config.width << ", " << config.y + config.height
-        << ", \"IGI_SDK_Cancel() - MenuManager_PopScreen(FALSE)\", \"\", \"\", Task_New(-1, "
-           "\"MenuFrame\", \"\", \"\", "
-        << config.x << ", " << frameY << ", " << config.width << ", " << frameHeight
-        << ", 1, 4, 4, FALSE";
-    if (!config.title.empty()) {
-        out << ", Task_New(-1, \"MenuText\", \"title\", ";
-        quoted(out, config.title);
-        out << ", \"font3.fnt\", 2, \"\", \"\")";
-    }
-    // A control set that no longer fits the retail frame is rendered as one
-    // scrollable ListBox over the flattened command entries. Every configured
-    // option stays reachable instead of being drawn past the frame edge.
-    if (commandList) {
-        out << ", Task_New(-1, \"MenuFrame\", \"commands\", \"\", " << config.x << ", " << config.y
-            << ", " << config.width << ", " << config.height
-            << ", 8, 20, 4, TRUE, "
-               "Task_New(-1, \"MenuText\", \"\", \"Controls\", \"font3.fnt\", 2, \"\", \"\"), "
-               "Task_New("
-            << (config.screenId >= 0 ? config.screenId + 1 : -1)
-            << ", \"ListBox\", \"\", \"slide\", \"font1.fnt\", " << std::max(config.width - 20, 40)
-            << ", ";
-        quoted(out, "IGI_SDK_FillList(-1)");
-        out << ", ";
-        quoted(out, "IGI_SDK_GetList(-1)");
-        out << ", ";
-        quoted(out, "IGI_SDK_SetList(-1,this.nActiveID)");
-        out << ", ";
-        quoted(out, "IGI_SDK_SetList(-1,this.nActiveID)");
-        out << "))";
-    }
-    for (const auto &item : config.items) {
-        if (commandList)
-            break;
-        const auto index = &item - config.items.data();
-        const auto widgetId =
-            config.screenId >= 0 ? (config.screenId + 1 + static_cast<int>(index)) : -1;
-        if (item.kind == ModMenuItemKind::List || item.kind == ModMenuItemKind::Input) {
-            out << ", Task_New(-1, \"MenuFrame\", ";
-            quoted(out, item.id);
-            out << ", \"\", " << config.x << ", " << frameY << ", " << config.width
-                << ", 25, 8, 20, 4, TRUE, Task_New(-1, \"MenuText\", \"\", ";
-            quoted(out, item.label);
-            out << ", \"font3.fnt\", 2, \"\", \"\"), Task_New(" << widgetId
-                << ", \"ListBox\", \"\", \"slide\", \"font1.fnt\", 140, ";
-            quoted(out, "IGI_SDK_FillList(" + std::to_string(index) + ")");
-            out << ", ";
-            quoted(out, "IGI_SDK_GetList(" + std::to_string(index) + ")");
-            out << ", ";
-            quoted(out, "IGI_SDK_SetList(" + std::to_string(index) + ",this.nActiveID)");
-            out << ", ";
-            quoted(out, "IGI_SDK_SetList(" + std::to_string(index) + ",this.nActiveID)");
-            out << "))";
-        } else if (item.kind == ModMenuItemKind::Toggle) {
-            out << ", Task_New(-1, \"MenuFrame\", ";
-            quoted(out, item.id);
-            out << ", \"\", " << config.x << ", " << config.y << ", " << config.width
-                << ", 25, 8, 20, 4, TRUE, Task_New(-1, \"MenuText\", \"\", ";
-            quoted(out, item.label);
-            out << ", \"font3.fnt\", 2, \"\", \"\"), Task_New(" << widgetId
-                << ", \"ToggleBox\", \"\", ";
-            quoted(out, "IGI_SDK_GetToggle(" + std::to_string(index) + ")");
-            out << ", ";
-            quoted(out, "IGI_SDK_SetToggle(" + std::to_string(index) + ",this.isOn)");
-            out << "))";
-        } else {
-            out << ", Task_New(-1, \"MenuText\", ";
-            quoted(out, item.id);
-            out << ", ";
-            quoted(out, item.label);
-            out << ", \"font3.fnt\", 2, ";
-            if (item.kind == ModMenuItemKind::Action)
-                quoted(out, "IGI_SDK_Action(" + std::to_string(index) + ")");
-            else
-                quoted(out, "");
-            out << ", \"\")";
+            << firstScreenId << ", \"LOCAL:menusystem/ingamemenu.res\", FALSE, " << pageScreen(0)
+            << ");\n";
+        if (paged) {
+            // Extra pages are sibling MenuScreen tasks; the manager adopts them
+            // because the script runs in its context.
+            std::string remainder;
+            for (std::size_t page = 1; page < pageCount; ++page)
+                remainder += pageScreen(page) + ";\n";
+            out << remainder;
         }
+    } else {
+        out << pageStatements << "\n";
+        out << "MenuManager_RequestScreen(" << firstScreenId << ", FALSE);\n";
     }
-    out << ", Task_New(-1, \"MenuFrame\", \"ControlsFrame\", \"\", " << config.x << ", " << config.y
-        << ", " << config.width << ", 25, 8, 20, 4, TRUE, "
-        << "Task_New(-1, \"MenuText\", \"restart\", \"Restart\", \"font3.fnt\", 2, "
-           "\"IGI_SDK_Cancel() - MenuManager_LeaveMenus(900, 12)\", \"menu_ok\"), "
-        << "Task_New(-1, \"MenuText\", \"okay\", \"Okay\", \"font3.fnt\", 2, \"IGI_SDK_Apply() - "
-           "MenuManager_LeaveMenus(900, 9)\", \"menu_ok\"), "
-        << "Task_New(-1, \"MenuText\", \"cancel\", \"Cancel\", \"font3.fnt\", 2, "
-           "\"IGI_SDK_Cancel() - MenuManager_PopScreen(FALSE)\", \"menu_cancel\"))";
-    out << (standaloneManager ? ")));\n" : "));\n");
-    if (!standaloneManager)
-        out << "MenuManager_RequestScreen(" << config.screenId << ", FALSE);\n";
     return static_cast<bool>(out);
 }
 

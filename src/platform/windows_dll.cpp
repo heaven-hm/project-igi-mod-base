@@ -22,6 +22,9 @@ struct MainThreadState {
     bool initialized = false;
     bool directNativeMode = true;
     bool autoStart = false;
+    // The end key disables the menu without tearing anything down, so the retail
+    // game keeps its own menus and the start key can bring the mod back.
+    bool disabled = false;
     bool tickMissingReported = false;
     unsigned watchdogCounter = 0;
     unsigned autoStartCounter = 0;
@@ -140,6 +143,15 @@ void mainLoopTick(const igi::DllMenuCallbacks &callbacks, igi::hotkeys::KeyTrack
     }
 
     if (startRequested) {
+        if (g_state.disabled) {
+            g_state.disabled = false;
+            const bool reopened = callbacks.toggle ? callbacks.toggle() : false;
+            igi::log(reopened ? igi::LogLevel::Info : igi::LogLevel::Warning,
+                     reopened ? "internal menu: re-enabled by the configured start key"
+                              : "internal menu: re-enable requested; the menu opens on the next "
+                                "active gameplay frame");
+            return;
+        }
         if (!g_state.initialized) {
             if (callbacks.initialize && callbacks.initialize()) {
                 g_state.initialized = true;
@@ -223,34 +235,42 @@ DWORD WINAPI igiSdkMainThread(void *rawModule) {
     while (g_state.running.load(std::memory_order_acquire)) {
         mainLoopTick(callbacks, keys);
         const bool unloadRequested = g_state.unloadRequested.load(std::memory_order_acquire);
-        if (unloadRequested || (g_state.endKey && keys.isPressedOnce(g_state.endKey))) {
-            if (deactivateMenuRuntime(callbacks)) {
-                g_state.running.store(false, std::memory_order_release);
-                if (unloadRequested) {
-                    // Unloading is only safe once the retail hooks are restored.
-                    // Otherwise the game still calls into this module and freeing
-                    // it freezes the game.
-                    if (callbacks.hooksResident && callbacks.hooksResident()) {
-                        igi::log(igi::LogLevel::Error,
-                                 "safe unload refused: retail hooks are still installed; the mod "
-                                 "is disabled and the DLL stays resident until the game exits");
-                        g_state.running.store(false, std::memory_order_release);
-                        igi::log(igi::LogLevel::Info,
-                                 "internal host stopped; DLL remains resident safely");
-                        detachConsole();
-                        igi::closeLogFile();
-                        return 0;
-                    }
-                    igi::log(igi::LogLevel::Info,
-                             "safe unload: callbacks stopped; releasing DLL from its host thread");
-                    detachConsole();
-                    igi::closeLogFile();
-                    FreeLibraryAndExitThread(g_module, 0);
-                }
-                igi::log(igi::LogLevel::Info,
-                         "internal host stopped by configured end key; start key is disabled until "
-                         "the game exits");
+        const bool disableRequested = g_state.endKey && keys.isPressedOnce(g_state.endKey);
+        if (disableRequested && !unloadRequested) {
+            // Disabling must not release or delete anything the retail menu system
+            // still references: closing the screen is the only state change. The
+            // game keeps its own pause/main menus and the start key re-opens this
+            // menu, so no re-injection is needed.
+            if (g_state.initialized) {
+                const bool closed = callbacks.toggle ? callbacks.toggle() : false;
+                g_state.disabled = true;
+                igi::log(closed ? igi::LogLevel::Info : igi::LogLevel::Warning,
+                         closed ? "internal menu: disabled by the configured end key; press the "
+                                  "start key to re-enable"
+                                : "internal menu: disable requested; the menu closes on the next "
+                                  "frame");
             }
+        }
+        if (unloadRequested) {
+            if (!deactivateMenuRuntime(callbacks))
+                continue;
+            g_state.running.store(false, std::memory_order_release);
+            // Unloading is only safe once the retail hooks are restored. Otherwise
+            // the game still calls into this module and freeing it freezes the game.
+            if (callbacks.hooksResident && callbacks.hooksResident()) {
+                igi::log(igi::LogLevel::Error,
+                         "safe unload refused: retail hooks are still installed; the mod is "
+                         "disabled and the DLL stays resident until the game exits");
+                igi::log(igi::LogLevel::Info, "internal host stopped; DLL remains resident safely");
+                detachConsole();
+                igi::closeLogFile();
+                return 0;
+            }
+            igi::log(igi::LogLevel::Info,
+                     "safe unload: callbacks stopped; releasing DLL from its host thread");
+            detachConsole();
+            igi::closeLogFile();
+            FreeLibraryAndExitThread(g_module, 0);
         }
         igi::hotkeys::pollSleep();
     }

@@ -315,10 +315,21 @@ assert 'WeaponEntry{"Medipack", "WEAPON_ID_MEDIPACK", 50}' in HEAVEN, (
 
 # The retail menu cannot draw more rows than its frame holds, so a larger control
 # set must switch to the scrollable command list or options become unreachable.
-assert "menuNeedsCommandList(config)" in (
-    ROOT / "src/ui/menu_script.cpp"
-).read_text(encoding="utf-8"), (
-    "the generator must switch to the command-list layout when controls outgrow the frame"
+# Large menus keep the rich row layout and are paged across MenuScreens, so no
+# control collapses into a one-line selector.
+SCRIPT = (ROOT / "src/ui/menu_script.cpp").read_text(encoding="utf-8")
+assert "menuPageCount(config)" in SCRIPT and "kMenuRowsPerPage" in SCRIPT, (
+    "the generator must page large control sets instead of drawing a single line"
+)
+assert "Next Page >" in SCRIPT and "MenuManager_RequestScreen(" in SCRIPT, (
+    "page navigation must be baked into the generated retail script"
+)
+# The host must recognise every page screen and pop the whole pushed range.
+assert "igi::menuPageCount(menuConfig)" in INTERNAL_HOST, (
+    "the retail host must know how many page screens belong to the menu"
+)
+assert "closeCommandScript" in INTERNAL_HOST and "MenuManager_PopScreen(FALSE);" in INTERNAL_HOST, (
+    "closing must pop every page screen the menu pushed"
 )
 
 print(

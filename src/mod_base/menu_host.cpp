@@ -254,10 +254,19 @@ bool runMenuCommand(const char *resource, const char *operation) {
     return true;
 }
 
+// A large control set is emitted as several page screens sharing the reserved id
+// range, so any of those ids counts as "our menu is on screen".
 bool isConfiguredMenuScreenActive() {
     auto *manager = static_cast<const RetailMenuManagerLayout *>(IGI::OTHER::FLOW_GET_SCREEN());
-    return manager && manager->currentScreenId == menuConfig.screenId &&
-           IGI::TASK::FIND_BY_ID(menuConfig.screenId) != nullptr;
+    if (!manager)
+        return false;
+    const int pages = static_cast<int>(igi::menuPageCount(menuConfig));
+    for (int page = 0; page < pages; ++page) {
+        const int id = menuConfig.screenId + page;
+        if (manager->currentScreenId == id && IGI::TASK::FIND_BY_ID(id) != nullptr)
+            return true;
+    }
+    return false;
 }
 
 // Removes the injected MenuScreen task while the retail MenuManager is still
@@ -377,6 +386,16 @@ bool writeMenuResourceFile() {
     return output.good();
 }
 
+// Page navigation pushes one screen per page, so closing has to pop the whole
+// range we pushed or the game is left on a page screen.
+std::string closeCommandScript() {
+    const auto pages = igi::menuPageCount(menuConfig);
+    std::string script;
+    for (std::size_t page = 0; page < pages; ++page)
+        script += "MenuManager_PopScreen(FALSE);";
+    return script;
+}
+
 bool rebuildMenuResources() {
     std::vector<std::uint8_t> screen;
     std::vector<std::uint8_t> reopen;
@@ -386,7 +405,7 @@ bool rebuildMenuResources() {
         !igi::compileIgiMenuCommandScript("MenuManager_RequestScreen(" +
                                               std::to_string(menuConfig.screenId) + ", FALSE);",
                                           reopen, error) ||
-        !igi::compileIgiMenuCommandScript("MenuManager_PopScreen(FALSE);", close, error)) {
+        !igi::compileIgiMenuCommandScript(closeCommandScript(), close, error)) {
         igi::log(igi::LogLevel::Error,
                  std::string("internal menu resource compilation failed: ") + error);
         return false;

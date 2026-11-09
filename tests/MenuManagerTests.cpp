@@ -432,6 +432,7 @@ void menuCommandListTest() {
     const auto nine = nineScript.str();
     assert(nine.find("IGI_SDK_Action(0)") != std::string::npos);
     assert(nine.find("IGI_SDK_FillList(-1)") == std::string::npos);
+    assert(igi::menuPageCount(config) == 1);
     // The generated frame must use the grown geometry so no row is clipped.
     assert(nine.find(std::to_string(igi::menuLayoutY(config))) != std::string::npos);
 
@@ -459,12 +460,16 @@ void menuCommandListTest() {
     std::ostringstream script;
     assert(igi::writeIgiMenuScreenScript(script, config));
     const auto generated = script.str();
-    assert(generated.find("\"commands\"") != std::string::npos);
-    assert(generated.find("IGI_SDK_FillList(-1)") != std::string::npos);
-    assert(generated.find("IGI_SDK_SetList(-1,this.nActiveID)") != std::string::npos);
-    assert(generated.find("ListBox") != std::string::npos);
-    // Every control is now inside the command list instead of a frame row.
-    assert(generated.find("IGI_SDK_Action(0)") == std::string::npos);
+    // Large menus keep the row layout and are paged across MenuScreen tasks.
+    assert(generated.find("\"commands\"") == std::string::npos);
+    assert(generated.find("IGI_SDK_FillList(-1)") == std::string::npos);
+    assert(generated.find("Next Page >") != std::string::npos);
+    assert(generated.find("Prev Page") != std::string::npos);
+    assert(igi::menuPageCount(config) > 1);
+    for (std::size_t page = 0; page < igi::menuPageCount(config); ++page) {
+        const auto screenId = std::to_string(config.screenId + static_cast<int>(page));
+        assert(generated.find("Task_New(" + screenId + ", \"MenuScreen\"") != std::string::npos);
+    }
 
     // The generated resource must still compile for the retail script runtime.
     std::vector<std::uint8_t> qvm;

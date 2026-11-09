@@ -96,10 +96,25 @@ int main() {
     std::ostringstream script;
     assert(igi::writeIgiMenuScreenScript(script, config));
     const auto text = script.str();
-    assert(text.find("IGI_SDK_FillList(-1)") != std::string::npos);
-    assert(text.find("IGI_SDK_SetList(-1,this.nActiveID)") != std::string::npos);
+    // Every control keeps the rich row layout; large menus are paged instead of
+    // collapsing into a one-line selector.
+    assert(text.find("IGI_SDK_FillList(-1)") == std::string::npos);
     assert(text.find("ListBox") != std::string::npos);
     assert(text.find("IGI_SDK_Apply()") != std::string::npos);
+    const std::size_t pages = igi::menuPageCount(config);
+    assert(pages > 1);
+    assert(text.find("IGI_SDK_FillList(") != std::string::npos);
+    assert(text.find("ToggleBox") != std::string::npos ||
+           text.find("IGI_SDK_Action(") != std::string::npos);
+    assert(text.find("Next Page >") != std::string::npos);
+    assert(text.find("Prev Page") != std::string::npos);
+    // Each page is its own MenuScreen task inside the same resource.
+    for (std::size_t page = 0; page < pages; ++page) {
+        const auto screenId = std::to_string(config.screenId + static_cast<int>(page));
+        assert(text.find("Task_New(" + screenId + ", \"MenuScreen\"") != std::string::npos);
+    }
+    // A page switch is a retail screen request, not host-side state.
+    assert(text.find("MenuManager_RequestScreen(") != std::string::npos);
 
     // The generated resource must compile for the retail script runtime.
     std::vector<std::uint8_t> qvm;

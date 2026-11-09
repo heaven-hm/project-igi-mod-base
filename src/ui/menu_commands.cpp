@@ -26,6 +26,12 @@ std::size_t menuRowCapacity(const MenuConfig &config) {
     return usable > kReservedRows ? usable - kReservedRows : 0;
 }
 
+std::size_t menuPageCount(const MenuConfig &config) {
+    const auto rows = config.items.size() + (config.items.size() > kMenuRowsPerPage ? 1 : 0);
+    const std::size_t pages = (rows + kMenuRowsPerPage - 1) / kMenuRowsPerPage;
+    return pages == 0 ? 1 : pages;
+}
+
 int menuRequiredHeight(const MenuConfig &config) {
     const auto rows = static_cast<int>(config.items.size()) + 2;
     return rows * static_cast<int>(kRowHeight + kRowSpacing) + 8;
