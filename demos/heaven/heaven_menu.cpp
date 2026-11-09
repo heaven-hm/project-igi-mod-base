@@ -349,7 +349,11 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
 } // namespace
 
 bool configureModMenu(igi::MenuConfig &config) {
+#if defined(IGI_HEAVEN_ADVANCED)
+    config.title = "Heaven's Mod Advanced";
+#else
     config.title = "Heaven's Mod";
+#endif
     config.items = buildItems();
     config.renderEndFrame = [](igi::Runtime &runtime) {
         (void)igi::renderThirdPersonCrosshair(runtime);
