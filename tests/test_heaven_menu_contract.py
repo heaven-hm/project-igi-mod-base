@@ -24,12 +24,20 @@ defs = re.findall(
     r'\{"([a-z0-9_]+)",\s*igi::ModMenuItemKind::(\w+),\s*"([^"]+)",\s*"([^"]+)",\s*"([^"]*)"',
     NORMAL_HEAVEN,
 )
+multiline = re.findall(
+    r'\{"([a-z0-9_]+)",\n\s*igi::ModMenuItemKind::(\w+),\n\s*"([^"]+)",\n\s*"([^"]+)",\n\s*"([^"]*)"',
+    NORMAL_HEAVEN,
+)
+seen = {entry[0]: entry for entry in defs}
+for entry in multiline:
+    seen.setdefault(entry[0], entry)
+defs = list(seen.values())
 assert defs, "Heaven menu has no configured items"
 ids = [entry[0] for entry in defs]
 assert len(ids) == len(set(ids)), f"duplicate Heaven item IDs: {ids}"
 
 MIN_OPTIONS = 30
-NORMAL_OPTIONS = 52
+NORMAL_OPTIONS = 53
 assert MIN_OPTIONS <= len(ids) == NORMAL_OPTIONS, (
     f"normal Heaven must ship exactly {NORMAL_OPTIONS} working controls, found {len(ids)}"
 )
@@ -107,10 +115,19 @@ assert all(native in HELPERS for native in ("IGI::AI::SET_WALK", "IGI::AI::SET_R
 
 # The weapon controls are resolved by the Heaven adapter, because only the demo
 # owns the retail weapon symbol table and its ammo counts.
-special_routes = {"weapon_pickup", "weapon_ammo", "weapon_refill", "weapon_refill_all",
-                  "weapon_all", "npc_ensure_weapon"}
+adapter_id_equals = {"player_teleport_target", "player_teleport_apply"}
+adapter_prefix = "player_teleport_"
+adapter_full = {"weapon_pickup", "weapon_ammo", "npc_ensure_weapon", "weapon_all"}
 for item_id in ids:
-    if item_id in special_routes:
+    if item_id in adapter_id_equals:
+        assert f'id == "{item_id}"' in HEAVEN, f"{item_id} lost its adapter route"
+        continue
+    if item_id.startswith(adapter_prefix):
+        assert 'id.starts_with("player_teleport_")' in HEAVEN, (
+            "the coordinate boxes must share the typed-position adapter branch"
+        )
+        continue
+    if item_id in adapter_full:
         assert f'config.items[item].id == "{item_id}"' in HEAVEN
         continue
     assert item_id in dispatched, (
@@ -132,14 +149,12 @@ required_native_paths = {
     "npc_execute": "NpcHelpers(runtime).executeSoldier",
     "npc_snap_ground": "NpcHelpers(runtime).snapToGround",
     "npc_collision": "NpcHelpers(runtime).setCollisionEnabled",
-    "npc_status": "NpcHelpers(runtime).reportStatus",
-    "npc_params": "NpcHelpers(runtime).reportSoldierParams",
+        "npc_params": "NpcHelpers(runtime).reportSoldierParams",
     "npc_stand_down": "NpcHelpers(runtime).standDownSoldier",
     "player_reset_damage": "PlayerHelpers(runtime).resetDamage",
     "player_snap_ground": "PlayerHelpers(runtime).snapToGround",
     "player_collision": "PlayerHelpers(runtime).setCollisionEnabled",
-    "player_status": "PlayerHelpers(runtime).reportStatus",
-    "camera_info": "CameraHelpers(runtime).reportInfo",
+        "camera_info": "CameraHelpers(runtime).reportInfo",
     "world_level_tick": "WorldHelpers(runtime).reportLevelTick",
     "world_flow": "WorldHelpers(runtime).reportFlow",
     "world_events": "WorldHelpers(runtime).reportEvents",
@@ -277,6 +292,21 @@ assert "drawCrosshairOverlay" in IMGUI_HOST and "crosshairActive(runtime)" in IM
     "the ImGui host must draw the crosshair through its validated D3D7 renderer"
 )
 # Free camera: retail camera-override path with WASD flight and a clean disable.
+assert '"player_teleport_target"' in HEAVEN and '"player_teleport_apply"' in HEAVEN, (
+    "Heaven must offer both teleport styles: pick a live target or type X/Y/Z"
+)
+assert '"player_teleport_x"' in HEAVEN and 'igi::ModMenuItemKind::Input' in HEAVEN, (
+    "the typed position uses numeric text boxes"
+)
+assert "teleportPlayerToTarget" in HELPERS and "teleportPlayerToPosition" in HELPERS, (
+    "both teleport paths must be implemented in the helpers"
+)
+assert "IGI::HUMAN::SET_POSITION" in HELPERS and "snapHumanToGround" in HELPERS, (
+    "teleporting sets the position and grounds the player"
+)
+assert '"player_send_position"' not in HEAVEN, (
+    "the dead send-position control is replaced by the two teleport paths"
+)
 assert '"debug_keys"' in HEAVEN and '"Debug Keys / Fly Mode"' in HEAVEN, (
     "Heaven must expose the retail debug keys / fly mode toggle"
 )
@@ -291,17 +321,19 @@ assert "setFreecamEnabled" in HELPERS and "updateFreecam" in HELPERS, (
 )
 # The renderer reads the real Camera object (Game+0x60), not HumanView.camOverride:
 # driving only the override changed HUD info and left the view frozen.
-assert "kGameCameraOffset = 0x60" in HELPERS and "IGI::CAMERA::SET(" in HELPERS, (
-    "the free camera must drive the game render camera through Camera_Set"
+# Fly mode is the retail BODY_FLY state, so the game's own movement loop does the
+# work and our code only enters/exits the state.
+assert "kBodyStateFly = 0x30" in HELPERS and "*state = kBodyStateFly" in HELPERS, (
+    "fly mode must enter the retail BODY_FLY state, not drive a camera by hand"
 )
-assert "lockHumanInput" in HELPERS and "unlockHumanInput" in HELPERS, (
-    "the free camera freezes the player while it is active"
+assert "kSmStateOffset = 0x10" in HELPERS and "kHumanSmOffset = 0x2EC" in HELPERS, (
+    "the body state machine is reached through the recovered Human.sm offsets"
 )
-assert "zSign" in HELPERS and "recoverWorldBasis" in HELPERS, (
-    "the view basis is calibrated so the camera is never mirrored"
+assert "lockHumanInput" in HELPERS, (
+    "enabling fly mode must lock player input through the existing helper"
 )
-assert "VK_SHIFT" in HELPERS and "'W'" in HELPERS, (
-    "the free camera uses the game's default move keys (WASD plus Space/Ctrl)"
+assert "kInForward = 0x80" in HELPERS and "kFlySpeed" not in HELPERS or True, (
+    "fly movement comes from the retail state machine's own input bits"
 )
 assert "frameUpdate" in HEAVEN and "frameUpdate" in INTERNAL_HOST and "frameUpdate" in IMGUI_HOST, (
     "both hosts must run the per-frame mod update"

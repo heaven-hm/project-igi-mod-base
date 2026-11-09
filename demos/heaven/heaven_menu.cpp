@@ -4,6 +4,8 @@
 
 #include <array>
 #include <charconv>
+#include <cstdlib>
+#include <charconv>
 #include <cstddef>
 #include <string>
 #include <string_view>
@@ -35,6 +37,8 @@ constexpr std::array kWeaponLabels = {"Glock 17",   "MP5SD",        "Uzi",    "M
 // Selected weapon index and the ammo amount the user typed into the text box.
 std::size_t g_selectedWeapon = 0;
 int g_refillAmmo = 120;
+// Typed teleport coordinates.
+double g_teleportPos[3] = {0.0, 0.0, 0.0};
 
 constexpr std::array kLevelLabels = {"Level 1",  "Level 2",  "Level 3",  "Level 4", "Level 5",
                                      "Level 6",  "Level 7",  "Level 8",  "Level 9", "Level 10",
@@ -140,30 +144,36 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
          "Player",
          "HumanCollision",
          {"Enabled", "Disabled"}},
-        {"player_status",
-         igi::ModMenuItemKind::Action,
-         "Player Status",
-         "Player",
-         "LogGameState",
-         {}},
-        {"player_send_position",
-         igi::ModMenuItemKind::Action,
-         "Send Player Position",
-         "Player",
-         "PlayerSendPosition",
-         {}},
-        {"player_flag_d44",
+        {"player_teleport_target",
          igi::ModMenuItemKind::List,
-         "Player Flag D44",
+         "Teleport Player To Target",
          "Player",
-         "HumanPlayerSetFlagD44",
-         {"Enabled", "Disabled"}},
-        {"player_flag_d68",
-         igi::ModMenuItemKind::List,
-         "Player Flag D68",
+         "PlayerTeleportTarget",
+         {"No live target list"}},
+        {"player_teleport_x",
+         igi::ModMenuItemKind::Input,
+         "Position X",
          "Player",
-         "HumanPlayerSetFlagD68",
-         {"Enabled", "Disabled"}},
+         "PlayerPosX",
+         {}},
+        {"player_teleport_y",
+         igi::ModMenuItemKind::Input,
+         "Position Y",
+         "Player",
+         "PlayerPosY",
+         {}},
+        {"player_teleport_z",
+         igi::ModMenuItemKind::Input,
+         "Position Z",
+         "Player",
+         "PlayerPosZ",
+         {}},
+        {"player_teleport_apply",
+         igi::ModMenuItemKind::Action,
+         "Move Player To Position",
+         "Player",
+         "PlayerTeleportApply",
+         {}},
 
         // Camera
         {"view",
@@ -360,11 +370,19 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
         item.nativeAction = std::string(definition.action);
         item.values = definition.values;
         if (item.kind == igi::ModMenuItemKind::Input) {
-            // Ammo text box: typed exactly by the user, applied on demand.
-            item.inputValue = 120;
-            item.inputMinimum = 1;
-            item.inputMaximum = 9999;
-            item.inputStep = 30;
+            // Ammo text box: typed exactly by the user, applied on demand. The
+            // teleport boxes accept signed world coordinates.
+            if (item.id == "weapon_ammo") {
+                item.inputValue = 120;
+                item.inputMinimum = 1;
+                item.inputMaximum = 9999;
+                item.inputStep = 30;
+            } else {
+                item.inputValue = 0;
+                item.inputMinimum = -1000000;
+                item.inputMaximum = 1000000;
+                item.inputStep = 100;
+            }
         }
         items.push_back(std::move(item));
     }
@@ -451,6 +469,50 @@ void runModMenu(const igi::MenuConfig &config, igi::Runtime &runtime, std::size_
         const auto parsed = std::from_chars(value.data(), value.data() + value.size(), ammo);
         if (parsed.ec == std::errc{} && ammo > 0)
             g_refillAmmo = ammo;
+    }
+    if (inRange && config.items[item].id == "player_teleport_target") {
+        const auto targetId = igi::parseTargetId(value);
+        auto *npc = igi::selectedNpc(runtime);
+        auto *car = igi::selectedCar(runtime);
+        auto *heli = igi::selectedHeli(runtime);
+        // The menu selection decides which live object the player moves to.
+        const bool placed = igi::teleportPlayerToTarget(runtime, targetId);
+        igi::log(placed ? igi::LogLevel::Info : igi::LogLevel::Warning,
+                 placed ? "player teleported to the selected target"
+                        : "teleport rejected: select a live NPC/car/heli target first");
+        (void)npc;
+        (void)car;
+        (void)heli;
+        return;
+    }
+    if (inRange && config.items[item].id == "player_teleport_apply") {
+        const bool placed = igi::teleportPlayerToPosition(
+            runtime, {g_teleportPos[0], g_teleportPos[1], g_teleportPos[2]});
+        igi::log(placed ? igi::LogLevel::Info : igi::LogLevel::Warning,
+                 placed ? "player moved to the typed position"
+                        : "teleport rejected: enter all three coordinates first");
+        return;
+    }
+    if (inRange && config.items[item].id.starts_with("player_teleport_") &&
+        config.items[item].id != "player_teleport_target" &&
+        config.items[item].id != "player_teleport_apply") {
+        const std::string typed(value);
+        char *end = nullptr;
+        const double coordinate = std::strtod(typed.c_str(), &end);
+        if (end == typed.c_str() || *end != '\0') {
+            igi::log(igi::LogLevel::Warning,
+                     "teleport coordinate rejected: '" + std::string(value) + "' is not a number");
+            return;
+        }
+        if (config.items[item].id == "player_teleport_x")
+            g_teleportPos[0] = coordinate;
+        else if (config.items[item].id == "player_teleport_y")
+            g_teleportPos[1] = coordinate;
+        else
+            g_teleportPos[2] = coordinate;
+        igi::log(igi::LogLevel::Info, "teleport " + std::string(config.items[item].id) +
+                                          " set to " + std::to_string(coordinate));
+        return;
     }
     if (inRange && config.items[item].id == "npc_ensure_weapon") {
         auto *npc = igi::selectedNpc(runtime);

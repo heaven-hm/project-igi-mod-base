@@ -6,6 +6,7 @@
 
 #include <array>
 #include <cstddef>
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -278,6 +279,12 @@ bool setFreecamEnabled(Runtime &runtime, bool enabled);
 bool freecamEnabled();
 // Per-frame free camera update. Call from a displayed-frame callback.
 bool updateFreecam(Runtime &runtime);
+// Parses a "Name [#taskId]" menu choice into its task id (-1 when not a target).
+int parseTargetId(std::string_view value);
+// Moves the live player next to the selected NPC/car/heli target.
+bool teleportPlayerToTarget(Runtime &runtime, int targetTaskId);
+// Moves the live player to a typed world position.
+bool teleportPlayerToPosition(Runtime &runtime, const std::array<double, 3> &position);
 // Retail-sprite draw for the QVM menu host (no Dear ImGui there).
 bool renderThirdPersonCrosshair(Runtime &runtime);
 bool changeLevel(Runtime &runtime, int levelId);
