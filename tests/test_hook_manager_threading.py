@@ -83,6 +83,16 @@ def test_runtime_shutdown_retires_hooks_instead_of_patching_live_code():
     # A resident module keeps its native bindings alive for in-flight callbacks.
     assert "hooks_.resident()" in runtime
     assert "native bindings stay loaded" in runtime
+    # Retiring must also make every detour a pass-through, otherwise the game
+    # keeps seeing mod behaviour (for example edited menu strings) after eject.
+    assert "hookBehaviorActive.store(false" in uninstall
+    for detour in (
+        "displayAddFrameCallbackDetour",
+        "displayRunCallbacksDetour",
+        "menuManagerGetStringDetour",
+    ):
+        text = body(detour)
+        assert "hookBehaviorActive.load" in text, f"{detour} must pass through when retired"
 
 
 if __name__ == "__main__":

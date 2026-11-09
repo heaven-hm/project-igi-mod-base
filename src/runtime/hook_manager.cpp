@@ -22,6 +22,10 @@ std::atomic<igi::Scheduler *> activeScheduler{nullptr};
 // Set while a Display_RunCallbacks detour is walking the game's callback list so
 // the list-registered IGISDK_Tick does not run a second time in the same frame.
 std::atomic<bool> frameTickHandled{false};
+// True while the mod owns game behaviour. Retiring the mod clears it so every
+// installed detour becomes a pure pass-through: the retail code stays untouched
+// but the game returns to its own behaviour (menu strings, frame dispatch).
+std::atomic<bool> hookBehaviorActive{true};
 
 bool addHookCreated = false;
 bool runHookCreated = false;
@@ -186,6 +190,8 @@ void recordFrameDispatchThread() noexcept {
 // the game's callback is installed, then makes sure our tick is still present so a
 // display reset cannot silently drop it.
 extern "C" int __cdecl displayAddFrameCallbackDetour(void *callback) {
+    if (!hookBehaviorActive.load(std::memory_order_acquire))
+        return displayAddFrameCallbackOriginal ? displayAddFrameCallbackOriginal(callback) : 0;
     const int result =
         displayAddFrameCallbackOriginal ? displayAddFrameCallbackOriginal(callback) : 0;
     tickRegistrationRequested.store(true, std::memory_order_release);
@@ -196,6 +202,8 @@ extern "C" int __cdecl displayAddFrameCallbackDetour(void *callback) {
 // from ScreenDraw. It suppresses the duplicate list-walk tick, runs the original
 // frame dispatch, then drains the scheduler for the completed frame.
 extern "C" int __cdecl displayRunCallbacksDetour() {
+    if (!hookBehaviorActive.load(std::memory_order_acquire))
+        return displayRunCallbacksOriginal ? displayRunCallbacksOriginal() : 0;
     runDispatchActive.store(true, std::memory_order_release);
     recordFrameDispatchThread();
     processFrameTickRequests();
@@ -210,6 +218,10 @@ extern "C" int __cdecl displayRunCallbacksDetour() {
 extern "C" const char *__cdecl menuManagerGetStringDetour(void *mm, const char *name) {
     const char *res =
         menuManagerGetStringOriginal ? menuManagerGetStringOriginal(mm, name) : nullptr;
+    // This hook edits the returned menu string. Once the mod is retired the game
+    // must see its own strings again, otherwise its own menus break.
+    if (!hookBehaviorActive.load(std::memory_order_acquire))
+        return res;
     if (res && std::strncmp(res, "RM: ", 4) == 0) {
         char *mutableRes = const_cast<char *>(res);
         std::memmove(mutableRes, res + 4, std::strlen(res + 4) + 1);
@@ -295,6 +307,7 @@ bool installDisplayFrameHook(igi::Scheduler &scheduler, void *&trampolineOut) {
         getStringHookCreated = false;
     }
 
+    hookBehaviorActive.store(true, std::memory_order_release);
     trampolineOut = reinterpret_cast<void *>(displayAddFrameCallbackOriginal);
 
     tickRegistrationRequested.store(true, std::memory_order_release);
@@ -403,13 +416,15 @@ bool HookManager::uninstall(bool restoreHooks) noexcept {
     }
 
     if (!restoreHooks) {
-        // Safe retire: the callback is out of the retail list and the scheduler is
-        // detached, so every hook is inert. Leaving the detours installed keeps the
-        // game's own code untouched while the module stays resident.
+        // Safe retire: the callback leaves the retail list, the scheduler is
+        // detached and every detour becomes a pass-through. The game therefore
+        // returns to its own behaviour (including its own menu strings) while its
+        // code stays untouched and this module stays resident.
+        hookBehaviorActive.store(false, std::memory_order_release);
         retired_ = true;
         log(LogLevel::Info,
-            "IGI 1 display frame hooks retired in place; retail code left untouched and the "
-            "module stays resident");
+            "IGI 1 display frame hooks retired in place: detours are pass-through, retail code "
+            "left untouched and the module stays resident");
         return true;
     }
 

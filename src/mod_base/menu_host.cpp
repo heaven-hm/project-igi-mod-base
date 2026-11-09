@@ -260,10 +260,31 @@ bool isConfiguredMenuScreenActive() {
            IGI::TASK::FIND_BY_ID(menuConfig.screenId) != nullptr;
 }
 
+// Removes the injected MenuScreen task while the retail MenuManager is still
+// alive. The retail pop only takes the screen off the stack, so a leftover child
+// would keep sitting in front of the game's own screens (the pause menu would
+// open behind a dead screen). Must run before the QVM resource is released.
+void releaseInjectedMenuScreen() {
+#if defined(_WIN32)
+    auto *screen = IGI::TASK::FIND_BY_ID(menuConfig.screenId);
+    if (!screen) {
+        if (menuScreenCreated)
+            igi::log(igi::LogLevel::Info,
+                     "internal unload: injected menu screen already detached from task id " +
+                         std::to_string(menuConfig.screenId));
+        return;
+    }
+    igi::log(igi::LogLevel::Info, "internal unload: deleting leftover menu screen task id " +
+                                      std::to_string(menuConfig.screenId));
+    IGI::TASK::DELETE_TASK(screen);
+#endif
+}
+
 void completeShutdownOnGameThread() {
 #if defined(_WIN32)
     unregisterEndFrameCallback();
 #endif
+    releaseInjectedMenuScreen();
     IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, "IGI SDK Mod Menu: disabled");
     menuRegistration.stop();
     menuCallbacks.reset();
@@ -600,6 +621,7 @@ bool prepareMenuForLevelChange() {
 #if defined(_WIN32)
     unregisterEndFrameCallback();
 #endif
+    releaseInjectedMenuScreen();
     if (menuBridge)
         menuBridge->cancel();
     else if (!resumeFromMenu(runtime))
