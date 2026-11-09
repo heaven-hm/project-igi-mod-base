@@ -247,6 +247,18 @@ assert "WeaponGunPickup" in HELPERS and "IGI::PLAYER::PICK_UP_WEAPON(npc, args)"
 assert "IGI::SOLDIER::ENSURE_WEAPON(npc)" in HELPERS, (
     "NPC equip must still claim retail weapon slot 0"
 )
+# WeaponType.sightDisplay sits at 0x614 (IGI-RE weapontypes.h: six 0x100 blocks
+# after the 0x10 header). Reading 0x61C hits the model-name string, which made
+# the third-person crosshair gate never match.
+assert "std::byte unused[0x614];" in HELPERS and "0x614);" in HELPERS, (
+    "the crosshair gate must read WeaponType.sightDisplay at its recovered offset"
+)
+assert "std::byte unused[0x61C]" not in HELPERS, (
+    "the stale sightDisplay offset must not come back"
+)
+assert "IGI::OTHER::DRAW_SPRITE_Z" in HELPERS and "kStatusScreenCrossSpriteOffset = 0x74" in HELPERS, (
+    "the crosshair must draw the retail STATUSSCREEN:cross sprite at 0x74"
+)
 assert "IGI::WEAPON::DROP" in HELPERS and "WeaponHelpers::dropCurrentWeapon" in HELPERS, (
     "drop weapon must use the retail Weapon_Drop lifecycle"
 )

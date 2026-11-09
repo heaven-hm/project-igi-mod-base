@@ -54,12 +54,19 @@ static_assert(sizeof(RetailVec3d) == 24);
 // Largest node id the retail graph accepts (Graph_AddNode rejects id >= 1000).
 constexpr int kMaxGraphNodes = 1000;
 
+// Retail WeaponType layout (IGI-RE weapontypes.h): six 0x100 name/text blocks
+// start at 0x10, so `category` is at 0x610 and `sightDisplay` at 0x614.
+// Reading 0x61C instead lands inside the model-name string, which is why the
+// third-person crosshair gate never matched.
 struct WeaponTypeHudLayout {
-    std::byte unused[0x61C];
+    std::byte unused[0x614];
     int sightDisplay;
 };
 
-static_assert(offsetof(WeaponTypeHudLayout, sightDisplay) == 0x61C);
+static_assert(offsetof(WeaponTypeHudLayout, sightDisplay) == 0x614);
+// SIGHTDISPLAYTYPE_CROSSHAIR: the weapon wants the retail cross sprite.
+constexpr int kSightDisplayCrosshair = 1;
+constexpr int kSightDisplayNone = 0;
 
 constexpr std::size_t kStatusScreenCrossSpriteOffset = 0x74;
 
@@ -500,40 +507,84 @@ bool setThirdPersonCrosshairEnabled(Runtime &runtime, bool enabled) {
     return true;
 }
 
+namespace {
+// The crosshair runs every frame, so a problem must be reported once per cause
+// instead of every frame or not at all.
+void reportCrosshairState(std::string_view reason) {
+    static std::string lastReason;
+    if (lastReason == reason)
+        return;
+    lastReason = std::string(reason);
+    if (reason.empty())
+        return;
+    log(LogLevel::Info, "third-person crosshair: " + std::string(reason));
+}
+} // namespace
+
 bool renderThirdPersonCrosshair(Runtime &runtime) {
     if (!g_thirdPersonCrosshairEnabled.load(std::memory_order_acquire) ||
         !requireLiveGameThread(runtime))
         return false;
     auto *player = reinterpret_cast<IGI::Human *>(IGI::GAME::GET_PLAYER(0));
-    if (!player)
+    if (!player) {
+        reportCrosshairState("no live player");
         return false;
+    }
     IGI::HumanCameraInfo camera{};
     IGI::HUMAN::GET_CAMERA_INFO(player, &camera);
-    if (camera.mode != 2)
+    if (camera.mode != 2) {
+        reportCrosshairState("waiting for third-person camera");
         return false;
+    }
     auto *weapon = IGI::HUMAN::GET_WEAPON(player);
-    if (!weapon)
+    if (!weapon) {
+        reportCrosshairState("player has no weapon task");
         return false;
+    }
     auto *weaponType = IGI::WEAPON::WEAPON_GET_TYPE(weapon);
-    if (!weaponType || reinterpret_cast<const WeaponTypeHudLayout *>(weaponType)->sightDisplay != 1)
+    if (!weaponType) {
+        reportCrosshairState("weapon type unavailable");
         return false;
+    }
+    const int sightDisplay =
+        reinterpret_cast<const WeaponTypeHudLayout *>(weaponType)->sightDisplay;
+    if (sightDisplay == kSightDisplayNone)
+        return false;
+    if (sightDisplay != kSightDisplayCrosshair) {
+        // Scoped weapons draw their own sight; report it once instead of silently
+        // rendering nothing frame after frame.
+        static int reportedSight = -1;
+        if (reportedSight != sightDisplay) {
+            reportedSight = sightDisplay;
+            log(LogLevel::Info, "third-person crosshair skipped: weapon sight display type " +
+                                    std::to_string(sightDisplay));
+        }
+        return false;
+    }
     auto *statusScreen = IGI::OTHER::STATUS_SCREEN_GET();
     auto *displayMode = IGI::OTHER::DISPLAY_GET_MODE();
-    if (!statusScreen || !displayMode || displayMode->width <= 0 || displayMode->height <= 0)
+    if (!statusScreen || !displayMode || displayMode->width <= 0 || displayMode->height <= 0) {
+        reportCrosshairState("status screen or display mode unavailable");
         return false;
+    }
     auto *cross = reinterpret_cast<IGI::Sprite *>(reinterpret_cast<std::byte *>(statusScreen) +
                                                   kStatusScreenCrossSpriteOffset);
     const int width = IGI::OTHER::SPRITE_WIDTH(cross);
     const int height = IGI::OTHER::SPRITE_HEIGHT(cross);
-    if (width <= 0 || height <= 0)
+    if (width <= 0 || height <= 0) {
+        reportCrosshairState("cross sprite is not loaded yet");
         return false;
+    }
     const float centerX = static_cast<float>(displayMode->width) * 0.5F;
     const float centerY = static_cast<float>(displayMode->height) * 0.5F;
     const float halfWidth = static_cast<float>(width) * 0.5F;
     const float halfHeight = static_cast<float>(height) * 0.5F;
     const float x = centerX - std::nearbyint(halfWidth);
     const float y = centerY - std::nearbyint(halfHeight);
+    // Same draw the retail HUD handler uses (IGI-RE gun.c Gun_HudHandler):
+    // centre of the display, mid-grey, z 1.0.
     IGI::OTHER::DRAW_SPRITE_Z(cross, x, y, 128.0F, 128.0F, 128.0F, 0, 0, 0, 1.0F);
+    reportCrosshairState("drawing at the display centre");
     return true;
 }
 
