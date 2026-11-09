@@ -34,6 +34,11 @@ struct CarControlArg {
     float *input;
 };
 
+struct HeliControlArg {
+    int tick;
+    float *axes;
+};
+
 struct DisplayMode {
     int unk0;
     int width;
@@ -298,6 +303,7 @@ inline constexpr std::uint32_t SOLDIER_STATE18_UPDATE = 0x0045ab00;
 inline constexpr std::uint32_t GUN_GET_EVENT4 = 0x00477c40;
 inline constexpr std::uint32_t HUMAN_CAMERA_FIND_HUMAN = 0x00482880;
 inline constexpr std::uint32_t HELI_FIND_DOOR = 0x00431ac0;
+inline constexpr std::uint32_t HELI_CONTROL = 0x00431b70;
 inline constexpr std::uint32_t GRAPH_GET_WORLD_POS = 0x004f92e0;
 inline constexpr std::uint32_t AI_FUNCTION_SET_EVENT_PRIORITY = 0x0044e0c0;
 inline constexpr std::uint32_t SOUND_GET_RATE = 0x004e6050;
@@ -588,6 +594,7 @@ NATIVE_DECL void GET_GUNNER_POS(Car *c, Vec3d *pos, Matrix *m);
 NATIVE_DECL long double GET_TRACK_FACTOR(Car *c, int joint);
 NATIVE_DECL void CAR_EXPLODE(Car *car);
 NATIVE_DECL Task *FIND_DOOR(Heli *h);
+NATIVE_DECL void HELI_CONTROL(Heli *h, HeliControlArg *arg);
 NATIVE_DECL void HELI_GET_PARAM_TABLE(Heli *h, void **out);
 NATIVE_DECL void HELI_GET_SOUND_PARAMS(Heli *h, void **out);
 NATIVE_DECL void GET_STATE_SIZE(Heli *h, int *out);

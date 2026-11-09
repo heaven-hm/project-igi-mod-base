@@ -33,8 +33,11 @@ NORMAL_OPTIONS = 50
 assert MIN_OPTIONS <= len(ids) == NORMAL_OPTIONS, (
     f"normal Heaven must ship exactly {NORMAL_OPTIONS} working controls, found {len(ids)}"
 )
-assert "#if defined(IGI_HEAVEN_ADVANCED)" in HEAVEN and '"npc_movement"' in HEAVEN, (
-    "Heaven Advanced must add its selected-NPC movement control without changing normal Heaven"
+ADVANCED_HEAVEN = HEAVEN.split("#if defined(IGI_HEAVEN_ADVANCED)", 1)[1]
+assert "#if defined(IGI_HEAVEN_ADVANCED)" in HEAVEN and all(
+    marker in ADVANCED_HEAVEN for marker in ('"npc_movement"', '"heli_reset"')
+), (
+    "Heaven Advanced must add its live NPC and helicopter controls without changing normal Heaven"
 )
 
 categories = {"Weapons", "Player", "Camera", "World", "Vehicles", "AI / NPC"}
@@ -87,6 +90,9 @@ DISPATCHER = HELPERS[dispatcher_start:dispatcher_end]
 dispatched = set(re.findall(r'id == "([a-z0-9_]+)"', DISPATCHER))
 assert 'id == "npc_movement"' in DISPATCHER, (
     "Heaven Advanced selected-NPC movement must have a dedicated game-thread route"
+)
+assert 'id == "heli_reset"' in DISPATCHER and "VehicleHelpers(runtime).resetHeli" in DISPATCHER, (
+    "Heaven Advanced selected-helicopter reset must have a dedicated game-thread route"
 )
 assert all(native in HELPERS for native in ("IGI::AI::SET_WALK", "IGI::AI::SET_RUN", "IGI::AI::CLEAR_MOVE")), (
     "selected-NPC movement must use the catalogued HumanAI retail calls"

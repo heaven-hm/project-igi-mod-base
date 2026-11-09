@@ -620,6 +620,10 @@ NATIVE_DECL void CAR_EXPLODE(Car *car) {
 NATIVE_DECL Task *FIND_DOOR(Heli *h) {
     return NATIVE_INVOKE<Task *>(HASH::HELI_FIND_DOOR, "Task *Heli_FindDoor(Heli *h)", h);
 }
+NATIVE_DECL void HELI_CONTROL(Heli *h, HeliControlArg *arg) {
+    return NATIVE_INVOKE<Void>(HASH::HELI_CONTROL, "void Heli_Control(Heli *h, ControlArg *arg)", h,
+                               arg);
+}
 NATIVE_DECL void HELI_GET_PARAM_TABLE(Heli *h, void **out) {
     return NATIVE_INVOKE<Void>(HASH::HELI_GET_PARAM_TABLE,
                                "void Heli_GetParamTable(Heli *h, void **out)", h, out);
@@ -1434,7 +1438,7 @@ NATIVE_DECL int SPRITE_HEIGHT(Sprite *sprite) {
 }
 } // namespace OTHER
 std::size_t NativeBindingCount() noexcept {
-    return 335;
+    return 336;
 }
 } // namespace IGI
 #undef NATIVE_INVOKE

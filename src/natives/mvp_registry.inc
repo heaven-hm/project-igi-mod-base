@@ -452,6 +452,9 @@ if (!catalogue.add({0x0042fc40, "Car_Explode", "IGI-RE", "entry", "void Car_Expl
 if (!catalogue.add({0x00431ac0, "Heli_FindDoor", "IGI-RE", "entry", "Task *Heli_FindDoor(Heli *h)",
                     NativeVerification::Exposed}))
     return false;
+if (!catalogue.add({0x00431b70, "Heli_Control", "IGI-RE", "entry",
+                    "void Heli_Control(Heli *h, ControlArg *arg)", NativeVerification::Exposed}))
+    return false;
 if (!catalogue.add({0x00431b60, "Heli_GetParamTable", "IGI-RE", "entry",
                     "void Heli_GetParamTable(Heli *h, void **out)", NativeVerification::Exposed}))
     return false;

@@ -806,6 +806,14 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
         } else {
             log(LogLevel::Warning, "heli info rejected: vehicle native was unavailable");
         }
+    } else if (id == "heli_reset") {
+        auto *heli = reinterpret_cast<IGI::Heli *>(
+            findLiveTarget(runtime, g_selectedHeliTaskId, isHeliTask));
+        if (!heli) {
+            log(LogLevel::Warning, "heli reset rejected: selected helicopter was unavailable");
+        } else if (!VehicleHelpers(runtime).resetHeli(heli)) {
+            log(LogLevel::Warning, "heli reset rejected: Heli_Control was unavailable");
+        }
     } else if (id == "vehicle_info") {
         auto *car =
             reinterpret_cast<IGI::Car *>(findLiveTarget(runtime, g_selectedCarTaskId, isCarTask));
@@ -2021,6 +2029,16 @@ bool VehicleHelpers::resetCar(IGI::Car *car) const {
     float input[4] = {0.0F, -1.0F, -2.0F, -1.0F};
     IGI::CarControlArg reset{0, input};
     IGI::VEHICLE::CAR_CONTROL(car, &reset);
+    return true;
+}
+bool VehicleHelpers::resetHeli(IGI::Heli *heli) const {
+    if (!requireLiveGameThread(runtime_) || !heli)
+        return false;
+    if (!isCallableNative(IGI::HASH::HELI_CONTROL, "void Heli_Control(Heli *h, ControlArg *arg)"))
+        return false;
+    float axes[5] = {0.0F, 0.0F, 0.0F, -1.0F, -2.0F};
+    IGI::HeliControlArg reset{0, axes};
+    IGI::VEHICLE::HELI_CONTROL(heli, &reset);
     return true;
 }
 bool VehicleHelpers::driveCar(IGI::Car *car, float throttle, bool brake) const {

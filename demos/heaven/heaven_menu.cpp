@@ -353,6 +353,13 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
     movement.nativeAction = "HumanAIMovement";
     movement.values = {"Walk", "Run", "Stop"};
     items.push_back(std::move(movement));
+    igi::ModMenuItemConfig heliReset;
+    heliReset.id = "heli_reset";
+    heliReset.kind = igi::ModMenuItemKind::Action;
+    heliReset.label = "Reset Selected Heli";
+    heliReset.category = "Vehicles";
+    heliReset.nativeAction = "HeliControlReset";
+    items.push_back(std::move(heliReset));
 #endif
     return items;
 }
