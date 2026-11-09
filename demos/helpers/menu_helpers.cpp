@@ -25,6 +25,7 @@ static bool requireLiveGameThread(Runtime &runtime);
 static bool refreshLiveMenu(Runtime &runtime, std::string_view effect);
 static bool executeMenuCommand(std::string_view commandScript);
 static bool isNpcTask(IGI::Task *task);
+static IGI::HumanAI *npcAiTask(IGI::Human *npc);
 static bool isCarTask(IGI::Task *task);
 static bool isHeliTask(IGI::Task *task);
 
@@ -764,6 +765,17 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
             log(LogLevel::Warning,
                 "soldier execution rejected: selected target is not a standard Soldier");
         }
+    } else if (id == "npc_movement") {
+        auto *npc =
+            reinterpret_cast<IGI::Human *>(findLiveTarget(runtime, g_selectedNpcTaskId, isNpcTask));
+        if (!npc) {
+            reportMissingNpcTarget("NPC movement");
+        } else if (value == "Stop") {
+            if (!NpcHelpers(runtime).clearMovement(npc))
+                log(LogLevel::Warning, "NPC stop rejected: selected NPC has no live HumanAI task");
+        } else if (!NpcHelpers(runtime).setMovementMode(npc, value == "Run")) {
+            log(LogLevel::Warning, "NPC movement rejected: selected NPC has no live HumanAI task");
+        }
     } else if (id == "heli_target") {
         if (const auto selected = targetId(value)) {
             auto *task = findLiveTarget(runtime, *selected, isHeliTask);
@@ -1058,6 +1070,20 @@ static bool isNpcTask(IGI::Task *task) {
     const auto humanType = IGI::HUMAN::GET_TYPE();
     return (type == humanType || IGI::TASK::IS_A(type, humanType) != 0) &&
            !IGI::HUMAN::IS_PLAYER(reinterpret_cast<IGI::Human *>(task));
+}
+
+static IGI::HumanAI *npcAiTask(IGI::Human *npc) {
+    if (!npc)
+        return nullptr;
+#if defined(_WIN32)
+    const auto type = *reinterpret_cast<const std::uint16_t *>(igi::re::HASH::gHumanAIType);
+    if (type == 0)
+        return nullptr;
+    return reinterpret_cast<IGI::HumanAI *>(
+        IGI::TASK::FIND_CHILD(reinterpret_cast<IGI::Task *>(npc), type));
+#else
+    return nullptr;
+#endif
 }
 
 static bool isHeliTaskType(std::uint16_t type) {
@@ -1578,6 +1604,29 @@ bool NpcHelpers::reportSoldierParams(IGI::Human *npc) const {
            << " params " << params;
     log(LogLevel::Info, status.str());
     IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, status.str().c_str());
+    return true;
+}
+
+bool NpcHelpers::setMovementMode(IGI::Human *npc, bool run) const {
+    if (!requireLiveGameThread(runtime_))
+        return false;
+    auto *ai = npcAiTask(npc);
+    if (!ai)
+        return false;
+    if (run)
+        IGI::AI::SET_RUN(ai);
+    else
+        IGI::AI::SET_WALK(ai);
+    return true;
+}
+
+bool NpcHelpers::clearMovement(IGI::Human *npc) const {
+    if (!requireLiveGameThread(runtime_))
+        return false;
+    auto *ai = npcAiTask(npc);
+    if (!ai)
+        return false;
+    IGI::AI::CLEAR_MOVE(ai);
     return true;
 }
 

@@ -344,6 +344,16 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
         item.values = definition.values;
         items.push_back(std::move(item));
     }
+#if defined(IGI_HEAVEN_ADVANCED)
+    igi::ModMenuItemConfig movement;
+    movement.id = "npc_movement";
+    movement.kind = igi::ModMenuItemKind::List;
+    movement.label = "Selected NPC Movement";
+    movement.category = "AI / NPC";
+    movement.nativeAction = "HumanAIMovement";
+    movement.values = {"Walk", "Run", "Stop"};
+    items.push_back(std::move(movement));
+#endif
     return items;
 }
 } // namespace

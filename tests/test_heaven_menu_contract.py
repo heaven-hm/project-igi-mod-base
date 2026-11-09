@@ -11,20 +11,30 @@ HELPERS = (ROOT / "demos/helpers/menu_helpers.cpp").read_text(encoding="utf-8")
 IMGUI_HOST = (ROOT / "src/mod_base/imgui_menu_host.cpp").read_text(encoding="utf-8")
 INTERNAL_HOST = (ROOT / "src/mod_base/menu_host.cpp").read_text(encoding="utf-8")
 
-# Every control is declared once in the definition table:
+# The normal Heaven target must remain the concise 50-control surface.  Advanced
+# additions are compiled out of that target, so remove those guarded blocks before
+# checking the common definition table.
+NORMAL_HEAVEN = re.sub(
+    r"#if defined\(IGI_HEAVEN_ADVANCED\).*?#endif\n", "", HEAVEN, flags=re.DOTALL
+)
+
+# Every normal control is declared once in the definition table:
 #   {"id", igi::ModMenuItemKind::Kind, "Label", "Category", "Action", values},
 defs = re.findall(
     r'\{"([a-z0-9_]+)",\s*igi::ModMenuItemKind::(\w+),\s*"([^"]+)",\s*"([^"]+)",\s*"([^"]*)"',
-    HEAVEN,
+    NORMAL_HEAVEN,
 )
 assert defs, "Heaven menu has no configured items"
 ids = [entry[0] for entry in defs]
 assert len(ids) == len(set(ids)), f"duplicate Heaven item IDs: {ids}"
 
 MIN_OPTIONS = 30
-MAX_OPTIONS = 50
-assert MIN_OPTIONS <= len(ids) <= MAX_OPTIONS, (
-    f"Heaven must ship {MIN_OPTIONS}-{MAX_OPTIONS} working controls, found {len(ids)}"
+NORMAL_OPTIONS = 50
+assert MIN_OPTIONS <= len(ids) == NORMAL_OPTIONS, (
+    f"normal Heaven must ship exactly {NORMAL_OPTIONS} working controls, found {len(ids)}"
+)
+assert "#if defined(IGI_HEAVEN_ADVANCED)" in HEAVEN and '"npc_movement"' in HEAVEN, (
+    "Heaven Advanced must add its selected-NPC movement control without changing normal Heaven"
 )
 
 categories = {"Weapons", "Player", "Camera", "World", "Vehicles", "AI / NPC"}
@@ -75,6 +85,12 @@ dispatcher_start = HELPERS.index("void executeMenuNativeAction(")
 dispatcher_end = HELPERS.index("static bool executeMenuCommandFor(IGI::Task *manager", dispatcher_start)
 DISPATCHER = HELPERS[dispatcher_start:dispatcher_end]
 dispatched = set(re.findall(r'id == "([a-z0-9_]+)"', DISPATCHER))
+assert 'id == "npc_movement"' in DISPATCHER, (
+    "Heaven Advanced selected-NPC movement must have a dedicated game-thread route"
+)
+assert all(native in HELPERS for native in ("IGI::AI::SET_WALK", "IGI::AI::SET_RUN", "IGI::AI::CLEAR_MOVE")), (
+    "selected-NPC movement must use the catalogued HumanAI retail calls"
+)
 
 # The weapon controls are resolved by the Heaven adapter, because only the demo
 # owns the retail weapon symbol table and its ammo counts.

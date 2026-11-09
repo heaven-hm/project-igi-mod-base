@@ -182,6 +182,8 @@ class NpcHelpers {
     bool reportStatus(IGI::Human *npc) const;
     bool standDownSoldier(IGI::Human *npc) const;
     bool reportSoldierParams(IGI::Human *npc) const;
+    bool setMovementMode(IGI::Human *npc, bool run) const;
+    bool clearMovement(IGI::Human *npc) const;
 
   private:
     Runtime &runtime_;

@@ -174,6 +174,9 @@ LIVE_OBJECT_NATIVES = frozenset({
     # soldier state owned by that soldier instance, exactly like EXECUTE above.
     "SOLDIER::STAND_ENTER",
     "SOLDIER::GET_PARAMS",
+    "AI::CLEAR_MOVE",
+    "AI::SET_WALK",
+    "AI::SET_RUN",
     # Level_GetTick reads the active level record, which only exists in-game.
     "LEVEL::GET_TICK",
     "AI::REMOVE_ALARM_ACTIONS",
