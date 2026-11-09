@@ -327,6 +327,9 @@ assert "Next Page >" in SCRIPT and "IGI_SDK_Page(" in SCRIPT, (
 assert "pageScreen(activePage)" in SCRIPT, (
     "only the active page may be emitted, so no page screen is ever orphaned"
 )
+assert "MenuManager_RequestScreen(\" << activeScreenId" in SCRIPT, (
+    "the generated script must request the emitted page, not page 1"
+)
 # The host must recognise every page screen and pop the whole pushed range.
 assert "igi::menuPageCount(menuConfig)" in INTERNAL_HOST, (
     "the retail host must know how many page screens belong to the menu"

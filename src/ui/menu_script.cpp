@@ -59,6 +59,9 @@ bool writeMenuScript(std::ostream &out, const MenuConfig &config, bool standalon
     const int frameY = menuLayoutY(config);
     const int frameHeight = menuRequiredHeight(config);
     const int firstScreenId = igi::menuPageScreenId(config, 0);
+    // The screen that is actually emitted below: requesting any other id leaves the
+    // retail manager with a null screen task and freezes its state machine.
+    const int activeScreenId = igi::menuPageScreenId(config, activePage);
     const int lastScreenId = igi::menuPageScreenId(config, pageCount - 1);
     const int screenTop = frameY;
     // The MenuScreen rectangle is the visible background, so it must cover the
@@ -161,13 +164,13 @@ bool writeMenuScript(std::ostream &out, const MenuConfig &config, bool standalon
         out << "Task_DeclareParameters(\"MenuManager\", \"Current menuscreen\", \"Int32\", "
                "\"Resource path\", \"String256\", \"isOwnDisplay\", \"bool8\");\n"
                "Task_New(-1, \"MenuManager\", \"IGI SDK\", "
-            << firstScreenId << ", \"LOCAL:menusystem/ingamemenu.res\", FALSE, "
+            << activeScreenId << ", \"LOCAL:menusystem/ingamemenu.res\", FALSE, "
             << pageScreen(activePage) << ");\n";
     } else {
         // Exactly one MenuScreen task exists per attachment, so closing the menu
         // never leaves an orphaned screen behind in the retail manager.
         out << pageScreen(activePage) << ";\n";
-        out << "MenuManager_RequestScreen(" << firstScreenId << ", FALSE);\n";
+        out << "MenuManager_RequestScreen(" << activeScreenId << ", FALSE);\n";
     }
     return static_cast<bool>(out);
 }

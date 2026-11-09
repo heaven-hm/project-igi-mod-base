@@ -125,6 +125,9 @@ int main() {
     assert(text.find("Task_New(" + activeId + ", \"MenuScreen\"") != std::string::npos);
     // Page navigation is a registered SDK symbol, so the host owns the switch.
     assert(text.find("IGI_SDK_Page(1)") != std::string::npos);
+    // The requested screen must be the page that was actually emitted: requesting
+    // another page id leaves the retail manager with a null screen task.
+    assert(text.find("MenuManager_RequestScreen(" + activeId + ", FALSE)") != std::string::npos);
     assert(text.find("IGI_SDK_Page(-1)") != std::string::npos);
     assert(igi::menuPageScreenId(config, 1) > config.screenId + static_cast<std::int32_t>(
                                                                   igi::kMenuRowsPerPage));
@@ -138,6 +141,21 @@ int main() {
     // The generated resource must compile for the retail script runtime.
     std::vector<std::uint8_t> qvm;
     std::string error;
+    // Page 2 must request its own screen id, not page 1's.
+    igi::MenuConfig second = config;
+    second.pageIndex = 1;
+    std::ostringstream secondScript;
+    assert(igi::writeIgiMenuScreenScript(secondScript, second));
+    const auto pageTwo = igi::menuPageScreenId(second, 1);
+    assert(secondScript.str().find("Task_New(" + std::to_string(pageTwo) + ", \"MenuScreen\"") !=
+           std::string::npos);
+    assert(secondScript.str().find("MenuManager_RequestScreen(" + std::to_string(pageTwo) + ", FALSE)") !=
+           std::string::npos);
+    assert(secondScript.str().find("IGI_SDK_Page(1)") != std::string::npos);
+    std::vector<std::uint8_t> pageQvm;
+    std::string pageError;
+    assert(igi::compileIgiMenuScreenScript(second, pageQvm, pageError));
+
     assert(igi::compileIgiMenuScreenScript(config, qvm, error));
     assert(!qvm.empty());
     assert(error.empty());

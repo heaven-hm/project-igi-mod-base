@@ -242,6 +242,8 @@ bool installMenuScriptCallbacks() {
     return true;
 }
 
+// Command scripts (RequestScreen/PopScreen) create no task, so Task_RunScript
+// legitimately returns null. The transition deadline is the real success signal.
 bool runMenuCommand(const char *resource, const char *operation) {
     auto *game = IGI::GAME::GET();
     auto *root = game ? static_cast<IGI::Task *>(
@@ -252,13 +254,9 @@ bool runMenuCommand(const char *resource, const char *operation) {
     auto *manager = IGI::TASK::FIND_CHILD(root, IGI::MENU::GET_TYPE());
     if (!manager)
         return false;
-    if (!IGI::TASK::RUN_SCRIPT(manager, resource, 0)) {
-        igi::log(igi::LogLevel::Error,
-                 std::string("internal menu command: ") + operation + " Task_RunScript failed");
-        return false;
-    }
-    igi::log(igi::LogLevel::Info,
-             std::string("internal menu command: ") + operation + " requested");
+    (void)IGI::TASK::RUN_SCRIPT(manager, resource, 0);
+    igi::log(igi::LogLevel::Info, std::string("internal menu command: ") + operation +
+                                      " requested; awaiting the retail screen transition");
     return true;
 }
 
@@ -598,6 +596,17 @@ void menuFrameWork() {
     igi::log(igi::LogLevel::Info,
              "internal menu natives: invoking Task_RunScript with the verified MenuManager parent");
     auto *screen = IGI::TASK::RUN_SCRIPT(manager, "LOCAL:mod_base/modmenu.qvm", 0);
+    const int requestedScreenId = igi::menuPageScreenId(menuConfig, menuConfig.pageIndex);
+    if (!screen)
+        screen = IGI::TASK::FIND_BY_ID(requestedScreenId);
+    if (!screen) {
+        igi::log(igi::LogLevel::Error,
+                 "internal menu screen: page " + std::to_string(menuConfig.pageIndex + 1) +
+                     " script created no screen task for id " + std::to_string(requestedScreenId) +
+                     "; keeping the game unpaused");
+        initialAttachPending.store(false, std::memory_order_release);
+        return;
+    }
     if (screen) {
         using GetChangedEvent = std::uint8_t(__cdecl *)();
         using Broadcast = void(__cdecl *)(IGI::Task *, std::uint8_t, void *);
