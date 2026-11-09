@@ -35,15 +35,11 @@ int g_selectedNpcTaskId = -1;
 int g_selectedCarTaskId = -1;
 int g_selectedHeliTaskId = -1;
 
-// Reports whether a rebuilt live list changed, and whether the previously
-// selected task survived the rebuild.
 struct RefreshOutcome {
     bool changed = false;
     bool preservedIsLive = true;
 };
 
-// Level unloads and mission restarts rebuild the game task list, so previously
-// selected NPC/car task ids can never stay valid across those transitions.
 void clearLiveTargetSelections(const std::string &reason) {
     const bool hadSelection =
         g_selectedNpcTaskId >= 0 || g_selectedCarTaskId >= 0 || g_selectedHeliTaskId >= 0;
@@ -54,8 +50,6 @@ void clearLiveTargetSelections(const std::string &reason) {
         log(LogLevel::Info, "live target selections cleared: " + reason);
 }
 
-// Guidance for a click with no target picked yet, plus self-healing for a
-// selection that stopped being live so follow-up clicks stay clean.
 void reportMissingCarTarget(std::string_view action) {
     if (g_selectedCarTaskId < 0) {
         log(LogLevel::Info,
@@ -469,10 +463,6 @@ bool setPlayerThirdPersonView(Runtime &runtime, bool active) {
 bool refreshLiveTargetOptions(MenuConfig &config, Runtime &runtime) {
     if (!requireLiveGameThread(runtime) || !IGI::GAME::GET())
         return false;
-    // Live lists are rebuilt from the task table on every refresh, so the
-    // selection must follow its task identity instead of its old index.
-    // Otherwise every kill, respawn or level change silently re-points the
-    // menu at a different car or soldier.
     const auto replaceChoices =
         [&config](std::string_view id, const std::vector<LiveTarget> &targets,
                   std::string_view emptyLabel, int selectedTaskId) -> RefreshOutcome {
@@ -509,8 +499,6 @@ bool refreshLiveTargetOptions(MenuConfig &config, Runtime &runtime) {
                                     g_selectedCarTaskId);
     const auto heli = replaceChoices("heli_target", entities.heliTargets(), "No live helicopters",
                                      g_selectedHeliTaskId);
-    // A selection that vanished from the task table is dropped so both menu
-    // frontends stop offering actions for a task that no longer exists.
     if (!npc.preservedIsLive)
         g_selectedNpcTaskId = -1;
     if (!car.preservedIsLive)
@@ -1010,9 +998,6 @@ static bool isNpcTask(IGI::Task *task) {
            !IGI::HUMAN::IS_PLAYER(reinterpret_cast<IGI::Human *>(task));
 }
 
-// The retail Helicopter type has no public getter binding, and a task-type
-// registration lookup faults when the type table is not populated. Matching the
-// retail type name keeps helicopter detection to a verified name lookup.
 static bool isHeliTaskType(std::uint16_t type) {
     const char *typeName = IGI::TASK::GET_NAME(type);
     return typeName && std::string_view(typeName).find("Heli") != std::string_view::npos;
@@ -1178,10 +1163,6 @@ IGI::Car *EntityHelpers::carAt(std::size_t slot) const {
     }
     return nullptr;
 }
-// Retail task names are the instance names created by the level script. A task
-// without an instance name still reports its retail type name, so every menu
-// entry carries a name the running game itself provides instead of a made-up
-// ordinal such as "NPC 3" or "Car 3".
 static std::string liveTaskName(IGI::Task *task) {
     if (!task)
         return {};
@@ -1307,8 +1288,6 @@ bool EntityHelpers::snapHumanToGround(IGI::Human *human) const {
         return false;
     if (!isCallableNative(IGI::HASH::HUMAN_SNAP_TO_GROUND, "void Human_SnapToGround(Human *h)"))
         return false;
-    // Log the exact native invocation so a crash inside Human_SnapToGround is
-    // visible in the log instead of a silent drop after the menu action line.
     log(LogLevel::Info,
         "snap to ground: invoking Human_SnapToGround for task #" +
             std::to_string(IGI::TASK::GET_ID(reinterpret_cast<IGI::Task *>(human))));
@@ -1339,8 +1318,6 @@ bool EntityHelpers::setHumanCollision(IGI::Human *human, bool enabled) const {
     }
     return true;
 }
-// Player readout: every value comes from a verified human/player getter, so the
-// menu reports live state instead of a helper-owned cache.
 bool PlayerHelpers::reportStatus() const {
     auto *p = localPlayer(runtime_);
     if (!p)
@@ -1357,7 +1334,6 @@ bool PlayerHelpers::reportStatus() const {
     return true;
 }
 
-// Camera readout from the retail camera-info handler (mode, FOV, eye height).
 bool CameraHelpers::reportInfo() const {
     auto *player = localPlayer(runtime_);
     if (!player)
@@ -1376,8 +1352,6 @@ bool CameraHelpers::reportInfo() const {
 bool WorldHelpers::reportLevelTick() const {
     if (!requireLiveGameThread(runtime_))
         return false;
-    // Level_GetTick dereferences the active level record, so it is only safe
-    // once the retail level task exists.
     if (!IGI::LEVEL::GET()) {
         log(LogLevel::Warning, "level readout rejected: no active level task");
         return false;
@@ -1413,7 +1387,6 @@ bool WorldHelpers::reportEvents() const {
     return true;
 }
 
-// Car readout through the retail control-info handler.
 bool VehicleHelpers::reportCarInfo(IGI::Car *car) const {
     if (!requireLiveGameThread(runtime_) || !car)
         return false;
@@ -1433,7 +1406,6 @@ bool VehicleHelpers::reportCarInfo(IGI::Car *car) const {
     return true;
 }
 
-// Helicopter readout: door task, control info and state size.
 bool VehicleHelpers::reportHeliInfo(IGI::Heli *heli) const {
     if (!requireLiveGameThread(runtime_) || !heli)
         return false;
@@ -1457,7 +1429,6 @@ bool VehicleHelpers::explodeAllCars() const {
         return false;
     if (!isCallableNative(IGI::HASH::CAR_EXPLODE, "void Car_Explode(Car *c)"))
         return false;
-    // Collect first: exploding a car mutates the task list that FIND_NEXT walks.
     EntityHelpers entities(runtime_);
     std::vector<IGI::Car *> cars;
     for (auto *car = entities.firstCar(); car; car = entities.nextCar(car))
@@ -1517,8 +1488,6 @@ bool NpcHelpers::reportStatus(IGI::Human *npc) const {
     return true;
 }
 
-// Brings a live standard Soldier back to its retail stand state. Mirrors the
-// execute path: the soldier state machine lives at the verified +0x2EC offset.
 bool NpcHelpers::standDownSoldier(IGI::Human *npc) const {
     if (!requireLiveGameThread(runtime_) || !npc)
         return false;
@@ -1661,8 +1630,6 @@ bool WeaponHelpers::cycle(int force) const {
 bool WeaponHelpers::reportFlashReset() const {
     return restorePlayerVisualFeedback(runtime_);
 }
-// Publishes the retail weapon event identifiers the game dispatches with, which
-// is what distinguishes the weapon task/event paths at runtime.
 bool WeaponHelpers::reportEvents() const {
     if (!requireLiveGameThread(runtime_))
         return false;
@@ -1938,8 +1905,6 @@ bool VehicleHelpers::resetCar(IGI::Car *car) const {
         return false;
     if (!isCallableNative(IGI::HASH::CAR_CONTROL, "void Car_Control(Car *o, CarControlArg *arg)"))
         return false;
-    // Log the exact native invocation so a crash or hang inside the Car_Control
-    // reset path is visible in the log instead of a silent drop.
     log(LogLevel::Info, "vehicle reset: invoking Car_Control reset for task #" +
                             std::to_string(IGI::TASK::GET_ID(reinterpret_cast<IGI::Task *>(car))));
     float input[4] = {0.0F, -1.0F, -2.0F, -1.0F};
