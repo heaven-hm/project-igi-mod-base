@@ -25,7 +25,7 @@ bool prepareMenuForLevelChange() {
 
 namespace {
 constexpr std::size_t kMinimumControls = 30;
-constexpr std::size_t kMaximumControls = 60;
+constexpr std::size_t kMaximumControls = 90;
 
 std::size_t countKind(const igi::MenuConfig &config, igi::ModMenuItemKind kind) {
     std::size_t count = 0;
@@ -86,6 +86,9 @@ int main() {
         case igi::ModMenuItemKind::Slider:
             expected += 1;
             break;
+        case igi::ModMenuItemKind::Input:
+            expected += igi::inputSamples(item).size();
+            break;
         }
     }
     assert(commands.size() >= expected);
@@ -135,6 +138,22 @@ int main() {
     // The visible background must cover the grown row frame.
     const int backgroundBottom = igi::menuLayoutY(config) + igi::menuRequiredHeight(config);
     assert(text.find(std::to_string(backgroundBottom)) != std::string::npos);
+    // The frame grows with the content instead of clipping long rows.
+    assert(igi::menuRequiredWidth(config) >= config.width);
+    igi::MenuConfig wide = config;
+    wide.items.front().label = std::string(80, 'W');
+    assert(igi::menuRequiredWidth(wide) > igi::menuRequiredWidth(config));
+    assert(igi::menuRequiredWidth(wide) <= 780);
+    assert(igi::menuLayoutX(wide) >= 8);
+    assert(igi::menuLayoutX(wide) <= igi::menuLayoutX(config));
+    // The last page draws fewer rows, so its frame must be shorter instead of
+    // reserving empty space for rows that do not exist.
+    assert(igi::menuRowsOnPage(config) == igi::kMenuRowsPerPage);
+    igi::MenuConfig last = config;
+    last.pageIndex = igi::menuPageCount(config) - 1;
+    assert(igi::menuRowsOnPage(last) <= igi::kMenuRowsPerPage);
+    assert(igi::menuRequiredHeight(last) <= igi::menuRequiredHeight(config));
+    assert(igi::menuRowsOnPage(last) > 0);
     // A page switch is a retail screen request, not host-side state.
     assert(text.find("MenuManager_RequestScreen(") != std::string::npos);
 

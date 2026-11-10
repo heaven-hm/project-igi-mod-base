@@ -2,6 +2,12 @@
 
 #include <cstdint>
 
+#if defined(_WIN32)
+// Requests the host thread to close the menu, remove every retail callback and
+// unload this module. Safe to call from the game thread (menu action).
+extern "C" int __cdecl IGI_SDK_RequestSafeUnload();
+#endif
+
 namespace igi {
 
 struct DllMenuCallbacks {

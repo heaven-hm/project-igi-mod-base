@@ -241,21 +241,15 @@ DWORD WINAPI igiSdkMainThread(void *rawModule) {
     while (g_state.running.load(std::memory_order_acquire)) {
         mainLoopTick(callbacks, keys);
         const bool unloadRequested = g_state.unloadRequested.load(std::memory_order_acquire);
-        const bool disableRequested = g_state.endKey && keys.isPressedOnce(g_state.endKey);
-        if (disableRequested && !unloadRequested) {
-            // Disabling must not release or delete anything the retail menu system
-            // still references: closing the screen is the only state change. The
-            // game keeps its own pause/main menus and the start key re-opens this
-            // menu, so no re-injection is needed.
-            if (g_state.initialized) {
-                const bool closed = callbacks.closeMenu ? callbacks.closeMenu() : false;
-                g_state.disabled = true;
-                igi::log(closed ? igi::LogLevel::Info : igi::LogLevel::Warning,
-                         closed ? "internal menu: disabled by the configured end key; press the "
-                                  "start key to re-enable"
-                                : "internal menu: disable requested; the menu closes on the next "
-                                  "frame");
-            }
+        const bool ejectRequested = g_state.endKey && keys.isPressedOnce(g_state.endKey);
+        if (ejectRequested && !unloadRequested) {
+            // The configured end key ejects the mod: the menu closes, the retail
+            // callbacks are removed and the DLL unloads (or stays resident only
+            // when the hooks could not be restored). The start key must not be
+            // able to bring the menu back after an eject.
+            g_state.unloadRequested.store(true, std::memory_order_release);
+            igi::log(igi::LogLevel::Info,
+                     "internal menu: eject requested by the configured end key");
         }
         if (unloadRequested) {
             if (!deactivateMenuRuntime(callbacks))

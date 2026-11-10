@@ -336,6 +336,8 @@ add_test(NAME igi_sdk_tests COMMAND igi_sdk_tests)
 add_test(NAME igi_heaven_layout COMMAND igi_heaven_layout_tests)
 add_test(NAME igi_heaven_menu_contract
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_heaven_menu_contract.py)
+add_test(NAME igi_native_signatures
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_native_signatures.py)
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/data/igi-natives.csv")
 add_test(NAME igi_generated_natives
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_generated_natives.py)
@@ -362,6 +364,18 @@ if(APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
         set(IGI_UNICORN_PYTHON arch -x86_64 ${Python3_EXECUTABLE})
     endif()
 endif()
+add_test(NAME igi_menu_helpers_unicorn
+         COMMAND ${IGI_UNICORN_PYTHON} ${CMAKE_CURRENT_SOURCE_DIR}/tools/igi_runtime_harness.py
+                 --verify-menu-helpers --exe ${IGI_TEST_EXE} --dll "")
+set_tests_properties(igi_menu_helpers_unicorn PROPERTIES
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "IGI_EXE=${IGI_TEST_EXE}")
+add_test(NAME igi_heaven_flows_unicorn
+         COMMAND ${IGI_UNICORN_PYTHON} ${CMAKE_CURRENT_SOURCE_DIR}/tools/igi_runtime_harness.py
+                 --verify-heaven-flows --exe ${IGI_TEST_EXE})
+set_tests_properties(igi_heaven_flows_unicorn PROPERTIES
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "IGI_EXE=${IGI_TEST_EXE}")
 add_test(NAME igi_demo_natives_unicorn
          COMMAND ${IGI_UNICORN_PYTHON} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_demo_natives_unicorn.py)
 set_tests_properties(igi_demo_natives_unicorn PROPERTIES

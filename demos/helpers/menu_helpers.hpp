@@ -46,6 +46,10 @@ class EntityHelpers {
     // Named world objects (buildings, doors, props and mission landmarks) with
     // their level position, used for the predefined teleport dropdown.
     std::vector<LiveTarget> landmarkTargets() const;
+    // Every named world-space object below the live level task, with its
+    // authored position. This is the authoritative 3D object list: the game's
+    // event task lists only contain actors, vehicles and a few props.
+    std::vector<LiveTarget> worldObjectTargets() const;
     bool moveHuman(IGI::Human *human, const std::array<double, 3> &position) const;
     bool setHumanYaw(IGI::Human *human, float yaw) const;
     bool snapHumanToGround(IGI::Human *human) const;
@@ -100,6 +104,10 @@ class WeaponHelpers {
     bool stopWeaponAnimation() const;
     // Adds rounds to the weapon the player is holding right now.
     bool refillCurrentWeapon(int ammo) const;
+    // Adds rounds to one weapon id, creating the retail weapon task first when
+    // the player does not carry it yet. This is what makes ammo work on a weapon
+    // that was just added instead of only on the gun currently in hand.
+    bool refillWeapon(std::string_view weaponId, int ammo) const;
     // Fully drops the held weapon: retail drop, cleared carried slot and no
     // leftover draw animation, so the weapon cannot be cycled back to.
     bool dropCurrentWeapon() const;
@@ -303,8 +311,35 @@ bool teleportPlayerToTarget(Runtime &runtime, int targetTaskId);
 // Current player body position in retail world units. Used to prefill the
 // teleport X/Y/Z inputs so the menu never starts at an unset (0,0,0).
 bool readPlayerPosition(Runtime &runtime, std::array<double, 3> &position);
-// Moves the live player to a typed world position.
+// Reads the authored world position of a live task (task_pos, +0x20).
+bool readTargetPosition(Runtime &runtime, int targetTaskId, std::array<double, 3> &position);
+// Moves the live player to a typed world position. The destination is grounded
+// by probing down from above the requested height, so a typed Z below terrain
+// cannot place the player under the map.
 bool teleportPlayerToPosition(Runtime &runtime, const std::array<double, 3> &position);
+// Send Player Position: moves the player to the chosen live target (an AI/human,
+// any 3D object, or the player itself) and broadcasts the new body position.
+bool sendPlayerToTarget(Runtime &runtime, int targetTaskId);
+// True when the id is a live mission in the retail mission table.
+bool missionAvailable(Runtime &runtime, int missionId);
+// Mission ids and names from the retail mission table, used for the level list.
+std::vector<LiveTarget> missionTargets(Runtime &runtime);
+// Ejects the mod: closes the menu, removes the retail hooks and unloads the DLL
+// from the host thread. Safe to call from a game-thread menu action.
+bool requestModExit();
+// Level transition. The request only records the id; the host performs it from
+// the end-of-frame callback, after the retail scene has been flushed, so the
+// Game task is never deleted in the middle of the draw pass.
+bool requestLevelChange(Runtime &runtime, int levelId);
+bool processPendingLevelChange(Runtime &runtime);
+// World clock and independent mission timer (LevelFlow, IGI-RE
+// levelflowtypes.h: nTick +0x68, startHour +0x6C, timeLimit +0x74).
+bool setWorldHour(Runtime &runtime, float hour);
+std::optional<float> worldHour(Runtime &runtime);
+bool setMissionElapsedSeconds(Runtime &runtime, int seconds);
+std::optional<int> missionElapsedSeconds(Runtime &runtime);
+bool setMissionTimeLimit(Runtime &runtime, float seconds);
+std::optional<int> missionTimeLimitSeconds(Runtime &runtime);
 // Retail-sprite draw for the QVM menu host (no Dear ImGui there).
 bool renderThirdPersonCrosshair(Runtime &runtime);
 bool changeLevel(Runtime &runtime, int levelId);

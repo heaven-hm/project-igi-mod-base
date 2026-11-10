@@ -105,6 +105,16 @@ LIVE_GAME_ONLY_NATIVES = frozenset({
 # The dedicated menu-helper flow emulates Game_SetRaining with its required
 # singleton seeded, so the generic scan defers it and keeps that dedicated test.
 LIVE_OBJECT_NATIVES = frozenset({
+    # These need a live camera, task table, LevelFlow or mission table; the
+    # dedicated heaven-flow test drives them with constructed state instead.
+    "OTHER::VIEWPORT_ADD_CALLBACK",
+    "OTHER::TRANS_CONTEXT_PROJECT",
+    "CAMERA::SET",
+    "CAMERA::ROTATE_X",
+    "HUMAN::SEND_POSITION",
+    "MISSION::FIND",
+    "OTHER::LEVELFLOW_GET_HOUR",
+    "TASK::FIND",
     "GAME::SET_RAINING",
     "MENU::REFRESH",
     "GAME::RESTART",
@@ -670,6 +680,9 @@ _HASH_RE = re.compile(r"inline\s+constexpr\s+std::uint32_t\s+(\w+)\s*=\s*(0x[0-9
 _DECL_RE = re.compile(r"NATIVE_DECL\s+[\w:\s\*]+?\*?\s*(\w+)\s*\([^)]*\)\s*\{")
 _SIGNATURE_RE = re.compile(r"NATIVE_DECL\s+[\w:\s\*]+?\*?\s*(\w+)\s*\(([^)]*)\)\s*;")
 _NAMESPACE_RE = re.compile(r"namespace\s+(\w+)\s*\{")
+# A callback parameter contains nested parentheses, so the general declaration
+# regex stops early. Parse the one viewport-callback form explicitly.
+_DECL_FNPTR_RE = re.compile(r"NATIVE_DECL\s+\w+\s+(\w+)\s*\(\s*\w+\s*\(\s*\*\s*\w+\s*\)\s*\([^)]*\)\s*\)\s*\{")
 _HASH_USE_RE = re.compile(r"HASH::(\w+)")
 _SOURCE_CALL_RE = re.compile(r"IGI::([A-Z_][A-Z_0-9]*)::([A-Z_][A-Z_0-9]*)")
 
@@ -719,7 +732,7 @@ def load_native_catalogue(header: Path = NATIVES_HEADER, source: Path = NATIVES_
     # mvp_natives.cpp defines natives as NATIVE_DECL ... NAME(...) { ... } blocks
     # nested inside `namespace DOMAIN { ... }`. The domain for a declaration is
     # the nearest preceding namespace that is not a wrapper namespace.
-    for match in _DECL_RE.finditer(text):
+    for match in list(_DECL_RE.finditer(text)) + list(_DECL_FNPTR_RE.finditer(text)):
         name = match.group(1)
         hash_match = _HASH_USE_RE.search(text, match.end(), match.end() + 2000)
         if hash_match is None:
@@ -1061,6 +1074,28 @@ def run_menu_helpers_check(args, emu_module) -> int:
         raise RuntimeError("menu helpers do not call IGI::GAME::SET_RAINING")
     if "IGI::MENU::REFRESH" not in source:
         raise RuntimeError("menu helpers do not refresh the active menu after a live effect")
+    required_flow_tokens = (
+        "IGI::MISSION::FIND",
+        "processPendingLevelChange",
+        "requestLevelChange",
+        "setWorldHour",
+        "setMissionElapsedSeconds",
+        "setMissionTimeLimit",
+        "findOwnedGun",
+        "refillWeapon",
+        "placeHumanOnGround",
+        "broadcastPlayerPosition",
+        "worldObjectTargets",
+        "landmarkTargets",
+        "IGI::OTHER::VIEWPORT_ADD_CALLBACK",
+        "IGI::CAMERA::ROTATE_X",
+        "IGI::OTHER::TRANS_CONTEXT_PROJECT",
+    )
+    missing_flow_tokens = [token for token in required_flow_tokens if token not in source]
+    if missing_flow_tokens:
+        raise RuntimeError(
+            "menu helpers lost a fixed retail path: " + ", ".join(missing_flow_tokens)
+        )
     cleanup = source.find("prepareMenuForLevelChange()")
     mission = source.find("Game_SetMission(")
     flow_request = source.find("IGI::OTHER::FLOW_SET_REQUEST(4)")
@@ -1092,6 +1127,226 @@ def run_menu_helpers_check(args, emu_module) -> int:
     print("PASS live effects use the typed MenuManager_Refresh wrapper")
     print("PASS level change uses the engine Flow request and Game task unload sequence")
     print("PASS level change releases injected QVM resources before the new level attaches")
+    print("PASS free camera, teleport, target, ammo and clock paths are present")
+    return 0
+
+
+def _float_bits(value: float) -> int:
+    return struct.unpack("<I", struct.pack("<f", value))[0]
+
+
+def _read_floats(emu, address, count):
+    return list(struct.unpack("<%df" % count, emu.read(address, 4 * count)))
+
+
+def run_heaven_flows_check(args, emu_module) -> int:
+    """Run the retail routines the fixed Heaven controls depend on.
+
+    This executes real igi.exe code in Unicorn: the mission table lookup, the
+    LevelFlow clock, the matrix/camera override pair used by the free camera,
+    Camera_Set's priority rule, and both position broadcast lists. It does not
+    reproduce gameplay side effects (bullets, rendering), which need the game.
+    """
+    source = MENU_HELPERS.read_text(encoding="utf-8")
+    heaven = (ROOT / "demos" / "heaven" / "heaven_menu.cpp").read_text(encoding="utf-8")
+    required_source = (
+        "IGI::MISSION::FIND",
+        "IGI::OTHER::LEVELFLOW_GET_HOUR",
+        "IGI::CAMERA::ROTATE_X",
+        "IGI::HUMAN::SEND_POSITION",
+        "IGI::PLAYER::SEND_POSITION",
+        "IGI::HUMAN::SET_POSITION",
+        "IGI::HUMAN::SNAP_TO_GROUND",
+        "IGI::WEAPON::GUN_GET_TYPE",
+        "IGI::PLAYER::PICK_UP_WEAPON",
+    )
+    missing = [token for token in required_source if token not in source]
+    if missing:
+        raise RuntimeError("menu helpers lost required retail calls: " + ", ".join(missing))
+    if "processPendingLevelChange" not in heaven:
+        raise RuntimeError("Heaven does not run the level change after the frame flush")
+
+    catalogue = load_native_catalogue()
+    needed = {
+        "MISSION::FIND": 0x00485170,
+        "OTHER::LEVELFLOW_GET_HOUR": 0x00489470,
+        "OTHER::LEVELFLOW_GET_TICKS_LEFT": 0x004894B0,
+        "CAMERA::ROTATE_X": 0x004B34F0,
+        "CAMERA::SET": 0x004D9870,
+        "CAMERA::SET_CAMERA": 0x004658D0,
+        "HUMAN::SEND_POSITION": 0x00463080,
+        "PLAYER::SEND_POSITION": 0x00410F70,
+        "HUMAN::GET_CAMERA_INFO": 0x0045FCD0,
+        "WEAPON::GUN_GET_TYPE": 0x00477BF0,
+    }
+    for name, address in needed.items():
+        entry = catalogue.get(name)
+        if entry is None or entry["address"] != address:
+            raise RuntimeError(f"{name} is missing or moved in the native catalogue")
+
+    import math
+
+    runtime = IGIRuntime(args.exe, args.dll, emu_module, lenient=args.lenient)
+    emu = runtime.emu
+    # Do not call seed_game_globals(): the checks below seed the exact data
+    # structures each retail routine reads instead of blank scratch memory.
+
+    # 1. Mission_Find over a synthetic mission table: installed ids resolve,
+    #    unknown ids return null. This is the guard that prevents a level change
+    #    from unloading the running level into a mission that does not exist.
+    mission_stride = 0x4A8
+    # gMissions is the inline table at 0x5C1590 (25 entries) and gMissionCount
+    # is the dword right after it; Mission_Find indexes the table directly.
+    missions = 0x005C1590
+    emu.write(0x005C89FC, struct.pack("<I", 2))
+    for index, (mission_id, name) in enumerate(((5, b"Escape"), (7, b"Trainyard"))):
+        base = missions + index * mission_stride
+        emu.write(base, struct.pack("<I", mission_id))
+        emu.write(base + 4, name + b"\0")
+    found, _, _ = emu.call(0x00485170, 5)
+    if found != missions:
+        raise RuntimeError(f"Mission_Find(5) returned 0x{found:08x}, expected 0x{missions:08x}")
+    if emu.read_cstr(found + 4) != b"Escape":
+        raise RuntimeError("Mission_Find returned the wrong mission name")
+    missing_id, _, _ = emu.call(0x00485170, 6)
+    if missing_id != 0:
+        raise RuntimeError("Mission_Find accepted an id that is not in the table")
+    second, _, _ = emu.call(0x00485170, 7)
+    if second != missions + mission_stride:
+        raise RuntimeError("Mission_Find returned the wrong mission entry")
+    print("PASS Mission_Find resolves installed level ids and rejects missing ids")
+
+    # 2. LevelFlow clock: world hour is startHour + nTick/fps/3600, and the
+    #    remaining mission frames use timeLimit independently of startHour.
+    flow = emu.alloc(0x60)
+    emu.write(0x00567C8C, struct.pack("<I", flow))  # gFlow
+    emu.write(flow + 0x3C, struct.pack("<I", 30))  # Flow.fps
+    level_flow = emu.alloc(0x128)
+    emu.write(0x00BC2360, struct.pack("<I", level_flow))  # gLevelFlow
+    emu.write(level_flow + 0x68, struct.pack("<i", 900))  # nTick
+    emu.write(level_flow + 0x6C, struct.pack("<f", 8.0))  # startHour
+    emu.write(level_flow + 0x74, struct.pack("<f", 60.0))  # timeLimit
+    _, _, st0 = emu.call(0x00489470)
+    # IGI-RE's emulator reports st0 as (mantissa, exponent) of the 80-bit value.
+    mantissa, exponent = st0
+    sign = -1.0 if exponent & 0x8000 else 1.0
+    hour = sign * mantissa * 2.0 ** ((exponent & 0x7FFF) - 16383 - 63)
+    expected_hour = 8.0 + 900.0 / (30.0 * 3600.0)
+    if not math.isclose(hour, expected_hour, rel_tol=1e-6, abs_tol=1e-6):
+        raise RuntimeError(f"LevelFlow_GetHour returned {hour}, expected {expected_hour}")
+    ticks_left, _, _ = emu.call(0x004894B0)
+    if ticks_left != 900:
+        raise RuntimeError(f"LevelFlow_GetTicksLeft returned {ticks_left}, expected 900")
+    print("PASS LevelFlow world hour and mission time limit are independent")
+
+    # 3. The free-camera axes: euler(0,0,0) turned by -90 X is the retail camera
+    #    orientation (set_view). Verify the exact matrix the callback passes on.
+    matrix = emu.alloc(0x28)
+    axes = emu.alloc(0x28)
+    emu.call(0x004B38E0, matrix, _float_bits(0.0), _float_bits(0.0), _float_bits(0.0))
+    emu.call(0x004B34F0, axes, matrix, _float_bits(-math.pi / 2.0))
+    values = _read_floats(emu, axes, 9)
+    expected = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0, 0.0]
+    if any(not math.isclose(a, b, abs_tol=1e-5) for a, b in zip(values, expected)):
+        raise RuntimeError(f"Matrix_RotateX produced {values}, expected {expected}")
+    print("PASS free camera builds the retail -90 X camera axes")
+
+    # 4. Camera_Set priority: a paused frame keeps the higher-priority pose, and
+    #    a new render frame lets the next Camera_Set take over.
+    listeners = emu.alloc(16)
+    emu.write(0x00A54690, struct.pack("<I", listeners))  # gCameraListeners
+    camera = emu.alloc(0x60)
+    emu.write(camera + 0x4C, struct.pack("<i", -1))  # Camera.frame
+    emu.write(camera + 0x48, struct.pack("<f", 0.0))  # Camera.priority
+    pos1 = emu.alloc(24)
+    emu.write(pos1, struct.pack("<3d", 10.0, 20.0, 30.0))
+    pos2 = emu.alloc(24)
+    emu.write(pos2, struct.pack("<3d", -1.0, -2.0, -3.0))
+    rot = emu.alloc(0x28)
+    emu.call(0x004B38E0, rot, _float_bits(0.0), _float_bits(0.0), _float_bits(0.0))
+    emu.call(0x004D9870, camera, pos1, rot, _float_bits(1.0), _float_bits(1.0),
+             _float_bits(300.0), 1, 0, 0, 0)
+    if emu.read(camera + 0x28, 24) != emu.read(pos1, 24):
+        raise RuntimeError("Camera_Set did not apply the first pose")
+    emu.call(0x004D9870, camera, pos2, rot, _float_bits(1.0), _float_bits(1.0),
+             _float_bits(100.0), 1, 0, 0, 0)
+    if emu.read(camera + 0x28, 24) != emu.read(pos1, 24):
+        raise RuntimeError("a lower-priority Camera_Set replaced the free camera pose")
+    emu.call(0x004D9870, camera, pos2, rot, _float_bits(1.0), _float_bits(1.0),
+             _float_bits(1000.0), 2, 0, 0, 0)
+    if emu.read(camera + 0x28, 24) != emu.read(pos2, 24):
+        raise RuntimeError("Camera_Set did not accept the free camera pose on a new frame")
+    print("PASS Camera_Set keeps the free camera pose over the retail camera priority")
+
+    # 5. HumanView_SetCamera -> Human_GetHumanCameraInfoHandler: the free camera
+    #    override makes the retail camera info report mode 4 (CAM_OVERRIDE) and
+    #    the pose the mod owns, which is what HumanCamera_FirstPersonUpdate uses.
+    human = emu.alloc(0xCF8)
+    view = emu.alloc(0x328)
+    emu.write(human + 0x20, struct.pack("<3d", 1.0, 2.0, 3.0))
+    emu.write(human + 0x4EC, struct.pack("<I", view))  # Human.view
+    emu.write(human + 0x4F0, struct.pack("<i", 2))  # Human.camMode = third person
+    emu.write(view + 0xE0, struct.pack("<3d", 1.0, 2.0, 3.0))  # view.eye
+    emu.call(0x004B38E0, view + 0xF8, _float_bits(0.0), _float_bits(0.0), _float_bits(0.0))
+    emu.write(view + 0x1E4, struct.pack("<f", 1.0))  # view.fovX
+    emu.write(view + 0x1E8, struct.pack("<f", 0.75))  # view.fovY
+    cam_pos = emu.alloc(24)
+    emu.write(cam_pos, struct.pack("<3d", 100.0, 200.0, 300.0))
+    cam_rot = emu.alloc(0x28)
+    emu.call(0x004B38E0, cam_rot, _float_bits(0.1), _float_bits(0.0), _float_bits(0.2))
+    emu.call(0x004658D0, view, cam_pos, cam_rot)  # HumanView_SetCamera
+    info = emu.alloc(0x74)
+    emu.call(0x0045FCD0, human, info)  # Human_GetHumanCameraInfoHandler
+    mode = struct.unpack("<i", emu.read(info + 0x70, 4))[0]
+    if mode != 4:
+        raise RuntimeError(f"camera override reported mode {mode}, expected CAM_OVERRIDE (4)")
+    if emu.read(info, 24) != emu.read(cam_pos, 24):
+        raise RuntimeError("camera override did not publish the free camera position")
+    if emu.read(info + 0x18, 36) != emu.read(cam_rot, 36):
+        raise RuntimeError("camera override did not publish the free camera rotation")
+    print("PASS HumanView_SetCamera drives the retail CAM_OVERRIDE camera path")
+
+    # 6. Both position broadcasts run against an empty listener list. The mod now
+    #    calls both; before the fix only the player list was notified.
+    # gGameTaskLists is the inline pointer array; Human_SendPosition uses list 1
+    # and HumanPlayer_SendPosition uses list 2. Empty lists make the broadcasts
+    # iterable without a live game.
+    for slot in range(6):
+        fake = emu.alloc(16)
+        emu.write(fake, struct.pack("<ii", 0, 0))
+        emu.write(0x0057BA9C + slot * 4, struct.pack("<I", fake))
+    emu.call(0x00463080, human)  # Human_SendPosition
+    emu.call(0x00410F70, human)  # HumanPlayer_SendPosition
+    print("PASS both Human and HumanPlayer position broadcasts execute")
+
+    # 7. TransContext_Project returns display pixels from the active context.
+    #    The wrapper signature matches the registry now, and the helper no longer
+    #    rescales the result, so the crosshair can land on the aim point.
+    ctx = 0x00BCAAE0  # gTransContext
+    emu.write(ctx, b"\0" * 0xA8)
+    identity = struct.pack("<9f", 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
+    emu.write(ctx, identity)
+    emu.write(ctx + 0x28, struct.pack("<3d", 0.0, 0.0, 0.0))
+    emu.write(ctx + 0x48, struct.pack("<4f", 1.0, 1.0, 320.0, 240.0))
+    out = emu.alloc(8)
+    depth = emu.alloc(4)
+    centre = emu.alloc(24)
+    emu.write(centre, struct.pack("<3d", 0.0, 0.0, 100.0))
+    emu.call(0x00497F20, out, depth, centre)
+    centre_xy = struct.unpack("<2f", emu.read(out, 8))
+    if not (math.isclose(centre_xy[0], 320.0, abs_tol=1e-4) and
+            math.isclose(centre_xy[1], 240.0, abs_tol=1e-4)):
+        raise RuntimeError(f"TransContext_Project centre returned {centre_xy}, expected (320, 240)")
+    offset = emu.alloc(24)
+    emu.write(offset, struct.pack("<3d", 10000.0, 0.0, 100.0))
+    emu.call(0x00497F20, out, depth, offset)
+    offset_xy = struct.unpack("<2f", emu.read(out, 8))
+    if not (math.isclose(offset_xy[0], 420.0, abs_tol=1e-4) and
+            math.isclose(offset_xy[1], 240.0, abs_tol=1e-4)):
+        raise RuntimeError(f"TransContext_Project offset returned {offset_xy}, expected (420, 240)")
+    print("PASS TransContext_Project returns display-space crosshair pixels")
+
+    print("heaven flow result: 7 retail checks passed in Unicorn")
     return 0
 
 
@@ -1112,6 +1367,11 @@ def main() -> int:
         action="store_true",
         help="validate native-only weather and pre-level-transition cleanup",
     )
+    parser.add_argument(
+        "--verify-heaven-flows",
+        action="store_true",
+        help="run the retail mission/LevelFlow/camera/position flows in Unicorn",
+    )
     args = parser.parse_args()
 
     if not args.exe:
@@ -1119,7 +1379,12 @@ def main() -> int:
     if not Path(args.exe).is_file():
         skip(f"IGI_EXE does not exist: {args.exe}")
     if not Path(args.dll).is_file():
-        skip(f"DLL does not exist: {args.dll}")
+        if args.verify_heaven_flows or args.verify_menu_helpers:
+            # These retail checks do not need the mod DLL; they invoke the actual
+            # game routines the menu helpers call.
+            args.dll = ""
+        else:
+            skip(f"DLL does not exist: {args.dll}")
 
     emu_module = load_emu_module()
 
@@ -1136,6 +1401,8 @@ def main() -> int:
         return run_source_scan(args, emu_module)
     if args.verify_menu_helpers:
         return run_menu_helpers_check(args, emu_module)
+    if args.verify_heaven_flows:
+        return run_heaven_flows_check(args, emu_module)
 
     runtime = IGIRuntime(args.exe, args.dll, emu_module, lenient=args.lenient)
 

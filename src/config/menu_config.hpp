@@ -77,7 +77,8 @@ struct ImGuiMenuConfig {
     bool movable = true;
     bool resizable = true;
     bool collapsible = false;
-    bool autoResize = false;
+    // The ImGui frontend sizes itself to the configured control set by default.
+    bool autoResize = true;
     bool mouseCursor = true;
     bool keyboardNav = true;
     bool saveLayout = false;

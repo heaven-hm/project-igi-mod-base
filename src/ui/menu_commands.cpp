@@ -25,7 +25,7 @@ std::size_t menuRowCapacity(const MenuConfig &config) {
 }
 
 std::size_t menuPageCount(const MenuConfig &config) {
-    const auto rows = config.items.size() + (config.items.size() > kMenuRowsPerPage ? 1 : 0);
+    const auto rows = config.items.size();
     const std::size_t pages = (rows + kMenuRowsPerPage - 1) / kMenuRowsPerPage;
     return pages == 0 ? 1 : pages;
 }
@@ -38,15 +38,46 @@ std::size_t menuScreenIdSpan(const MenuConfig &config) {
     return menuPageCount(config) * static_cast<std::size_t>(kPageScreenStride);
 }
 
+std::size_t menuRowsOnPage(const MenuConfig &config) {
+    const auto pages = menuPageCount(config);
+    const auto page = std::min(config.pageIndex, pages - 1);
+    const auto firstRow = page * kMenuRowsPerPage;
+    return std::min(kMenuRowsPerPage, config.items.size() - firstRow);
+}
+
 int menuRequiredHeight(const MenuConfig &config) {
-    // The frame must fit every row it draws: the title, the controls on this
-    // page, both navigation rows when the menu is paged, and the button row.
-    // The old formula counted only one navigation row, so paged menus clipped
-    // the row above the buttons.
+    // The frame must fit every row it actually draws on this page: the title,
+    // the controls, both navigation rows when the menu is paged, and the button
+    // row. A page-aware count keeps the last page compact instead of reserving
+    // space for rows that do not exist.
     const bool paged = menuPageCount(config) > 1;
-    const std::size_t rowsOnPage = std::min(config.items.size(), kMenuRowsPerPage);
+    const std::size_t rowsOnPage = menuRowsOnPage(config);
     const auto rows = rowsOnPage + (config.title.empty() ? 0 : 1) + (paged ? 2 : 0) + 1;
     return static_cast<int>(rows) * static_cast<int>(kRowHeight + kRowSpacing) + 8;
+}
+
+int menuRequiredWidth(const MenuConfig &config) {
+    // The retail ListBox takes 140 pixels and the row needs padding, so the
+    // frame has to grow with the longest control label instead of clipping it.
+    std::size_t longest = config.title.size();
+    for (const auto &item : config.items) {
+        longest = std::max(longest, item.label.size());
+        for (const auto &value : item.values)
+            longest = std::max(longest, item.label.size() + 2 + value.size());
+    }
+    constexpr int kCharWidth = 7;
+    constexpr int kFixedWidth = 190;
+    constexpr int kMinimumWidth = 320;
+    constexpr int kMaximumWidth = 780;
+    const int content = static_cast<int>(longest) * kCharWidth + kFixedWidth;
+    return std::clamp(std::max(config.width, content), kMinimumWidth, kMaximumWidth);
+}
+
+int menuLayoutX(const MenuConfig &config) {
+    // Keep the right edge the user configured and grow leftwards, like the
+    // vertical layout keeps the bottom edge. Never leave the display on the left.
+    const int right = config.x + config.width;
+    return std::max(8, right - menuRequiredWidth(config));
 }
 
 int menuLayoutY(const MenuConfig &config) {

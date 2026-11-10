@@ -339,6 +339,10 @@ bool populatePortableMenuModel() {
                 return false;
             }
             break;
+        case igi::ModMenuItemKind::Input:
+            // The portable model has no text widget; the ImGui frontend renders
+            // numeric inputs directly and dispatches their Apply value.
+            break;
         }
     }
     return true;
@@ -674,13 +678,38 @@ bool toggleImGuiMenuOnGameThread() {
     return openImGuiMenu();
 }
 
+// The window must fit the longest label and the number of controls in a
+// category; a fixed 460x400 frame clipped the longer Heaven rows.
+void desiredImGuiWindowSize(float &width, float &height) {
+    constexpr float kRowHeight = 26.0F;
+    constexpr float kChromeHeight = 130.0F;
+    constexpr float kFixedWidth = 250.0F;
+    constexpr float kCharWidth = 8.0F;
+    std::size_t longest = menuConfig.title.size();
+    std::size_t rows = 0;
+    for (const auto &item : menuConfig.items) {
+        longest = std::max(longest, item.label.size());
+        ++rows;
+    }
+    const float contentWidth = static_cast<float>(longest) * kCharWidth + kFixedWidth;
+    const float contentHeight =
+        kChromeHeight + static_cast<float>(std::min<std::size_t>(rows, 24)) * kRowHeight;
+    width = std::clamp(std::max(static_cast<float>(menuConfig.imgui.width), contentWidth), 320.0F,
+                       900.0F);
+    height = std::clamp(std::max(static_cast<float>(menuConfig.imgui.height), contentHeight),
+                        220.0F, 720.0F);
+}
+
 void renderImGuiModWindow() {
     ImGui::SetNextWindowPos(
         ImVec2(static_cast<float>(menuConfig.imgui.x), static_cast<float>(menuConfig.imgui.y)),
         ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(static_cast<float>(menuConfig.imgui.width),
-                                    static_cast<float>(menuConfig.imgui.height)),
-                             ImGuiCond_FirstUseEver);
+    float desiredWidth = static_cast<float>(menuConfig.imgui.width);
+    float desiredHeight = static_cast<float>(menuConfig.imgui.height);
+    desiredImGuiWindowSize(desiredWidth, desiredHeight);
+    ImGui::SetNextWindowSize(ImVec2(desiredWidth, desiredHeight), menuConfig.imgui.autoResize
+                                                                      ? ImGuiCond_Always
+                                                                      : ImGuiCond_FirstUseEver);
 
     ImGuiWindowFlags windowFlags = ImGuiWindowFlags_None;
     if (!menuConfig.imgui.collapsible)
@@ -689,8 +718,6 @@ void renderImGuiModWindow() {
         windowFlags |= ImGuiWindowFlags_NoMove;
     if (!menuConfig.imgui.resizable)
         windowFlags |= ImGuiWindowFlags_NoResize;
-    if (menuConfig.imgui.autoResize)
-        windowFlags |= ImGuiWindowFlags_AlwaysAutoResize;
 
     bool keepOpen = menuVisible;
     if (ImGui::Begin(menuConfig.title.c_str(), &keepOpen, windowFlags)) {
@@ -884,8 +911,11 @@ void drawCrosshairOverlay(igi::Runtime &runtime) {
     if (menuConfig.crosshairPosition &&
         menuConfig.crosshairPosition(runtime, static_cast<int>(vp.dwWidth),
                                      static_cast<int>(vp.dwHeight), aimX, aimY)) {
-        centreX = static_cast<float>(vp.dwX) + aimX;
-        centreY = static_cast<float>(vp.dwY) + aimY;
+        // TransContext_Project already returns display pixels, including the
+        // viewport scene origin; adding the viewport offset again moved the
+        // crosshair away from the aim point on a non-zero viewport.
+        centreX = aimX;
+        centreY = aimY;
     }
     const ImVec2 centre(centreX, centreY);
     ImDrawList *draw = ImGui::GetBackgroundDrawList();
@@ -912,9 +942,33 @@ void drawCrosshairOverlay(igi::Runtime &runtime) {
     restoreIgiRenderCacheAndFpu();
 }
 
+// Finishes a requested eject on the game thread. The scheduler task and the
+// end-frame callback both call this, so a missing scheduler tick cannot leave the
+// menu visible and the start key working after "Exit Mod"/the end key.
+void completeExternalShutdownOnGameThread() {
+    if (!shutdownPending.load(std::memory_order_acquire))
+        return;
+    igi::log(igi::LogLevel::Info, "external imgui unload: game-thread cleanup started");
+    if (menuVisible)
+        (void)closeImGuiMenu();
+    else if (IGI::GAME::GET())
+        (void)igi::resumeFromMenu(runtime);
+    if (IGI::GAME::GET())
+        IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, "IGI SDK ImGui Mod Menu: disabled");
+    unregisterEndFrameCallback();
+    shutdownImGuiBackend();
+    shutdownPending.store(false, std::memory_order_release);
+    safeToShutdown.store(true, std::memory_order_release);
+    igi::log(igi::LogLevel::Info, "external imgui unload: game-thread cleanup finished");
+}
+
 extern "C" void __cdecl onDisplayEndFrame() noexcept {
     if (!runtime.initialized())
         return;
+    if (shutdownPending.load(std::memory_order_acquire)) {
+        completeExternalShutdownOnGameThread();
+        return;
+    }
     if (!IGI::GAME::GET()) {
         // Level teardown: the Game task is gone, so no per-frame helper may run.
         if (menuConfig.frameUpdate)
@@ -977,6 +1031,8 @@ bool prepareMenuForLevelChange() {
         (void)closeImGuiMenu();
     else
         (void)resumeFromMenu(runtime);
+    // The pause ownership belongs to the Game task that is about to be deleted.
+    igi::abandonMenuPause();
 
     log(LogLevel::Info, "level change: closed external ImGui menu and unlocked input");
     return true;
@@ -1071,19 +1127,7 @@ extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_External_RequestShutdown() {
     initialAttachPending.store(false, std::memory_order_release);
     shutdownPending.store(true, std::memory_order_release);
     safeToShutdown.store(false, std::memory_order_release);
-    runtime.scheduler().enqueueOnce([] {
-        igi::log(igi::LogLevel::Info, "external imgui unload: game-thread cleanup started");
-        if (menuVisible)
-            (void)closeImGuiMenu();
-        else if (IGI::GAME::GET())
-            (void)igi::resumeFromMenu(runtime);
-        if (IGI::GAME::GET())
-            IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, "IGI SDK ImGui Mod Menu: disabled");
-        unregisterEndFrameCallback();
-        shutdownImGuiBackend();
-        igi::log(igi::LogLevel::Info, "external imgui unload: game-thread cleanup finished");
-        safeToShutdown.store(true, std::memory_order_release);
-    });
+    runtime.scheduler().enqueueOnce([] { completeExternalShutdownOnGameThread(); });
     return true;
 #else
     return false;

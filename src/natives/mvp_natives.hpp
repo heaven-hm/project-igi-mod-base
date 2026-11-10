@@ -64,6 +64,7 @@ struct InputRemap;
 struct Level;
 struct Matrix;
 struct MenuInput;
+struct Mission;
 struct MenuManager;
 struct PlayerProfile;
 struct QTaskList;
@@ -226,6 +227,14 @@ inline constexpr std::uint32_t HUMAN_VIEW_SET_CAMERA = 0x004658d0;
 inline constexpr std::uint32_t HUMAN_VIEW_CLEAR_CAM_OVERRIDE = 0x00465910;
 // Matrix_SetEuler composes the retail Z-Y-X rotation the camera override expects.
 inline constexpr std::uint32_t MATRIX_SET_EULER = 0x004b38e0;
+// out = m * RotX(a); the render camera axes are the world matrix turned by -90
+// degrees around X (IGI-RE HumanCamera set_view).
+inline constexpr std::uint32_t MATRIX_ROTATE_X = 0x004b34f0;
+// Retail mission table lookup, used to validate a level change before unload.
+inline constexpr std::uint32_t MISSION_FIND = 0x00485170;
+// LevelFlow world clock in hours and remaining time-limit frames.
+inline constexpr std::uint32_t LEVELFLOW_GET_HOUR = 0x00489470;
+inline constexpr std::uint32_t LEVELFLOW_GET_TICKS_LEFT = 0x004894b0;
 // Base task type for every world-space object (cars, doors, pickups, props).
 inline constexpr std::uint32_t RIGID_DYN_CUBE_OBJ_GET_TYPE = 0x004c48c0;
 // The camera actually being rendered this frame (Camera*, not HumanCamera).
@@ -609,6 +618,7 @@ NATIVE_DECL void SET_CAMERA(HumanView *v, const double *pos, const Matrix *rot);
 // Clears the camera override so the retail view controls the camera again.
 NATIVE_DECL void CLEAR_CAM_OVERRIDE(HumanView *v);
 NATIVE_DECL void SET_EULER(Matrix *m, float ax, float ay, float az);
+NATIVE_DECL void ROTATE_X(Matrix *out, const Matrix *m, float a);
 NATIVE_DECL void SET_TARGET(HumanView *v, const int *target, char flag);
 NATIVE_DECL void SET_DIP(HumanView *v, float dip);
 NATIVE_DECL void SET_ZOOMED(HumanView *v);
@@ -789,6 +799,11 @@ NATIVE_DECL int EVAL_CONST(const char *expr);
 NATIVE_DECL ScriptValue *INT_VALUE(ScriptValue *out, int *var);
 NATIVE_DECL ScriptValue *BOOL8_VALUE(ScriptValue *out, char *var);
 } // namespace SCRIPT
+namespace MISSION {
+// Retail mission table lookup. Null means the id is not installed; a level
+// change must check this before it unloads the running level.
+NATIVE_DECL Mission *FIND(int id);
+} // namespace MISSION
 namespace TASK {
 NATIVE_DECL Task *RUN_SCRIPT(Task *parent, const char *path, char insertHead);
 NATIVE_DECL Task *FIND_BY_ID(int id);
@@ -866,6 +881,10 @@ NATIVE_DECL int SCREEN_GET_FRAME();
 // Registers fn(Camera*) to run once per viewport before it draws.
 NATIVE_DECL void VIEWPORT_ADD_CALLBACK(void (*fn)(void *camera));
 NATIVE_DECL int SPRITE_WIDTH(Sprite *sprite);
+// World clock of the running mission in hours (LevelFlow startHour + elapsed).
+NATIVE_DECL double LEVELFLOW_GET_HOUR();
+// Frames left in the mission time limit, never below zero.
+NATIVE_DECL int LEVELFLOW_GET_TICKS_LEFT();
 NATIVE_DECL int SPRITE_HEIGHT(Sprite *sprite);
 } // namespace OTHER
 } // namespace IGI

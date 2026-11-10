@@ -6,12 +6,15 @@
 #include "natives/igi_native_registry.hpp"
 #include "natives/mvp_natives.hpp"
 #include "natives/native_caller.hpp"
+#include "platform/windows_dll.hpp"
 #include "ui/menu_lifecycle.hpp"
 #include "ui/menu_resource.hpp"
 #include "ui/menu_script.hpp"
 
 #include <algorithm>
 #include <atomic>
+#include <cctype>
+#include <iterator>
 #include <charconv>
 #include <cmath>
 #include <cstddef>
@@ -94,20 +97,6 @@ static_assert(offsetof(RetailCameraView, owner) == 0x54);
 
 // Largest node id the retail graph accepts (Graph_AddNode rejects id >= 1000).
 constexpr int kMaxGraphNodes = 1000;
-
-// Retail WeaponType layout (IGI-RE weapontypes.h): six 0x100 name/text blocks
-// start at 0x10, so `category` is at 0x610 and `sightDisplay` at 0x614.
-// Reading 0x61C instead lands inside the model-name string, which is why the
-// third-person crosshair gate never matched.
-struct WeaponTypeHudLayout {
-    std::byte unused[0x614];
-    int sightDisplay;
-};
-
-static_assert(offsetof(WeaponTypeHudLayout, sightDisplay) == 0x614);
-// SIGHTDISPLAYTYPE_CROSSHAIR: the weapon wants the retail cross sprite.
-constexpr int kSightDisplayCrosshair = 1;
-constexpr int kSightDisplayNone = 0;
 
 constexpr std::size_t kStatusScreenCrossSpriteOffset = 0x74;
 // StatusScreen.scene at +0x20 (IGI-RE mission.h: Task then char scene[0x50]).
@@ -255,6 +244,170 @@ IGI::Task *findLiveTarget(Runtime &runtime, int id, Predicate &&predicate) {
     if (!task)
         return nullptr;
     return predicate(task) ? task : nullptr;
+}
+
+// Retail LevelFlow layout (IGI-RE levelflowtypes.h). The world clock and the
+// mission timer are independent fields of the level script task.
+struct LevelFlowLayout {
+    std::byte prefix[0x68];
+    int nTick;
+    float startHour;
+    std::byte unk70[4];
+    float timeLimit;
+};
+static_assert(offsetof(LevelFlowLayout, nTick) == 0x68);
+static_assert(offsetof(LevelFlowLayout, startHour) == 0x6C);
+static_assert(offsetof(LevelFlowLayout, timeLimit) == 0x74);
+
+// Retail Mission layout (IGI-RE mission.c). The name is the display label.
+struct MissionLayout {
+    int id;
+    char name[0x20];
+};
+static_assert(offsetof(MissionLayout, name) == 4);
+
+// Minimal Task/Node layout for walking a level's authored object tree.
+#pragma pack(push, 1)
+struct TaskTreeLayout {
+    TaskTreeLayout *next;
+    TaskTreeLayout *prev;
+    TaskTreeLayout *head;
+    TaskTreeLayout *tail;
+    TaskTreeLayout *tailpred;
+    TaskTreeLayout *parent;
+    int refs;
+    std::uint16_t type;
+    char pooled;
+    char unk1F;
+};
+#pragma pack(pop)
+
+std::array<double, 3> taskPosition(const IGI::Task *task) {
+    std::array<double, 3> position{};
+    if (!task)
+        return position;
+    std::memcpy(position.data(), reinterpret_cast<const std::uint8_t *>(task) + 0x20,
+                sizeof(double) * position.size());
+    return position;
+}
+
+void collectAuthoredTasks(const TaskTreeLayout *node, std::vector<IGI::Task *> &out, int depth) {
+    if (!node || depth <= 0 || out.size() >= 4096)
+        return;
+    for (auto *child = node->head; child && child->next; child = child->next) {
+        out.push_back(reinterpret_cast<IGI::Task *>(child));
+        collectAuthoredTasks(child, out, depth - 1);
+    }
+}
+
+// Every task below the active level's authored object roots. Unlike the game's
+// event task lists this contains the buildings, doors, props and landmarks the
+// level script created, which is what the object teleport picker needs.
+std::vector<IGI::Task *> authoredLevelTasks(Runtime &runtime) {
+    std::vector<IGI::Task *> tasks;
+    if (!requireLiveGameThread(runtime) || !IGI::GAME::GET())
+        return tasks;
+    const auto collect = [&tasks](IGI::Task *root) {
+        if (!root)
+            return;
+        const auto *layout = reinterpret_cast<const TaskTreeLayout *>(root);
+        collectAuthoredTasks(layout, tasks, 32);
+    };
+    collect(reinterpret_cast<IGI::Task *>(IGI::LEVEL::GET_DYNAMIC()));
+    collect(reinterpret_cast<IGI::Task *>(IGI::LEVEL::GET_STATIC()));
+    return tasks;
+}
+
+IGI::Task *findLevelFlowTask(Runtime &runtime) {
+    if (!requireLiveGameThread(runtime) || !IGI::GAME::GET())
+        return nullptr;
+    const auto levelFlowType = IGI::TASK::FIND("LevelFlow");
+    if (levelFlowType == 0)
+        return nullptr;
+    if (auto *dynamic = IGI::LEVEL::GET_DYNAMIC()) {
+        if (auto *found =
+                IGI::TASK::FIND_CHILD(reinterpret_cast<IGI::Task *>(dynamic), levelFlowType))
+            return found;
+    }
+    if (auto *level = reinterpret_cast<IGI::Task *>(IGI::LEVEL::GET())) {
+        if (auto *found = IGI::TASK::FIND_CHILD(level, levelFlowType))
+            return found;
+    }
+    for (auto *task : liveTasks(runtime)) {
+        const auto type = reinterpret_cast<const TaskTreeLayout *>(task)->type;
+        if (type == levelFlowType || IGI::TASK::IS_A(type, levelFlowType) != 0)
+            return task;
+    }
+    return nullptr;
+}
+
+int currentFlowFps() {
+    const int fps = IGI::OTHER::FLOW_GET_FPS();
+    return fps > 0 ? fps : 30;
+}
+
+// Places a human on the ground below a requested point. Human_SnapToGround
+// probes from the body position, so a typed Z below the map made the upward
+// fallback find the terrain underside and left the body underground. Probing
+// from above the requested point always finds the floor the player should stand
+// on; a point already under a low ceiling falls back to an exact probe.
+bool placeHumanOnGround(Runtime &runtime, IGI::Human *human,
+                        const std::array<double, 3> &position) {
+    if (!human)
+        return false;
+    if (!isCallableNative(IGI::HASH::HUMAN_SNAP_TO_GROUND, "void Human_SnapToGround(Human *h)")) {
+        auto destination = position;
+        IGI::HUMAN::SET_POSITION(human, destination.data());
+        return true;
+    }
+    constexpr double kProbeLift = 1.5 * 4096.0;
+    constexpr double kHighProbe = 40.0 * 4096.0;
+    auto probe = position;
+    probe[2] += kProbeLift;
+    IGI::HUMAN::SET_POSITION(human, probe.data());
+    IGI::HUMAN::SNAP_TO_GROUND(human);
+    auto grounded = taskPosition(reinterpret_cast<const IGI::Task *>(human));
+    if (!(grounded[2] <= probe[2] + 4096.0)) {
+        // The downward probe found nothing and the upward fallback hit a
+        // surface above the lift point: the requested point is under terrain or
+        // a ceiling. Probe down from well above it so the player lands on the
+        // top surface instead of under the map.
+        auto high = position;
+        high[2] += kHighProbe;
+        IGI::HUMAN::SET_POSITION(human, high.data());
+        IGI::HUMAN::SNAP_TO_GROUND(human);
+        grounded = taskPosition(reinterpret_cast<const IGI::Task *>(human));
+    }
+    log(LogLevel::Info, "teleport ground probe: requested " + std::to_string(position[0]) + ", " +
+                            std::to_string(position[1]) + ", " + std::to_string(position[2]) +
+                            " -> grounded " + std::to_string(grounded[0]) + ", " +
+                            std::to_string(grounded[1]) + ", " + std::to_string(grounded[2]));
+    return true;
+}
+
+void broadcastPlayerPosition(IGI::Human *player) {
+    if (!player)
+        return;
+    // The retail player update sends both broadcasts: list 1 (world systems)
+    // and list 2 (the player state machine). Only sending the player broadcast
+    // left world-side listeners on the old position, which is why Send Player
+    // Position appeared to do nothing.
+    IGI::HUMAN::SEND_POSITION(player);
+    IGI::PLAYER::SEND_POSITION(reinterpret_cast<IGI::HumanPlayer *>(player));
+}
+
+std::atomic<int> g_pendingLevel{0};
+
+void appendTargetsTo(std::vector<LiveTarget> &destination, const std::vector<LiveTarget> &source) {
+    for (const auto &target : source) {
+        if (destination.size() >= kMaxLiveTargets)
+            return;
+        const bool duplicate =
+            std::any_of(destination.begin(), destination.end(),
+                        [&target](const LiveTarget &item) { return item.taskId == target.taskId; });
+        if (!duplicate)
+            destination.push_back(target);
+    }
 }
 
 IGI::Game *g_precipitationGame = nullptr;
@@ -645,6 +798,9 @@ std::atomic<bool> g_freecamActive{false};
 // the free camera works while the mod menu is open.
 std::atomic<void *> g_renderCamera{nullptr};
 std::atomic<bool> g_viewportCallbackRegistered{false};
+// True when this module owns the human input lock for the free camera. The menu
+// pause can own the same lock; disabling freecam must not unlock it then.
+std::atomic<bool> g_freecamInputLocked{false};
 struct FreecamPose {
     double position[3]{};
     float pitch = 0.0F;
@@ -659,12 +815,35 @@ IGI::HumanView *playerView(IGI::Human *player) {
     return *reinterpret_cast<IGI::HumanView **>(reinterpret_cast<std::uint8_t *>(player) +
                                                 kHumanViewOffset);
 }
+
+// The retail camera axes are the world orientation turned by -90 degrees around
+// X (IGI-RE HumanCamera set_view). HumanView_SetCamera takes the world matrix,
+// Camera_Set takes the converted axes.
+void buildRenderCameraAxes(float pitch, float yaw, RetailMatrix &axes) {
+    RetailMatrix world{};
+    IGI::CAMERA::SET_EULER(reinterpret_cast<IGI::Matrix *>(&world), pitch, 0.0F, yaw);
+    constexpr float kCameraRotX = -1.57079637F;
+    IGI::CAMERA::ROTATE_X(reinterpret_cast<IGI::Matrix *>(&axes),
+                          reinterpret_cast<const IGI::Matrix *>(&world), kCameraRotX);
+}
 } // namespace
 
-// Viewport_AddCallback stores the Camera the renderer is about to use. This is
-// the object IGI-RE's FreeCamera_Run calls Camera_Set on every frame.
+// Viewport_AddCallback runs before the viewport builds its TransContext, which is
+// exactly where IGI-RE FreeCamera_Run calls Camera_Set. Applying the pose here
+// makes the free camera visible on the same frame, including while the retail
+// game is paused behind the menu (HumanCamera does not run while paused).
 extern "C" void __cdecl igiCaptureViewportCamera(void *camera) noexcept {
     g_renderCamera.store(camera, std::memory_order_release);
+    if (!camera || !g_freecamActive.load(std::memory_order_acquire))
+        return;
+    RetailMatrix axes{};
+    buildRenderCameraAxes(g_freecamPose.pitch, g_freecamPose.yaw, axes);
+    // Same call shape as IGI-RE FreeCamera_Run, with a priority above the retail
+    // human camera (300) so a paused frame cannot replace this pose.
+    IGI::CAMERA::SET(reinterpret_cast<IGI::Camera *>(camera),
+                     reinterpret_cast<const IGI::Vec3d *>(g_freecamPose.position),
+                     reinterpret_cast<const IGI::Matrix *>(&axes), g_freecamPose.fov, 1.0F, 1000.0F,
+                     IGI::OTHER::SCREEN_GET_FRAME(), nullptr, 0, 0);
 }
 
 // The retail free camera: HumanView_SetCamera sets camOverride, and the view's
@@ -690,7 +869,8 @@ bool setFreecamEnabled(Runtime &runtime, bool enabled) {
             return true;
         }
         g_freecamActive.store(false, std::memory_order_release);
-        (void)unlockHumanInput();
+        if (g_freecamInputLocked.exchange(false, std::memory_order_acq_rel))
+            (void)unlockHumanInput();
         log(LogLevel::Info, "free camera disabled: the retail view owns the camera again");
         return true;
     }
@@ -702,29 +882,50 @@ bool setFreecamEnabled(Runtime &runtime, bool enabled) {
         log(LogLevel::Info, "free camera already active");
         return true;
     }
-    // Start from the camera the game is rendering, so enabling never snaps the view.
+    // Start from the camera the game is rendering, so enabling never snaps the
+    // view. The captured render Camera is the third-person eye position; the
+    // camera-info handler returns the player's eye, which is a different point.
     IGI::HumanCameraInfo info{};
     IGI::HUMAN::GET_CAMERA_INFO(player, &info);
     g_freecamPose.position[0] = info.position[0];
     g_freecamPose.position[1] = info.position[1];
     g_freecamPose.position[2] = info.position[2];
-    // HumanView_GetForward takes the middle matrix column (m[1], m[4], m[7]).
+    float forwardX = info.matrix[1];
+    float forwardY = info.matrix[4];
+    float forwardZ = info.matrix[7];
+    g_freecamPose.fov = info.fov > 0.0F ? info.fov : 1.0F;
+#if defined(_WIN32)
+    if (auto *camera = g_renderCamera.load(std::memory_order_acquire)) {
+        const auto *rendered = reinterpret_cast<const RetailCameraView *>(camera);
+        if (std::isfinite(rendered->position[0]) && std::isfinite(rendered->position[1]) &&
+            std::isfinite(rendered->position[2])) {
+            g_freecamPose.position[0] = rendered->position[0];
+            g_freecamPose.position[1] = rendered->position[1];
+            g_freecamPose.position[2] = rendered->position[2];
+            // The render axes are the world matrix turned by -90 X, so column 2
+            // (m[2], m[5], m[8]) is the world view forward.
+            forwardX = rendered->axes.m[2];
+            forwardY = rendered->axes.m[5];
+            forwardZ = rendered->axes.m[8];
+            if (rendered->fov > 0.0F)
+                g_freecamPose.fov = rendered->fov;
+        }
+    }
+#endif
     // Matrix_SetEuler(pitch, 0, yaw) makes forward = (-sin yaw cos pitch,
     // cos yaw cos pitch, sin pitch), so the inverse is atan2(-x, y).
-    const float forwardX = info.matrix[1];
-    const float forwardY = info.matrix[4];
-    const float forwardZ = info.matrix[7];
     g_freecamPose.yaw = std::atan2(-forwardX, forwardY);
     g_freecamPose.pitch = std::asin(std::clamp(forwardZ, -1.0F, 1.0F));
-    g_freecamPose.fov = info.fov > 0.0F ? info.fov : 1.0F;
 #if defined(_WIN32)
     // Register once; the callback keeps the Camera* the renderer is using.
     if (!g_viewportCallbackRegistered.exchange(true, std::memory_order_acq_rel))
         IGI::OTHER::VIEWPORT_ADD_CALLBACK(&igiCaptureViewportCamera);
 #endif
     // The view override does not stop the body controls, so lock them while the
-    // camera is detached; disabling clears the override and unlocks input again.
-    (void)lockHumanInput();
+    // camera is detached. The menu pause may already own the lock; track only a
+    // lock this module created so disabling cannot unlock the retail menu.
+    g_freecamInputLocked.store(igi::menuPauseActive() ? false : lockHumanInput(),
+                               std::memory_order_release);
     g_freecamActive.store(true, std::memory_order_release);
     log(LogLevel::Info, "free camera enabled: WASD moves, Space/Ctrl rise/drop, Shift is 4x, "
                         "arrow keys turn; the player body stays in place");
@@ -792,15 +993,10 @@ bool updateFreecam(Runtime &runtime) {
     RetailMatrix rotation{};
     IGI::CAMERA::SET_EULER(reinterpret_cast<IGI::Matrix *>(&rotation), g_freecamPose.pitch, 0.0F,
                            g_freecamPose.yaw);
-    // IGI-RE FreeCamera_Run: Camera_Set(camera, pos, axes, fov, 1.0, 100.0,
-    // Screen_GetFrame(), NULL, 0, 0). A high priority keeps our pose ahead of the
-    // paused/update path, and it is the camera the renderer actually reads.
-    if (auto *camera = g_renderCamera.load(std::memory_order_acquire)) {
-        IGI::CAMERA::SET(reinterpret_cast<IGI::Camera *>(camera),
-                         reinterpret_cast<const IGI::Vec3d *>(g_freecamPose.position),
-                         reinterpret_cast<const IGI::Matrix *>(&rotation), g_freecamPose.fov, 1.0F,
-                         1000.0F, IGI::OTHER::SCREEN_GET_FRAME(), nullptr, 0, 0);
-    }
+    // The view override makes the retail HumanCamera copy this pose on its next
+    // update (mode 4), so the player camera, sound listener and crosshair all use
+    // it. The viewport callback above applies the same pose to the live render
+    // Camera for paused frames and for the current frame.
     IGI::CAMERA::SET_CAMERA(view, g_freecamPose.position,
                             reinterpret_cast<const IGI::Matrix *>(&rotation));
 #endif
@@ -831,23 +1027,17 @@ bool teleportPlayerToTarget(Runtime &runtime, int targetTaskId) {
         log(LogLevel::Warning, "teleport rejected: target is no longer live on this level");
         return false;
     }
-    double targetPosition[3]{};
-    // DynCubeObj objects keep their origin at +0x20 (IGI-RE task_pos()); Human
-    // uses the same offset, so every accepted teleport target is laid out alike.
-    std::memcpy(targetPosition, reinterpret_cast<const std::uint8_t *>(target) + 0x20,
-                sizeof(targetPosition));
+    const auto targetPosition = taskPosition(target);
     std::array<double, 3> playerPosition{};
     (void)readPlayerPosition(runtime, playerPosition);
     // Stand 1.5 m from the target on the side the player is already on, so the
-    // body does not spawn inside the object (200 world units is only 5 cm).
+    // body does not spawn inside the object. Z is vertical in this world, so the
+    // stand-off is horizontal only and the ground probe fixes the height.
     constexpr double kTeleportStandOff = 1.5 * 4096.0;
-    // Z is vertical in this world (Human_GetEyePos adds the eye height to
-    // pos[2]), so the stand-off is horizontal only and the ground snap fixes the
-    // height afterwards.
     const double direction[2] = {playerPosition[0] - targetPosition[0],
                                  playerPosition[1] - targetPosition[1]};
     const double length = std::sqrt(direction[0] * direction[0] + direction[1] * direction[1]);
-    double position[3]{};
+    std::array<double, 3> position{};
     if (length > 1.0) {
         position[0] = targetPosition[0] + direction[0] / length * kTeleportStandOff;
         position[1] = targetPosition[1] + direction[1] / length * kTeleportStandOff;
@@ -856,17 +1046,21 @@ bool teleportPlayerToTarget(Runtime &runtime, int targetTaskId) {
         position[1] = targetPosition[1];
     }
     position[2] = targetPosition[2];
-    // Exact retail flow: Human_SetPosition moves the body, Human_SnapToGround
-    // probes and calls Human_SetPosition once more with the grounded point, then
-    // both SendPosition broadcasts publish the final body position. Sending
-    // before the snap left the state machine and camera replicas on the old
-    // height, which is what made teleports end up underground.
-    IGI::HUMAN::SET_POSITION(player, position);
-    (void)EntityHelpers(runtime).snapHumanToGround(player);
-    IGI::HUMAN::SEND_POSITION(player);
-    IGI::PLAYER::SEND_POSITION(reinterpret_cast<IGI::HumanPlayer *>(player));
+    if (!placeHumanOnGround(runtime, player, position))
+        return false;
+    broadcastPlayerPosition(player);
     log(LogLevel::Info, "player teleported to target #" + std::to_string(targetTaskId));
     return true;
+}
+
+bool readTargetPosition(Runtime &runtime, int targetTaskId, std::array<double, 3> &position) {
+    if (!requireLiveGameThread(runtime) || targetTaskId < 0)
+        return false;
+    auto *target = findLiveTask(runtime, targetTaskId);
+    if (!target)
+        return false;
+    position = taskPosition(target);
+    return std::isfinite(position[0]) && std::isfinite(position[1]) && std::isfinite(position[2]);
 }
 
 bool readPlayerPosition(Runtime &runtime, std::array<double, 3> &position) {
@@ -902,14 +1096,184 @@ bool teleportPlayerToPosition(Runtime &runtime, const std::array<double, 3> &pos
     auto *player = reinterpret_cast<IGI::Human *>(IGI::GAME::GET_PLAYER(0));
     if (!player)
         return false;
-    auto destination = position;
-    IGI::HUMAN::SET_POSITION(player, destination.data());
-    (void)EntityHelpers(runtime).snapHumanToGround(player);
-    IGI::HUMAN::SEND_POSITION(player);
-    IGI::PLAYER::SEND_POSITION(reinterpret_cast<IGI::HumanPlayer *>(player));
+    if (!placeHumanOnGround(runtime, player, position))
+        return false;
+    broadcastPlayerPosition(player);
     log(LogLevel::Info, "player moved to " + std::to_string(position[0]) + ", " +
                             std::to_string(position[1]) + ", " + std::to_string(position[2]));
     return true;
+}
+
+bool sendPlayerToTarget(Runtime &runtime, int targetTaskId) {
+    if (!requireLiveGameThread(runtime) || targetTaskId < 0)
+        return false;
+    auto *player = reinterpret_cast<IGI::Human *>(IGI::GAME::GET_PLAYER(0));
+    if (!player)
+        return false;
+    if (findLiveTask(runtime, targetTaskId) == reinterpret_cast<IGI::Task *>(player)) {
+        // Sending to the player entity means re-publishing the current position
+        // to both retail broadcast lists, not moving the body.
+        broadcastPlayerPosition(player);
+        log(LogLevel::Info, "send player position: re-sent the live player position");
+        return true;
+    }
+    if (!teleportPlayerToTarget(runtime, targetTaskId))
+        return false;
+    log(LogLevel::Info, "send player position: destination target #" +
+                            std::to_string(targetTaskId) + " reached and broadcast");
+    return true;
+}
+
+bool missionAvailable(Runtime &runtime, int missionId) {
+    if (!requireLiveGameThread(runtime) || missionId <= 0)
+        return false;
+    return IGI::MISSION::FIND(missionId) != nullptr;
+}
+
+std::vector<LiveTarget> missionTargets(Runtime &runtime) {
+    std::vector<LiveTarget> missions;
+    if (!requireLiveGameThread(runtime) || !IGI::GAME::GET())
+        return missions;
+    for (int id = 1; id <= 32 && missions.size() < kMaxLiveTargets; ++id) {
+        auto *mission = IGI::MISSION::FIND(id);
+        if (!mission)
+            continue;
+        const auto *layout = reinterpret_cast<const MissionLayout *>(mission);
+        std::string name = "Mission " + std::to_string(id);
+        if (layout->name[0] != '\0') {
+            std::size_t nameLength = 0;
+            while (nameLength < sizeof(layout->name) && layout->name[nameLength] != '\0')
+                ++nameLength;
+            name += ": ";
+            name.append(layout->name, nameLength);
+        }
+        missions.push_back({id, std::move(name)});
+    }
+    return missions;
+}
+
+bool requestModExit() {
+#if defined(_WIN32)
+    const bool requested = IGI_SDK_RequestSafeUnload() != 0;
+    log(requested ? LogLevel::Info : LogLevel::Warning,
+        requested ? "Exit Mod: safe unload requested; the host closes the menu and removes the "
+                    "retail callbacks"
+                  : "Exit Mod rejected: the host is not running or unload is already pending");
+    return requested;
+#else
+    return false;
+#endif
+}
+
+bool requestLevelChange(Runtime &runtime, int levelId) {
+    if (!requireLiveGameThread(runtime) || levelId <= 0)
+        return false;
+    if (!missionAvailable(runtime, levelId)) {
+        log(LogLevel::Warning, "level change rejected: mission " + std::to_string(levelId) +
+                                   " is not installed in the retail mission table");
+        return false;
+    }
+    // Do not touch the Game task here: this runs from a frame callback, before
+    // the retail scene is flushed. The host performs the change from the end of
+    // the frame, after Scene_DrawAll, like the retail F12 level switch.
+    g_pendingLevel.store(levelId, std::memory_order_release);
+    log(LogLevel::Info, "level change queued: mission " + std::to_string(levelId) +
+                            "; switching after the current frame is flushed");
+    return true;
+}
+
+bool processPendingLevelChange(Runtime &runtime) {
+    const int levelId = g_pendingLevel.exchange(0, std::memory_order_acq_rel);
+    if (levelId <= 0)
+        return false;
+    return changeLevel(runtime, levelId);
+}
+
+bool setWorldHour(Runtime &runtime, float hour) {
+    if (!requireLiveGameThread(runtime))
+        return false;
+    auto *task = findLevelFlowTask(runtime);
+    if (!task) {
+        log(LogLevel::Warning, "world time rejected: the LevelFlow task is unavailable");
+        return false;
+    }
+    if (!(hour >= 0.0F && hour <= 24.0F)) {
+        log(LogLevel::Warning, "world time rejected: hour must be 0..24");
+        return false;
+    }
+    auto *layout = reinterpret_cast<LevelFlowLayout *>(task);
+    // World time = startHour + elapsed/fps/3600 (IGI-RE LevelFlow_GetHour). Only
+    // startHour changes here, so the mission timer stays independent.
+    const double elapsedHours =
+        static_cast<double>(layout->nTick) / (static_cast<double>(currentFlowFps()) * 3600.0);
+    layout->startHour = static_cast<float>(static_cast<double>(hour) - elapsedHours);
+    log(LogLevel::Info, "world time set to " + std::to_string(hour) + " h (start hour " +
+                            std::to_string(layout->startHour) + ")");
+    return true;
+}
+
+std::optional<float> worldHour(Runtime &runtime) {
+    auto *task = findLevelFlowTask(runtime);
+    if (!task)
+        return std::nullopt;
+#if defined(_WIN32)
+    // The retail routine is the authority for the clock (startHour + ticks).
+    const double retailHour = IGI::OTHER::LEVELFLOW_GET_HOUR();
+    if (std::isfinite(retailHour))
+        return static_cast<float>(retailHour);
+#endif
+    const auto *layout = reinterpret_cast<const LevelFlowLayout *>(task);
+    const double elapsedHours =
+        static_cast<double>(layout->nTick) / (static_cast<double>(currentFlowFps()) * 3600.0);
+    return static_cast<float>(static_cast<double>(layout->startHour) + elapsedHours);
+}
+
+bool setMissionElapsedSeconds(Runtime &runtime, int seconds) {
+    if (!requireLiveGameThread(runtime) || seconds < 0)
+        return false;
+    auto *task = findLevelFlowTask(runtime);
+    if (!task) {
+        log(LogLevel::Warning, "mission time rejected: the LevelFlow task is unavailable");
+        return false;
+    }
+    auto *layout = reinterpret_cast<LevelFlowLayout *>(task);
+    const float keepHour = worldHour(runtime).value_or(layout->startHour);
+    layout->nTick = seconds * currentFlowFps();
+    // Reset startHour so changing the mission clock does not move the world sun.
+    const double elapsedHours =
+        static_cast<double>(layout->nTick) / (static_cast<double>(currentFlowFps()) * 3600.0);
+    layout->startHour = static_cast<float>(static_cast<double>(keepHour) - elapsedHours);
+    log(LogLevel::Info, "mission time set to " + std::to_string(seconds) + " s (" +
+                            std::to_string(layout->nTick) + " ticks)");
+    return true;
+}
+
+std::optional<int> missionElapsedSeconds(Runtime &runtime) {
+    auto *task = findLevelFlowTask(runtime);
+    if (!task)
+        return std::nullopt;
+    const auto *layout = reinterpret_cast<const LevelFlowLayout *>(task);
+    return layout->nTick / currentFlowFps();
+}
+
+bool setMissionTimeLimit(Runtime &runtime, float seconds) {
+    if (!requireLiveGameThread(runtime) || seconds < 0.0F)
+        return false;
+    auto *task = findLevelFlowTask(runtime);
+    if (!task) {
+        log(LogLevel::Warning, "mission time limit rejected: the LevelFlow task is unavailable");
+        return false;
+    }
+    reinterpret_cast<LevelFlowLayout *>(task)->timeLimit = seconds;
+    log(LogLevel::Info, "mission time limit set to " + std::to_string(seconds) + " s");
+    return true;
+}
+
+std::optional<int> missionTimeLimitSeconds(Runtime &runtime) {
+    auto *task = findLevelFlowTask(runtime);
+    if (!task)
+        return std::nullopt;
+    return static_cast<int>(reinterpret_cast<const LevelFlowLayout *>(task)->timeLimit);
 }
 
 bool thirdPersonCrosshairActive(Runtime &runtime) {
@@ -921,16 +1285,11 @@ bool thirdPersonCrosshairActive(Runtime &runtime) {
         return false;
     IGI::HumanCameraInfo camera{};
     IGI::HUMAN::GET_CAMERA_INFO(player, &camera);
-    if (camera.mode != 2)
-        return false;
-    auto *weapon = IGI::HUMAN::GET_WEAPON(player);
-    if (!weapon)
-        return false;
-    auto *weaponType = IGI::WEAPON::WEAPON_GET_TYPE(weapon);
-    if (!weaponType)
-        return false;
-    return reinterpret_cast<const WeaponTypeHudLayout *>(weaponType)->sightDisplay ==
-           kSightDisplayCrosshair;
+    // The mod crosshair exists to replace the retail HUD crosshair in third
+    // person. Gating it on WeaponType.sightDisplay only ever matched the handful
+    // of weapons that already ask retail for a cross sprite, so the toggle
+    // appeared dead on every other weapon.
+    return camera.mode == 2;
 }
 
 bool thirdPersonCrosshairScreenPosition(Runtime &runtime, int width, int height, float &x,
@@ -955,23 +1314,22 @@ bool thirdPersonCrosshairScreenPosition(Runtime &runtime, int width, int height,
     IGI::OTHER::TRANS_CONTEXT_PROJECT(projected, &depth, aim);
     if (!(depth > 1.0F) || !std::isfinite(projected[0]) || !std::isfinite(projected[1]))
         return false;
-    // TransContext_Project returns display pixels; the caller may pass a
-    // letterboxed viewport rect, so scale into its coordinate space.
+    // TransContext_Project already returns display pixels: its scale/centre come
+    // from the viewport scene rect (gScene.x/halfW). Scaling that by the passed
+    // viewport size again moved the crosshair off the aim point.
     auto *displayMode = IGI::OTHER::DISPLAY_GET_MODE();
-    const float scaleX = displayMode && displayMode->width > 0
-                             ? static_cast<float>(width) / static_cast<float>(displayMode->width)
-                             : 1.0F;
-    const float scaleY = displayMode && displayMode->height > 0
-                             ? static_cast<float>(height) / static_cast<float>(displayMode->height)
-                             : 1.0F;
-    const float screenX = projected[0] * scaleX;
-    const float screenY = projected[1] * scaleY;
-    if (screenX < 0.0F || screenY < 0.0F || screenX > static_cast<float>(width) ||
-        screenY > static_cast<float>(height)) {
+    const float limitX = displayMode && displayMode->width > 0
+                             ? static_cast<float>(displayMode->width)
+                             : static_cast<float>(width);
+    const float limitY = displayMode && displayMode->height > 0
+                             ? static_cast<float>(displayMode->height)
+                             : static_cast<float>(height);
+    if (projected[0] < 0.0F || projected[1] < 0.0F || projected[0] > limitX ||
+        projected[1] > limitY) {
         return false;
     }
-    x = screenX;
-    y = screenY;
+    x = projected[0];
+    y = projected[1];
     return true;
 }
 
@@ -988,31 +1346,6 @@ bool renderThirdPersonCrosshair(Runtime &runtime) {
     IGI::HUMAN::GET_CAMERA_INFO(player, &camera);
     if (camera.mode != 2) {
         reportCrosshairState("waiting for third-person camera");
-        return false;
-    }
-    auto *weapon = IGI::HUMAN::GET_WEAPON(player);
-    if (!weapon) {
-        reportCrosshairState("player has no weapon task");
-        return false;
-    }
-    auto *weaponType = IGI::WEAPON::WEAPON_GET_TYPE(weapon);
-    if (!weaponType) {
-        reportCrosshairState("weapon type unavailable");
-        return false;
-    }
-    const int sightDisplay =
-        reinterpret_cast<const WeaponTypeHudLayout *>(weaponType)->sightDisplay;
-    if (sightDisplay == kSightDisplayNone)
-        return false;
-    if (sightDisplay != kSightDisplayCrosshair) {
-        // Scoped weapons draw their own sight; report it once instead of silently
-        // rendering nothing frame after frame.
-        static int reportedSight = -1;
-        if (reportedSight != sightDisplay) {
-            reportedSight = sightDisplay;
-            log(LogLevel::Info, "third-person crosshair skipped: weapon sight display type " +
-                                    std::to_string(sightDisplay));
-        }
         return false;
     }
     auto *statusScreen = IGI::OTHER::STATUS_SCREEN_GET();
@@ -1099,40 +1432,50 @@ bool refreshLiveTargetOptions(MenuConfig &config, Runtime &runtime) {
     const auto heli = replaceChoices("heli_target", entities.heliTargets(), "No live helicopters",
                                      g_selectedHeliTaskId);
     // The teleport picker accepts every live world object, not only NPCs, cars and
-    // helicopters: RigidDynCubeObj is the retail base type for 3D objects (doors,
-    // props, pickups) and Human covers every human-derived task.
+    // helicopters: the authored level tree supplies the doors, props and
+    // landmarks that the game event lists never contain.
+    const auto objects = entities.worldObjectTargets();
     std::vector<LiveTarget> teleportTargets;
-    const auto rigidType = IGI::TASK::RIGID_DYN_CUBE_GET_TYPE();
-    const auto humanType = IGI::HUMAN::GET_TYPE();
-    auto *playerTask = IGI::GAME::GET_PLAYER(0);
-    for (auto *task : liveTasks(runtime)) {
-        if (teleportTargets.size() >= kMaxLiveTargets)
-            break;
-        if (!task || task == playerTask)
-            continue;
-        struct TaskTypePrefix {
-            std::uint8_t prefix[0x1C];
-            std::uint16_t type;
-        };
-        const auto type = reinterpret_cast<const TaskTypePrefix *>(task)->type;
-        if (!isNpcTask(task) && !isCarTask(task) && !isHeliTask(task) &&
-            IGI::TASK::IS_A(type, rigidType) == 0 && IGI::TASK::IS_A(type, humanType) == 0) {
-            continue;
+    teleportTargets.reserve(entities.npcTargets().size() + entities.carTargets().size() +
+                            entities.heliTargets().size() + objects.size());
+    const auto appendTargets = [&teleportTargets](const std::vector<LiveTarget> &source) {
+        for (const auto &target : source) {
+            if (teleportTargets.size() >= kMaxLiveTargets)
+                return;
+            const bool duplicate = std::any_of(
+                teleportTargets.begin(), teleportTargets.end(),
+                [&target](const LiveTarget &existing) { return existing.taskId == target.taskId; });
+            if (!duplicate)
+                teleportTargets.push_back(target);
         }
-        teleportTargets.push_back({liveTaskKey(task), liveTaskName(task)});
-    }
+    };
+    appendTargets(entities.npcTargets());
+    appendTargets(entities.carTargets());
+    appendTargets(entities.heliTargets());
+    appendTargets(objects);
     const auto teleport =
         replaceChoices("player_teleport_target", teleportTargets, "No live targets", -1);
+    // Send Player Position accepts the same destinations plus the player entity.
+    std::vector<LiveTarget> sendTargets;
+    sendTargets.push_back({liveTaskKey(IGI::GAME::GET_PLAYER(0)), "Player (self)"});
+    appendTargetsTo(sendTargets, teleportTargets);
+    const auto send = replaceChoices("player_send_target", sendTargets, "No live targets", -1);
+    const auto landmarks =
+        replaceChoices("landmark_target", entities.landmarkTargets(), "No level landmarks", -1);
+    const auto levels =
+        replaceChoices("level", missionTargets(runtime), "No installed missions", -1);
     if (!npc.preservedIsLive)
         g_selectedNpcTaskId = -1;
     if (!car.preservedIsLive)
         g_selectedCarTaskId = -1;
     if (!heli.preservedIsLive)
         g_selectedHeliTaskId = -1;
-    if (npc.changed || car.changed || heli.changed || teleport.changed) {
+    if (npc.changed || car.changed || heli.changed || teleport.changed || send.changed ||
+        landmarks.changed || levels.changed) {
         log(LogLevel::Info, "live targets refreshed from the active game task list");
     }
-    return npc.changed || car.changed || heli.changed || teleport.changed;
+    return npc.changed || car.changed || heli.changed || teleport.changed || send.changed ||
+           landmarks.changed || levels.changed;
 }
 
 void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::size_t item,
@@ -1234,17 +1577,22 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
     } else if (id == "view") {
         setPlayerThirdPersonView(runtime, value == "Third Person");
     } else if (id == "debug_keys") {
-        // The retail debug keys are handled by the game itself (LCtrl + LShift +
-        // KEY). Touching the player body or the camera here crashed the game, so
-        // this control only reports the retail chart.
+        // The retail debug fly mode writes the body-fly state through the player
+        // state machine, which crashed the game when it was driven from the menu. This
+        // control now enables the camera-override free camera instead (the same
+        // safe path as the Free Camera control) and documents the retail chart.
         const bool enabled = value == "Enabled";
         log(LogLevel::Info, std::string("debug keys ") + (enabled ? "enabled" : "disabled") +
                                 "; retail chart: LCtrl+LShift+ F fly, Q/E cycle camera, "
                                 "A default camera, F9 unlock missions, F11 position, "
                                 "F12 next mission, P all weapons, R restart, I invincible, "
                                 "Numpad +/- zoom, Numpad Enter zoom reset, Numpad * third "
-                                "person, Numpad 8/2 pitch, 4/6 yaw, 9/3 distance. Use the Free "
-                                "Camera control for the mod camera.");
+                                "person, Numpad 8/2 pitch, 4/6 yaw, 9/3 distance. Fly mode is "
+                                "implemented through the safe camera override.");
+        if (setFreecamEnabled(runtime, enabled))
+            log(LogLevel::Info, "debug fly mode applied through the camera override");
+        else
+            log(LogLevel::Warning, "debug fly mode request rejected");
     } else if (id == "freecam") {
         if (setFreecamEnabled(runtime, value == "Enabled"))
             log(LogLevel::Info, "free camera state applied");
@@ -1253,16 +1601,80 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
     } else if (id == "third_person_crosshair") {
         setThirdPersonCrosshairEnabled(runtime, value == "Enabled");
     } else if (id == "level") {
-        int levelNum = 1;
-        if (value.starts_with("Level ")) {
-            try {
-                levelNum = std::stoi(std::string(value.substr(6)));
-            } catch (...) {
-                levelNum = 1;
-            }
+        // The label is "Mission N: name [#N]" (the retail mission table decides
+        // which ids exist), so the bracketed id is the authoritative value.
+        const auto missionId = targetId(value).value_or(-1);
+        if (missionId < 0 || !requestLevelChange(runtime, missionId))
+            log(LogLevel::Warning, "level change rejected: pick an installed mission");
+    } else if (id == "exit_mod") {
+        if (!requestModExit())
+            log(LogLevel::Warning, "Exit Mod: the host did not accept the unload request");
+    } else if (id == "landmark_target") {
+        const auto selected = targetId(value).value_or(-1);
+        if (selected < 0) {
+            log(LogLevel::Warning, "teleport rejected: pick a level landmark first");
+        } else if (teleportPlayerToTarget(runtime, selected)) {
+            log(LogLevel::Info, "player teleported to level landmark " + std::string(value));
+        } else {
+            log(LogLevel::Warning, "teleport rejected: the selected landmark is no longer live");
         }
-        runtime.scheduler().enqueueOnce(
-            [&runtime, levelNum] { WorldHelpers(runtime).changeLevel(levelNum); });
+    } else if (id == "player_send_target") {
+        const auto selected = targetId(value).value_or(-1);
+        if (selected < 0) {
+            log(LogLevel::Warning, "send player position rejected: pick a destination first");
+        } else if (sendPlayerToTarget(runtime, selected)) {
+            log(LogLevel::Info, "send player position: destination " + std::string(value));
+        } else {
+            log(LogLevel::Warning,
+                "send player position rejected: the destination is no longer live");
+        }
+    } else if (id == "world_time_preset" || id == "world_time_hour") {
+        float hour = 10.0F;
+        if (id == "world_time_preset") {
+            if (value.find("Night") != std::string::npos)
+                hour = 22.0F;
+            else if (value.find("Dawn") != std::string::npos)
+                hour = 6.0F;
+            else if (value.find("Dusk") != std::string::npos)
+                hour = 18.0F;
+            else if (value.find("Noon") != std::string::npos)
+                hour = 12.0F;
+        } else {
+            hour = std::strtof(std::string(value).c_str(), nullptr);
+        }
+        if (setWorldHour(runtime, hour))
+            IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, "IGI MOD: world time updated");
+        else
+            log(LogLevel::Warning, "world time update rejected");
+    } else if (id == "mission_time_seconds") {
+        const int seconds = std::atoi(std::string(value).c_str());
+        if (setMissionElapsedSeconds(runtime, seconds))
+            IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, "IGI MOD: mission time updated");
+        else
+            log(LogLevel::Warning, "mission time update rejected");
+    } else if (id == "mission_time_preset") {
+        const int current = missionElapsedSeconds(runtime).value_or(0);
+        int seconds = current;
+        if (value == "Reset")
+            seconds = 0;
+        else if (value == "+1 minute")
+            seconds = current + 60;
+        else if (value == "+5 minutes")
+            seconds = current + 300;
+        else if (value == "+15 minutes")
+            seconds = current + 900;
+        else if (value == "+30 minutes")
+            seconds = current + 1800;
+        if (setMissionElapsedSeconds(runtime, seconds))
+            IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, "IGI MOD: mission time updated");
+        else
+            log(LogLevel::Warning, "mission time update rejected");
+    } else if (id == "mission_time_limit") {
+        const float seconds = std::strtof(std::string(value).c_str(), nullptr);
+        if (setMissionTimeLimit(runtime, seconds))
+            IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, "IGI MOD: mission time limit updated");
+        else
+            log(LogLevel::Warning, "mission time limit update rejected");
     } else if (id == "restart_mission") {
         WorldHelpers(runtime).restartMission();
     } else if (id == "vehicle_reset") {
@@ -1697,8 +2109,14 @@ IGI::Heli *selectedHeli(Runtime &runtime) {
 bool changeLevel(Runtime &runtime, int levelId) {
     if (!requireLiveGameThread(runtime))
         return false;
-    if (levelId < 1 || levelId > 14)
+    // A level id that is not in the retail mission table makes LevelStart call
+    // Error_Show and hang the process, so the id is validated before the running
+    // level is unloaded.
+    if (!missionAvailable(runtime, levelId)) {
+        log(LogLevel::Warning,
+            "level change rejected: mission " + std::to_string(levelId) + " is not installed");
         return false;
+    }
     auto *game = IGI::GAME::GET();
     if (!game)
         return false;
@@ -1708,6 +2126,10 @@ bool changeLevel(Runtime &runtime, int levelId) {
     (void)setFreecamEnabled(runtime, false);
     g_thirdPersonCrosshairEnabled.store(false, std::memory_order_release);
     (void)removePrecipitationTask();
+    // The pause ownership described the player/Game task that is about to die;
+    // carrying it into the new level made the first close restore the wrong
+    // pause state.
+    igi::abandonMenuPause();
     if (!prepareMenuForLevelChange()) {
         log(LogLevel::Error, "level change: injected menu cleanup failed");
         return false;
@@ -2006,36 +2428,134 @@ std::vector<LiveTarget> EntityHelpers::heliTargets() const {
     return targets;
 }
 
-std::vector<LiveTarget> EntityHelpers::landmarkTargets() const {
+std::vector<LiveTarget> EntityHelpers::worldObjectTargets() const {
     std::vector<LiveTarget> targets;
     if (!requireLiveGameThread(runtime_))
         return targets;
-    const auto rigidType = IGI::TASK::RIGID_DYN_CUBE_GET_TYPE();
     auto *playerTask = IGI::GAME::GET_PLAYER(0);
-    for (auto *task : liveTasks(runtime_)) {
-        if (targets.size() >= kMaxLiveTargets)
-            break;
-        if (!task || task == playerTask)
-            continue;
+    const auto append = [&](IGI::Task *task) {
+        if (!task || task == playerTask || targets.size() >= kMaxLiveTargets)
+            return;
+        if (isNpcTask(task) || isCarTask(task) || isHeliTask(task))
+            return;
+        // Accept objects that actually carry a world position: the retail
+        // rigid-object hierarchy plus named Area/Building tasks. This skips
+        // script/AI helper tasks whose +0x20 is not a position.
         const auto type = reinterpret_cast<const IgiTaskLayout *>(task)->type;
-        if (IGI::TASK::IS_A(type, rigidType) == 0)
-            continue;
-        // RigidDynCubeObj.pos is at +0x20 (IGI-RE magicobjtypes.h). A zero
-        // position means the object is not placed yet (or is a template task).
-        double position[3]{};
-        std::memcpy(position, reinterpret_cast<const std::uint8_t *>(task) + 0x20,
-                    sizeof(position));
+        const auto rigidType = IGI::TASK::RIGID_DYN_CUBE_GET_TYPE();
+        bool worldType = IGI::TASK::IS_A(type, rigidType) != 0;
+        if (!worldType) {
+            if (const char *typeName = IGI::TASK::GET_NAME(type)) {
+                const std::string_view view(typeName);
+                worldType = view.find("Obj") != std::string_view::npos ||
+                            view.find("Area") != std::string_view::npos ||
+                            view.find("Building") != std::string_view::npos ||
+                            view.find("Door") != std::string_view::npos;
+            }
+        }
+        if (!worldType)
+            return;
+        const auto name = liveTaskName(task);
+        if (name.empty())
+            return;
+        const auto position = taskPosition(task);
         const double magnitude =
             std::fabs(position[0]) + std::fabs(position[1]) + std::fabs(position[2]);
         if (!std::isfinite(magnitude) || magnitude < 1.0)
-            continue;
-        targets.push_back(
-            {liveTaskKey(task), liveTaskName(task), {position[0], position[1], position[2]}, true});
+            return;
+        const int key = liveTaskKey(task);
+        if (std::any_of(targets.begin(), targets.end(),
+                        [key](const LiveTarget &existing) { return existing.taskId == key; }))
+            return;
+        targets.push_back({key, name, position, true});
+    };
+    // The authored Level tree is the only complete object source: the game's
+    // event lists contain actors and vehicles, not buildings, doors or props.
+    for (auto *task : authoredLevelTasks(runtime_))
+        append(task);
+    if (targets.empty()) {
+        // Early in level load the authored roots may not be attached yet; keep
+        // the live-list scan as a fallback instead of showing an empty picker.
+        for (auto *task : liveTasks(runtime_))
+            append(task);
     }
     std::sort(targets.begin(), targets.end(), [](const LiveTarget &left, const LiveTarget &right) {
         return left.name < right.name;
     });
     return targets;
+}
+
+std::vector<LiveTarget> EntityHelpers::landmarkTargets() const {
+    static constexpr std::string_view kLandmarkWords[] = {
+        "airport", "airstrip",   "base",     "bunker",     "bridge",    "building", "camp",
+        "castle",  "checkpoint", "church",   "compound",   "dam",       "depot",    "dock",
+        "embassy", "factory",    "gate",     "hangar",     "helipad",   "hospital", "hotel",
+        "hq",      "lab",        "landmark", "lighthouse", "mosque",    "office",   "outpost",
+        "palace",  "port",       "power",    "prison",     "radar",     "silo",     "station",
+        "temple",  "tower",      "train",    "tunnel",     "warehouse", "yard",
+    };
+    std::vector<LiveTarget> landmarks;
+    if (!requireLiveGameThread(runtime_))
+        return landmarks;
+    auto *playerTask = IGI::GAME::GET_PLAYER(0);
+    const auto rigidType = IGI::TASK::RIGID_DYN_CUBE_GET_TYPE();
+    // Scan the whole authored tree for landmark names so a building late in the
+    // level is not dropped by the 3D-object list's display cap.
+    for (auto *task : authoredLevelTasks(runtime_)) {
+        if (landmarks.size() >= kMaxLiveTargets)
+            break;
+        if (!task || task == playerTask || isNpcTask(task) || isCarTask(task) || isHeliTask(task))
+            continue;
+        const auto type = reinterpret_cast<const IgiTaskLayout *>(task)->type;
+        bool worldType = IGI::TASK::IS_A(type, rigidType) != 0;
+        if (!worldType) {
+            if (const char *typeName = IGI::TASK::GET_NAME(type)) {
+                const std::string_view view(typeName);
+                worldType = view.find("Obj") != std::string_view::npos ||
+                            view.find("Area") != std::string_view::npos ||
+                            view.find("Building") != std::string_view::npos ||
+                            view.find("Door") != std::string_view::npos;
+            }
+        }
+        if (!worldType)
+            continue;
+        const auto name = liveTaskName(task);
+        if (name.empty())
+            continue;
+        std::string lower = name;
+        std::transform(lower.begin(), lower.end(), lower.begin(),
+                       [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+        const bool matches = std::any_of(
+            std::begin(kLandmarkWords), std::end(kLandmarkWords),
+            [&lower](std::string_view word) { return lower.find(word) != std::string::npos; });
+        if (!matches)
+            continue;
+        const auto position = taskPosition(task);
+        const double magnitude =
+            std::fabs(position[0]) + std::fabs(position[1]) + std::fabs(position[2]);
+        if (!std::isfinite(magnitude) || magnitude < 1.0)
+            continue;
+        landmarks.push_back({liveTaskKey(task), name, position, true});
+    }
+    // Every mission must offer useful destinations even when its object names do
+    // not contain a landmark keyword: fall back to the named authored objects.
+    if (landmarks.size() < 8) {
+        for (const auto &object : worldObjectTargets()) {
+            if (landmarks.size() >= kMaxLiveTargets)
+                break;
+            const bool already = std::any_of(
+                landmarks.begin(), landmarks.end(),
+                [&object](const LiveTarget &existing) { return existing.taskId == object.taskId; });
+            if (!already)
+                landmarks.push_back(object);
+        }
+    }
+    std::sort(
+        landmarks.begin(), landmarks.end(),
+        [](const LiveTarget &left, const LiveTarget &right) { return left.name < right.name; });
+    if (landmarks.size() > kMaxLiveTargets)
+        landmarks.resize(kMaxLiveTargets);
+    return landmarks;
 }
 
 IGI::Car *EntityHelpers::nextCar(IGI::Car *current) const {
@@ -2450,7 +2970,10 @@ bool PlayerHelpers::sendPosition() const {
     auto *p = localPlayer(runtime_);
     if (!p)
         return false;
-    IGI::PLAYER::SEND_POSITION(p);
+    // Send both retail broadcasts. HumanPlayer_SendPosition only feeds task list
+    // 2 (the player state machine); the world/collision listeners live in list 1
+    // and used to keep the old body position, so this control did nothing.
+    broadcastPlayerPosition(reinterpret_cast<IGI::Human *>(p));
     return true;
 }
 bool PlayerHelpers::resetDamage() const {
@@ -2540,6 +3063,58 @@ constexpr int kHumanWeaponSlots = 3;
 // Adds rounds to the weapon currently in hand. The pickup native matches the
 // weapon id against the carried tasks, so this refills the held gun rather than
 // the menu's selection.
+// Every Gun task owned by a human, matched by the retail Gun.id at +0x100.
+// WeaponGunPickup walks the same child list, so this reaches weapons that were
+// added this session and are not in one of the three carried slots.
+static IGI::Task *findOwnedGun(IGI::Human *player, int gunId) {
+    if (!player || gunId == 0)
+        return nullptr;
+    const auto gunType = IGI::WEAPON::GUN_GET_TYPE();
+    if (gunType == 0)
+        return nullptr;
+    const auto *layout = reinterpret_cast<const IgiTaskLayout *>(player);
+    for (auto *child = layout->head; child && child->next; child = child->next) {
+        auto *task = reinterpret_cast<IGI::Task *>(child);
+        const auto type = reinterpret_cast<const IgiTaskLayout *>(task)->type;
+        if (type != gunType && IGI::TASK::IS_A(type, gunType) == 0)
+            continue;
+        const int id = *reinterpret_cast<const int *>(reinterpret_cast<const std::uint8_t *>(task) +
+                                                      kGunIdOffset);
+        if (id == gunId)
+            return task;
+    }
+    return nullptr;
+}
+
+// Adds reserve rounds and tops the loaded clip for one gun id. If the player
+// does not carry the weapon yet, the retail pickup creates the weapon task and
+// the new task is then filled, so newly added weapons receive the typed ammo.
+static bool refillGun(IGI::Human *player, int gunId, int ammo) {
+    if (!player || gunId == 0 || ammo <= 0)
+        return false;
+    auto *gun = findOwnedGun(player, gunId);
+    // WeaponGunPickup adds reserve rounds for the carried gun id (the same call
+    // the player pickup uses), and creates the weapon when it is missing.
+    int message[] = {gunId, ammo};
+    IGI::PLAYER::PICK_UP_WEAPON(player, message);
+    if (!gun)
+        gun = findOwnedGun(player, gunId);
+    if (!gun) {
+        log(LogLevel::Warning,
+            "weapon ammo: the retail pickup did not create gun id " + std::to_string(gunId));
+        return false;
+    }
+    // Retail Gun.rounds at +0x144 (IGI-RE guncasingtypes.h): the loaded clip.
+    int &rounds =
+        *reinterpret_cast<int *>(reinterpret_cast<std::uint8_t *>(gun) + kGunRoundsOffset);
+    const int before = rounds;
+    rounds = ammo;
+    log(LogLevel::Info, "weapon ammo: gun id " + std::to_string(gunId) + " clip " +
+                            std::to_string(before) + " -> " + std::to_string(rounds) + " and " +
+                            std::to_string(ammo) + " reserve rounds added");
+    return true;
+}
+
 bool WeaponHelpers::refillCurrentWeapon(int ammo) const {
     if (!requireLiveGameThread(runtime_) || ammo <= 0)
         return false;
@@ -2555,20 +3130,24 @@ bool WeaponHelpers::refillCurrentWeapon(int ammo) const {
     }
     const int gunId = *reinterpret_cast<const int *>(
         reinterpret_cast<const std::uint8_t *>(weapon) + kGunIdOffset);
-    // Retail Gun.rounds at +0x144 (IGI-RE guncasingtypes.h): the loaded clip.
-    int &rounds =
-        *reinterpret_cast<int *>(reinterpret_cast<std::uint8_t *>(weapon) + kGunRoundsOffset);
-    // WeaponGunPickup adds reserve rounds for the carried gun id (the same call
-    // the player pickup uses), and the clip is then topped from the reserve the
-    // way the retail reload does it.
-    int message[] = {gunId, ammo};
-    IGI::PLAYER::PICK_UP_WEAPON(player, message);
-    const int before = rounds;
-    rounds = ammo;
-    log(LogLevel::Info, "weapon ammo: gun id " + std::to_string(gunId) + " clip " +
-                            std::to_string(before) + " -> " + std::to_string(rounds) + " and " +
-                            std::to_string(ammo) + " reserve rounds added");
-    return true;
+    return refillGun(player, gunId, ammo);
+}
+
+bool WeaponHelpers::refillWeapon(std::string_view weaponId, int ammo) const {
+    if (!requireLiveGameThread(runtime_) || weaponId.empty() || ammo <= 0)
+        return false;
+    auto *player = reinterpret_cast<IGI::Human *>(IGI::GAME::GET_PLAYER(0));
+    if (!player) {
+        log(LogLevel::Warning, "weapon ammo rejected: player is unavailable");
+        return false;
+    }
+    const int gunId = IGI::SCRIPT::EVAL_CONST(std::string(weaponId).c_str());
+    if (gunId == 0) {
+        log(LogLevel::Warning,
+            "weapon ammo rejected: unknown retail weapon symbol " + std::string(weaponId));
+        return false;
+    }
+    return refillGun(player, gunId, ammo);
 }
 
 // Drops the player's current weapon completely:
@@ -2707,6 +3286,21 @@ bool WorldHelpers::restartMission() const {
 }
 bool WorldHelpers::setWeather(std::string_view weather) const {
     return igi::setWeather(runtime_, weather);
+}
+bool WorldHelpers::setWorldHour(float hour) const {
+    return igi::setWorldHour(runtime_, hour);
+}
+std::optional<float> WorldHelpers::worldHour() const {
+    return igi::worldHour(runtime_);
+}
+bool WorldHelpers::setMissionElapsedSeconds(int seconds) const {
+    return igi::setMissionElapsedSeconds(runtime_, seconds);
+}
+std::optional<int> WorldHelpers::missionElapsedSeconds() const {
+    return igi::missionElapsedSeconds(runtime_);
+}
+bool WorldHelpers::setMissionTimeLimit(float seconds) const {
+    return igi::setMissionTimeLimit(runtime_, seconds);
 }
 bool WorldHelpers::setFrameCap(int fps) const {
     return igi::setFps(runtime_, std::to_string(fps));

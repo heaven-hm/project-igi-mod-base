@@ -41,10 +41,13 @@ int g_refillAmmo = 120;
 // untouched (0,0,0) triple used to teleport the player out of the world.
 double g_teleportPos[3] = {0.0, 0.0, 0.0};
 bool g_teleportPosSet = false;
+// Send Player Position custom destination, edited through three text fields.
+double g_sendPos[3] = {0.0, 0.0, 0.0};
+bool g_sendPosSet = false;
 
-constexpr std::array kLevelLabels = {"Level 1",  "Level 2",  "Level 3",  "Level 4", "Level 5",
-                                     "Level 6",  "Level 7",  "Level 8",  "Level 9", "Level 10",
-                                     "Level 11", "Level 12", "Level 13", "Level 14"};
+// Replaced at runtime from the retail mission table, so the list only offers
+// ids that actually exist (selecting a missing id used to hang the game).
+constexpr std::array kLevelLabels = {"Loading mission list"};
 
 // One table drives both the menu definition and the category assignment, so a
 // control can never be added without a category or an action route.
@@ -188,6 +191,27 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
          "Player",
          "PlayerTeleportApply",
          {}},
+        {"landmark_target",
+         igi::ModMenuItemKind::List,
+         "Teleport To Level Landmark",
+         "Player",
+         "PlayerLandmark",
+         {"No level landmarks"}},
+        {"player_send_target",
+         igi::ModMenuItemKind::List,
+         "Send Player To Target",
+         "Player",
+         "PlayerSendTarget",
+         {"No live target list"}},
+        {"player_send_x", igi::ModMenuItemKind::Input, "Send X", "Player", "PlayerSendX", {}},
+        {"player_send_y", igi::ModMenuItemKind::Input, "Send Y", "Player", "PlayerSendY", {}},
+        {"player_send_z", igi::ModMenuItemKind::Input, "Send Z", "Player", "PlayerSendZ", {}},
+        {"player_send_apply",
+         igi::ModMenuItemKind::Action,
+         "Custom Position",
+         "Player",
+         "PlayerSendApply",
+         {}},
 
         // Camera
         {"view",
@@ -224,6 +248,36 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
 
         // World
         {"level", igi::ModMenuItemKind::List, "Mission", "World", "SetMission", levelValues},
+        {"world_time_preset",
+         igi::ModMenuItemKind::List,
+         "World Time",
+         "World",
+         "SetWorldTime",
+         {"Daytime (10:00)", "Nighttime (22:00)", "Dawn (06:00)", "Dusk (18:00)"}},
+        {"world_time_hour",
+         igi::ModMenuItemKind::Input,
+         "World Hour (0-24)",
+         "World",
+         "SetWorldHour",
+         {}},
+        {"mission_time_seconds",
+         igi::ModMenuItemKind::Input,
+         "Mission Time (seconds)",
+         "World",
+         "SetMissionTime",
+         {}},
+        {"mission_time_preset",
+         igi::ModMenuItemKind::List,
+         "Mission Time Action",
+         "World",
+         "SetMissionTime",
+         {"Reset", "+1 minute", "+5 minutes", "+15 minutes", "+30 minutes"}},
+        {"mission_time_limit",
+         igi::ModMenuItemKind::Input,
+         "Mission Time Limit (seconds)",
+         "World",
+         "SetMissionTimeLimit",
+         {}},
         {"restart_mission",
          igi::ModMenuItemKind::Action,
          "Restart Mission",
@@ -371,6 +425,9 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
          "SoldierExecute",
          {}},
 
+        // System
+        {"exit_mod", igi::ModMenuItemKind::Action, "Exit Mod", "System", "RequestExit", {}},
+
     };
 
     std::vector<igi::ModMenuItemConfig> items;
@@ -390,6 +447,16 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
                 item.inputValue = 120;
                 item.inputMinimum = 1;
                 item.inputMaximum = 9999;
+                item.inputStep = 30;
+            } else if (item.id == "world_time_hour") {
+                item.inputValue = 10;
+                item.inputMinimum = 0;
+                item.inputMaximum = 24;
+                item.inputStep = 1;
+            } else if (item.id == "mission_time_seconds" || item.id == "mission_time_limit") {
+                item.inputValue = 0;
+                item.inputMinimum = 0;
+                item.inputMaximum = 86400;
                 item.inputStep = 30;
             } else {
                 item.inputValue = 0;
@@ -442,33 +509,41 @@ namespace {
 // refreshed, so X/Y/Z never start at an unset (0,0,0). Once the user edits a
 // coordinate the typed value is kept instead of being overwritten each refresh.
 bool prefillTeleportCoordinates(igi::MenuConfig &config, igi::Runtime &runtime) {
-    // A new level builds a new Game task; the old prefill and the old typed
-    // coordinates belong to the previous level and must not be reused.
+    // A new level builds a new Game task; the old prefills and typed coordinates
+    // belong to the previous level and must not be reused.
     static void *lastGame = nullptr;
     auto *game = IGI::GAME::GET();
     if (game && game != lastGame) {
         lastGame = game;
         g_teleportPosSet = false;
+        g_sendPosSet = false;
     }
-    if (g_teleportPosSet)
-        return false;
     std::array<double, 3> position{};
     if (!igi::readPlayerPosition(runtime, position))
         return false;
-    constexpr const char *kIds[3] = {"player_teleport_x", "player_teleport_y", "player_teleport_z"};
     bool changed = false;
-    for (std::size_t axis = 0; axis < position.size(); ++axis) {
-        g_teleportPos[axis] = position[axis];
-        const auto rounded = static_cast<int>(position[axis]);
-        for (auto &item : config.items) {
-            if (item.id == kIds[axis] && item.inputValue != rounded) {
-                item.inputValue = rounded;
-                changed = true;
+    const auto fill = [&config, &position, &changed](double *destination, bool &flag,
+                                                     const char *const ids[3]) {
+        if (flag)
+            return;
+        for (std::size_t axis = 0; axis < position.size(); ++axis) {
+            destination[axis] = position[axis];
+            const auto rounded = static_cast<int>(position[axis]);
+            for (auto &item : config.items) {
+                if (item.id == ids[axis] && item.inputValue != rounded) {
+                    item.inputValue = rounded;
+                    changed = true;
+                }
             }
         }
-    }
-    // The boxes now hold a real position, so Apply must accept it.
-    g_teleportPosSet = true;
+        // The boxes now hold a real position, so Apply must accept it.
+        flag = true;
+    };
+    const char *const kTeleportIds[3] = {"player_teleport_x", "player_teleport_y",
+                                         "player_teleport_z"};
+    const char *const kSendIds[3] = {"player_send_x", "player_send_y", "player_send_z"};
+    fill(g_teleportPos, g_teleportPosSet, kTeleportIds);
+    fill(g_sendPos, g_sendPosSet, kSendIds);
     return changed;
 }
 } // namespace
@@ -483,7 +558,13 @@ bool configureModMenu(igi::MenuConfig &config) {
     config.renderEndFrame = [](igi::Runtime &runtime) {
         (void)igi::renderThirdPersonCrosshair(runtime);
     };
-    config.frameUpdate = [](igi::Runtime &runtime) { (void)igi::updateFreecam(runtime); };
+    config.frameUpdate = [](igi::Runtime &runtime) {
+        (void)igi::updateFreecam(runtime);
+        // End-of-frame is the safe point to unload the level: the retail scene
+        // has already been flushed, so deleting the Game task cannot pull tasks
+        // out from under the draw pass (the "next level" crash).
+        (void)igi::processPendingLevelChange(runtime);
+    };
     config.crosshairActive = [](igi::Runtime &runtime) {
         return igi::thirdPersonCrosshairActive(runtime);
     };
@@ -518,12 +599,24 @@ void runModMenu(const igi::MenuConfig &config, igi::Runtime &runtime, std::size_
         return;
     }
     if (inRange && config.items[item].id == "weapon_ammo") {
-        // Remember the typed amount for the other weapon actions, then fall
-        // through to the shared dispatcher, which applies it to the held weapon.
         int ammo = 0;
         const auto parsed = std::from_chars(value.data(), value.data() + value.size(), ammo);
-        if (parsed.ec == std::errc{} && ammo > 0)
-            g_refillAmmo = ammo;
+        if (parsed.ec != std::errc{} || ammo <= 0) {
+            igi::log(igi::LogLevel::Warning,
+                     "weapon ammo rejected: the typed amount is not a positive round count");
+            return;
+        }
+        g_refillAmmo = ammo;
+        // Apply to the weapon chosen in the weapon list, including a weapon that
+        // was added this session and is not the one in hand.
+        const auto &weapon = kWeapons[g_selectedWeapon];
+        if (igi::WeaponHelpers(runtime).refillWeapon(weapon.id, ammo))
+            igi::log(igi::LogLevel::Info, "weapon ammo applied to " + std::string(weapon.label) +
+                                              " (" + std::to_string(ammo) + " rounds)");
+        else
+            igi::log(igi::LogLevel::Warning,
+                     "weapon ammo rejected: the retail weapon task could not be filled");
+        return;
     }
     if (inRange && config.items[item].id == "player_teleport_target") {
         const auto targetId = igi::parseTargetId(value);
@@ -575,6 +668,41 @@ void runModMenu(const igi::MenuConfig &config, igi::Runtime &runtime, std::size_
                                           " set to " + std::to_string(coordinate));
         return;
     }
+    if (inRange && config.items[item].id.starts_with("player_send_") &&
+        config.items[item].id != "player_send_target" &&
+        config.items[item].id != "player_send_apply") {
+        const std::string typed(value);
+        char *end = nullptr;
+        const double coordinate = std::strtod(typed.c_str(), &end);
+        if (end == typed.c_str() || *end != '\0') {
+            igi::log(igi::LogLevel::Warning,
+                     "send coordinate rejected: '" + std::string(value) + "' is not a number");
+            return;
+        }
+        if (config.items[item].id == "player_send_x")
+            g_sendPos[0] = coordinate;
+        else if (config.items[item].id == "player_send_y")
+            g_sendPos[1] = coordinate;
+        else
+            g_sendPos[2] = coordinate;
+        g_sendPosSet = true;
+        igi::log(igi::LogLevel::Info, "send " + std::string(config.items[item].id) + " set to " +
+                                          std::to_string(coordinate));
+        return;
+    }
+    if (inRange && config.items[item].id == "player_send_apply") {
+        if (!g_sendPosSet) {
+            igi::log(igi::LogLevel::Warning,
+                     "send rejected: set at least one send X/Y/Z coordinate first");
+            return;
+        }
+        const bool placed =
+            igi::teleportPlayerToPosition(runtime, {g_sendPos[0], g_sendPos[1], g_sendPos[2]});
+        igi::log(placed ? igi::LogLevel::Info : igi::LogLevel::Warning,
+                 placed ? "send player position: moved to the typed XYZ and broadcast"
+                        : "send player position rejected: the live player was unavailable");
+        return;
+    }
     if (inRange && config.items[item].id == "npc_ensure_weapon") {
         auto *npc = igi::selectedNpc(runtime);
         if (!npc) {
@@ -602,9 +730,13 @@ void runModMenu(const igi::MenuConfig &config, igi::Runtime &runtime, std::size_
     if (item < config.items.size() && config.items[item].id == "weapon_all") {
         auto weapons = igi::WeaponHelpers(runtime);
         std::size_t granted = 0;
+        const int ammo = g_refillAmmo > 0 ? g_refillAmmo : 120;
         for (const auto &weapon : kWeapons) {
-            if (weapons.pickup(weapon.id, weapon.ammo))
-                ++granted;
+            if (weapons.pickup(weapon.id, ammo) && weapon.ammo > 0 &&
+                !weapons.refillWeapon(weapon.id, ammo)) {
+                continue;
+            }
+            ++granted;
         }
         igi::log(granted > 0 ? igi::LogLevel::Info : igi::LogLevel::Warning,
                  "equip all weapons: granted " + std::to_string(granted) + " of " +

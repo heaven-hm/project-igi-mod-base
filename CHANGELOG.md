@@ -1,5 +1,73 @@
 # Changelog
 
+## 0.4 — Heaven bug fixes, IGI-RE free camera, teleport targets and world clocks
+
+- **Menu lifecycle fixes:**
+  - Read the current screen from the live `MenuManager` task instead of
+    `Flow_GetScreen()` (which returns the Flow Screen task). The wrong object made
+    the host ignore its own attached screen (double open on one F5) and miss the
+    retail pause menu underneath it (pause-menu interference on eject).
+  - One-shot attach guard (`initialAttachPending.exchange`) and no duplicate
+    `menuFrameWork()` from `RunFrame`, so one start-key press performs one attach.
+  - Final close now uses the retail `MenuManager_LeaveMenus(900, 9)` resume path
+    (or returns to a retail screen that was already open) instead of popping an
+    empty screen stack. Page replacement rebuilds in place instead of popping.
+  - Shutdown/eject refuses while a mod screen transition or retail menu still
+    depends on the module, and level changes abandon stale pause ownership.
+- **Free camera (IGI-RE reference flow):**
+  - `Viewport_AddCallback` and `TransContext_Project` wrapper signatures now match
+    the native registry; the callback previously never registered, which is why
+    the camera and crosshair options did nothing.
+  - The viewport callback applies the pose with `Camera_Set` (priority 1000, same
+    call shape as IGI-RE `FreeCamera_Run`) and `HumanView_SetCamera` drives the
+    retail `CAM_OVERRIDE` path, so WASD flight works while the game is paused.
+  - Camera axes are built with `Matrix_SetEuler` + `Matrix_RotateX(-90)`; the
+    start pose comes from the live render camera, not the player eye.
+  - Debug Keys / Fly Mode routes to the same safe camera override instead of the
+    crashing retail body-fly state.
+- **Teleport and position:**
+  - Ground placement probes down from above the requested point (and from 40 m up
+    when the point is under terrain), so typed XYZ cannot place the body under
+    the map; both retail position broadcasts are sent after a move.
+  - Send Player Position accepts a live AI/human, any named 3D object, the player
+    entity, or typed XYZ, and now publishes both `Human_SendPosition` and
+    `HumanPlayer_SendPosition`.
+  - The live object/landmark picker walks the authored Level task tree instead of
+    only the small game event lists, so doors, props, buildings and mission
+    locations are selectable.
+- **World and mission clocks:**
+  - Daytime/nighttime presets, a custom world hour, mission elapsed time and an
+    independent mission time limit, all writing the retail `LevelFlow` fields
+    (`nTick +0x68`, `startHour +0x6C`, `timeLimit +0x74`).
+- **Level changes:**
+  - Mission ids are validated through `Mission_Find` before the current level is
+    unloaded, and the switch is deferred to the end-of-frame callback after the
+    scene flush instead of deleting the Game task inside the draw pass.
+- **Exit/eject:**
+  - Added a routed **Exit Mod** action to both the internal QVM and external
+    ImGui Heaven menus. It calls `IGI_SDK_RequestSafeUnload`, closes the menu,
+    removes the retail callbacks and unloads the DLL from the host thread.
+  - The configured end key now ejects instead of only disabling, so F5 cannot
+    re-open the menu after an eject.
+  - The external ImGui host also completes a pending eject from the end-frame
+    callback, so a missing/late scheduler tick can no longer leave the menu
+    visible with the start key still working.
+  - Renamed the typed destination action label to **Custom Position**.
+- **Weapons:**
+  - Ammo applies to the selected weapon task (creating it through
+    `WeaponGunPickup` when needed), not only the gun in hand; Equip All uses the
+    typed amount.
+- **Menu layout:**
+  - Frame width grows with the longest label/value, height is page-aware (the last
+    page no longer reserves empty rows), and the last-page navigation stays inside
+    the frame. The external ImGui window sizes itself when `auto_resize` is on.
+- **Verification:**
+  - New `tests/test_native_signatures.py` fails on wrapper/registry drift.
+  - New Unicorn `--verify-heaven-flows` runs seven retail routines: mission
+    lookup, LevelFlow clock, camera axes, `Camera_Set` priority, the
+    `CAM_OVERRIDE` path, both position broadcasts and display-space projection.
+  - Heaven layout/contract tests updated for 66 controls; all 10 ctest suites pass.
+
 ## 0.3 — Heaven production menu & Heaven Advanced: 50+ verified gameplay controls
 
 - **Production Menu Expansion (50 Verified Controls):**

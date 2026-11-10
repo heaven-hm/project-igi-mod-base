@@ -547,6 +547,11 @@ NATIVE_DECL void SET_EULER(Matrix *m, float ax, float ay, float az) {
                                "void Matrix_SetEuler(Matrix *m, float ax, float ay, float az)", m,
                                ax, ay, az);
 }
+NATIVE_DECL void ROTATE_X(Matrix *out, const Matrix *m, float a) {
+    return NATIVE_INVOKE<Void>(HASH::MATRIX_ROTATE_X,
+                               "void Matrix_RotateX(Matrix *out, const Matrix *m, float a)", out, m,
+                               a);
+}
 NATIVE_DECL void SET_TARGET(HumanView *v, const int *target, char flag) {
     return NATIVE_INVOKE<Void>(
         HASH::HUMAN_VIEW_SET_TARGET,
@@ -1493,23 +1498,34 @@ NATIVE_DECL void *VIEWPORT_GET_CAMERA() {
 NATIVE_DECL void TRANS_CONTEXT_PROJECT(float *out, float *depth, const double *pos) {
     return NATIVE_INVOKE<Void>(HASH::TRANS_CONTEXT_PROJECT,
                                "void TransContext_Project(float *out, float *depth, "
-                               "const double *pos)",
+                               "const double *p)",
                                out, depth, pos);
 }
 NATIVE_DECL void AMMO_LIST_ADD(void *list, int id, int count) {
     return NATIVE_INVOKE<Void>(HASH::AMMO_LIST_ADD,
-                               "void AmmoList_Add(void *list, int id, int count)", list, id, count);
+                               "void AmmoList_Add(AmmoList *list, int id, int n)", list, id, count);
 }
 NATIVE_DECL int SCREEN_GET_FRAME() {
     return NATIVE_INVOKE<int>(HASH::SCREEN_GET_FRAME, "int Screen_GetFrame(void)");
 }
 NATIVE_DECL void VIEWPORT_ADD_CALLBACK(void (*fn)(void *camera)) {
     return NATIVE_INVOKE<Void>(HASH::VIEWPORT_ADD_CALLBACK,
-                               "void Viewport_AddCallback(void (*fn)(Camera *camera))", fn);
+                               "void Viewport_AddCallback(ViewportCallback fn)", fn);
+}
+NATIVE_DECL double LEVELFLOW_GET_HOUR() {
+    return NATIVE_INVOKE<double>(HASH::LEVELFLOW_GET_HOUR, "long double LevelFlow_GetHour(void)");
+}
+NATIVE_DECL int LEVELFLOW_GET_TICKS_LEFT() {
+    return NATIVE_INVOKE<int>(HASH::LEVELFLOW_GET_TICKS_LEFT, "int LevelFlow_GetTicksLeft(void)");
 }
 } // namespace OTHER
+namespace MISSION {
+NATIVE_DECL Mission *FIND(int id) {
+    return NATIVE_INVOKE<Mission *>(HASH::MISSION_FIND, "Mission *Mission_Find(int id)", id);
+}
+} // namespace MISSION
 std::size_t NativeBindingCount() noexcept {
-    return 355;
+    return 360;
 }
 } // namespace IGI
 #undef NATIVE_INVOKE

@@ -1214,3 +1214,20 @@ if (!catalogue.add({0x004c48c0, "RigidDynCubeObj_GetType", "IGI-RE", "entry",
 if (!catalogue.add({0x004e81f0, "Viewport_GetCurrentCamera", "IGI-RE", "entry",
                     "Camera *Viewport_GetCurrentCamera(void)", NativeVerification::Exposed}))
     return false;
+// Mission table and LevelFlow clock bindings added with the level/teleport fixes.
+if (!catalogue.add({0x00485170, "Mission_Find", "IGI-RE", "entry", "Mission *Mission_Find(int id)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x00489470, "LevelFlow_GetHour", "IGI-RE", "entry",
+                    "long double LevelFlow_GetHour(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004894b0, "LevelFlow_GetTicksLeft", "IGI-RE", "entry",
+                    "int LevelFlow_GetTicksLeft(void)", NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004b34f0, "Matrix_RotateX", "IGI-RE", "entry",
+                    "void Matrix_RotateX(Matrix *out, const Matrix *m, float a)",
+                    NativeVerification::Exposed}))
+    return false;
+if (!catalogue.add({0x004f45f0, "Vehicle_GetType", "IGI-RE", "entry",
+                    "uint16_t Vehicle_GetType(void)", NativeVerification::Exposed}))
+    return false;

@@ -65,7 +65,10 @@ bool pauseForMenu(Runtime &runtime) {
     if (!g_pause.active) {
         g_pause.active = true;
         g_pause.gamePausedBefore = IGI::GAME::IS_PAUSED();
-        g_pause.inputLocked = lockHumanInput();
+        // A retail menu that was already open owns the pause and the input lock.
+        // Locking a second time here left the player locked out after that menu
+        // resumed, because only the retail menu knew it should unlock.
+        g_pause.inputLocked = g_pause.gamePausedBefore ? false : lockHumanInput();
     }
     if (IGI::GAME::IS_PAUSED())
         return true;

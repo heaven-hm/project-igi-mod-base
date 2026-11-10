@@ -10,6 +10,7 @@ HEAVEN = (ROOT / "demos/heaven/heaven_menu.cpp").read_text(encoding="utf-8")
 HELPERS = (ROOT / "demos/helpers/menu_helpers.cpp").read_text(encoding="utf-8")
 IMGUI_HOST = (ROOT / "src/mod_base/imgui_menu_host.cpp").read_text(encoding="utf-8")
 INTERNAL_HOST = (ROOT / "src/mod_base/menu_host.cpp").read_text(encoding="utf-8")
+WINDOWS_DLL = (ROOT / "src/platform/windows_dll.cpp").read_text(encoding="utf-8")
 
 # The normal Heaven target must remain the concise 50-control surface.  Advanced
 # additions are compiled out of that target, so remove those guarded blocks before
@@ -37,7 +38,7 @@ ids = [entry[0] for entry in defs]
 assert len(ids) == len(set(ids)), f"duplicate Heaven item IDs: {ids}"
 
 MIN_OPTIONS = 30
-NORMAL_OPTIONS = 55
+NORMAL_OPTIONS = 67
 assert MIN_OPTIONS <= len(ids) == NORMAL_OPTIONS, (
     f"normal Heaven must ship exactly {NORMAL_OPTIONS} working controls, found {len(ids)}"
 )
@@ -49,7 +50,7 @@ assert "#if defined(IGI_HEAVEN_ADVANCED)" in HEAVEN and all(
     "Heaven Advanced must add its live NPC and helicopter controls without changing normal Heaven"
 )
 
-categories = {"Weapons", "Player", "Camera", "World", "Vehicles", "AI / NPC"}
+categories = {"Weapons", "Player", "Camera", "World", "Vehicles", "AI / NPC", "System"}
 found_categories = {entry[3] for entry in defs}
 assert found_categories == categories, (
     f"Heaven categories must exactly match the production category set; got {found_categories}"
@@ -115,7 +116,7 @@ assert all(native in HELPERS for native in ("IGI::AI::SET_WALK", "IGI::AI::SET_R
 
 # The weapon controls are resolved by the Heaven adapter, because only the demo
 # owns the retail weapon symbol table and its ammo counts.
-adapter_id_equals = {"player_teleport_target", "player_teleport_apply"}
+adapter_id_equals = {"player_teleport_target", "player_teleport_apply", "player_send_apply"}
 adapter_prefix = "player_teleport_"
 adapter_full = {"weapon_pickup", "weapon_ammo", "npc_ensure_weapon", "weapon_all"}
 for item_id in ids:
@@ -125,6 +126,11 @@ for item_id in ids:
     if item_id.startswith(adapter_prefix):
         assert 'id.starts_with("player_teleport_")' in HEAVEN, (
             "the coordinate boxes must share the typed-position adapter branch"
+        )
+        continue
+    if item_id.startswith("player_send_"):
+        assert 'id.starts_with("player_send_")' in HEAVEN, (
+            "the Send Player Position boxes must share the typed-position adapter branch"
         )
         continue
     if item_id in adapter_full:
@@ -229,6 +235,18 @@ assert "unregisterEndFrameCallback();" in INTERNAL_HOST, (
 assert "menuBridge->resync(menuConfig)" in INTERNAL_HOST, (
     "the internal menu must resync its script bridge after refreshing live targets"
 )
+# FLOW_GET_SCREEN returns the Flow's Screen task, not the MenuManager. Reading the
+# current screen id from it made the host think its screen was gone (double open)
+# and that the retail pause menu was absent (pause-menu interference).
+assert "liveMenuManager()" in INTERNAL_HOST and "IGI::OTHER::FLOW_GET_SCREEN(" not in INTERNAL_HOST, (
+    "the host must read the current screen id from the live MenuManager task"
+)
+assert "initialAttachPending.exchange(false" in INTERNAL_HOST, (
+    "one F5 press must perform exactly one attach attempt"
+)
+assert "menuFrameWork();" not in INTERNAL_HOST.split("IGI_MenuManager_Internal_RunFrame")[1][:400], (
+    "RunFrame must not run a second menuFrameWork in the same frame"
+)
 assert "Task_Broadcast" in INTERNAL_HOST and "live target lists refreshed" in INTERNAL_HOST, (
     "the internal menu must publish refreshed live targets to its attached retail screen"
 )
@@ -273,14 +291,14 @@ assert "WeaponGunPickup" in HELPERS and "IGI::PLAYER::PICK_UP_WEAPON(npc, args)"
 assert "IGI::SOLDIER::ENSURE_WEAPON(npc)" in HELPERS, (
     "NPC equip must still claim retail weapon slot 0"
 )
-# WeaponType.sightDisplay sits at 0x614 (IGI-RE weapontypes.h: six 0x100 blocks
-# after the 0x10 header). Reading 0x61C hits the model-name string, which made
-# the third-person crosshair gate never match.
-assert "std::byte unused[0x614];" in HELPERS and "0x614);" in HELPERS, (
-    "the crosshair gate must read WeaponType.sightDisplay at its recovered offset"
+# The crosshair is a third-person replacement, not a second copy of the retail
+# crosshair sprite: gating it on WeaponType.sightDisplay made the toggle appear
+# dead on every weapon whose sight type is NONE.
+assert "return camera.mode == 2;" in HELPERS, (
+    "the third-person crosshair must be active whenever the camera is third person"
 )
-assert "std::byte unused[0x61C]" not in HELPERS, (
-    "the stale sightDisplay offset must not come back"
+assert "scaleX = displayMode" not in HELPERS, (
+    "TransContext_Project already returns display pixels; rescaling it misaligned the crosshair"
 )
 assert "IGI::OTHER::DRAW_SPRITE_Z" in HELPERS and "kStatusScreenCrossSpriteOffset = 0x74" in HELPERS, (
     "the internal menu host draws the retail STATUSSCREEN:cross sprite at 0x74"
@@ -423,7 +441,10 @@ assert "igi::menuPageCount(menuConfig)" in INTERNAL_HOST, (
     "the retail host must know how many page screens belong to the menu"
 )
 assert "closeCommandScript" in INTERNAL_HOST and "MenuManager_PopScreen(FALSE);" in INTERNAL_HOST, (
-    "closing must pop every page screen the menu pushed"
+    "page replacement still uses the retail screen command path"
+)
+assert "leaveCommandScript" in INTERNAL_HOST and "MenuManager_LeaveMenus(900, 9)" in INTERNAL_HOST, (
+    "the final close must resume through the retail LeaveMenus path, not pop an empty stack"
 )
 # A fresh attach must delete the previous page screens before building the new
 # one, or the base id migrates while old page scripts persist and the retail
@@ -438,6 +459,50 @@ assert "id range freed by removing the previous page screens" in INTERNAL_HOST, 
     "the id search must clear our own leftovers before relocating the base"
 )
 
+# Level, world-time and mission-time controls must use the validated paths.
+for item_id in ("world_time_preset", "world_time_hour", "mission_time_seconds",
+                "mission_time_preset", "mission_time_limit", "landmark_target",
+                "player_send_target"):
+    assert item_id in dispatched, f"{item_id} lost its helper dispatch branch"
+assert "MISSION::FIND" in HELPERS and "requestLevelChange" in HELPERS, (
+    "a level change must validate the id against the retail mission table first"
+)
+assert "processPendingLevelChange" in HEAVEN and "processPendingLevelChange" in HELPERS, (
+    "the level change must run after the frame is flushed, never inside the draw pass"
+)
+assert "setWorldHour" in HELPERS and "setMissionElapsedSeconds" in HELPERS, (
+    "world time and mission time are independent LevelFlow fields"
+)
+assert "broadcastPlayerPosition" in HELPERS and "IGI::HUMAN::SEND_POSITION(player)" in HELPERS, (
+    "Send Player Position must publish both retail position broadcasts"
+)
+assert "worldObjectTargets" in HELPERS and "authoredLevelTasks" in HELPERS, (
+    "the object picker must walk the authored level tree, not only the event task lists"
+)
+assert "refillWeapon" in HELPERS and "findOwnedGun" in HELPERS, (
+    "ammo must be applied to the selected weapon task, including newly created weapons"
+)
+assert "requestModExit" in HELPERS and "IGI_SDK_RequestSafeUnload" in HELPERS, (
+    "Exit Mod must request the host safe-unload path"
+)
+assert "exit_mod" in dispatched and "RequestExit" in HEAVEN, (
+    "Exit Mod must be a routed action in the shared Heaven menu"
+)
+assert '"Custom Position"' in HEAVEN and "Send Player To Custom XYZ" not in HEAVEN, (
+    "the typed-destination label must be exactly Custom Position"
+)
+assert "completeExternalShutdownOnGameThread" in IMGUI_HOST, (
+    "the external host must finish an eject from the end-frame path even if the scheduler task is late"
+)
+assert "shutdownPending.load(std::memory_order_acquire)) {" in IMGUI_HOST, (
+    "the external end-frame callback must drive the pending eject"
+)
+assert "unloadRequested.store(true" in WINDOWS_DLL, (
+    "the configured end key must eject instead of only disabling the menu"
+)
+assert "camera.mode == 2" in HELPERS and "IGI::CAMERA::ROTATE_X" in HELPERS, (
+    "the free camera must build the retail camera axes and apply them at the viewport"
+)
 print(
     f"PASS Heaven routes {len(ids)} production controls across {len(categories)} categories"
 )
