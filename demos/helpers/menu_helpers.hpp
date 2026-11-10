@@ -313,6 +313,10 @@ bool teleportPlayerToTarget(Runtime &runtime, int targetTaskId);
 // Current player body position in retail world units. Used to prefill the
 // teleport X/Y/Z inputs so the menu never starts at an unset (0,0,0).
 bool readPlayerPosition(Runtime &runtime, std::array<double, 3> &position);
+// First valid player position observed for the active Game task. This is the
+// per-level "Level Start" teleport target and is refreshed when the level changes.
+void captureLevelStartPosition(Runtime &runtime);
+bool readLevelStartPosition(Runtime &runtime, std::array<double, 3> &position);
 // Reads the authored world position of a live task (task_pos, +0x20).
 bool readTargetPosition(Runtime &runtime, int targetTaskId, std::array<double, 3> &position);
 // Moves the live player to a typed world position. The destination is grounded

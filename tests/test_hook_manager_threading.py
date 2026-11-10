@@ -79,6 +79,20 @@ def test_a_second_igi_menu_chains_instead_of_refusing():
     assert "hooks are intact" in uninstall
 
 
+def test_patched_entry_detection_does_not_depend_on_module_names():
+    """IGI-RE/dinput.dll patches the display entries with plain E9 jumps into its
+    own module. The old detector required a module name containing igi/heaven, so
+    it missed the resident hook and refused the menu with a signature mismatch."""
+    target = (ROOT / "src/runtime/target_profile.cpp").read_text(encoding="utf-8")
+    hook = SOURCE.read_text(encoding="utf-8")
+    assert "bool isPatchedEntry" in target
+    assert "isPatchedEntry(displayAddFrameCallback)" in target
+    assert "isPatchedEntry(displayRunCallbacks)" in target
+    assert "isJumpIntoIgiMod" not in target
+    assert "isPatchedEntry(igi::game::displayAddFrameCallback)" in hook
+    assert "Display_EndFrame fallback" in hook
+
+
 def test_runtime_shutdown_retires_hooks_instead_of_patching_live_code():
     """Eject must not restore retail code under a running game: doing so patches
     bytes in a suspended process and froze the game on unload."""
@@ -109,6 +123,7 @@ def test_runtime_shutdown_retires_hooks_instead_of_patching_live_code():
     for detour in (
         "displayAddFrameCallbackDetour",
         "displayRunCallbacksDetour",
+        "displayEndFrameDetour",
         "menuManagerGetStringDetour",
     ):
         text = body(detour)
@@ -118,5 +133,6 @@ def test_runtime_shutdown_retires_hooks_instead_of_patching_live_code():
 if __name__ == "__main__":
     test_callback_list_work_is_owned_by_frame_dispatch()
     test_a_second_igi_menu_chains_instead_of_refusing()
+    test_patched_entry_detection_does_not_depend_on_module_names()
     test_runtime_shutdown_retires_hooks_instead_of_patching_live_code()
     test_hook_restore_waits_for_an_active_frame_detour_to_return()

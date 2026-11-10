@@ -1,6 +1,51 @@
 # Changelog
 
+## 0.4.1 — Start-key, pause restoration, free camera and teleport hardening
+
+- **One F5, one toggle:** both hosts now serialize start-key toggle requests with a
+  single `toggleRequestPending` flag. Two requests queued before the game thread
+  drained them used to open and immediately close the same screen.
+- **Retail pause restoration:** the retail screen that was current before the mod
+  menu replaced it is saved in `returnScreenId`, survives page switches, and is
+  used by the leave command. Closing the mod menu now returns to the pause menu
+  the player opened instead of resuming gameplay. The saved id is cleared on
+  close, deferred close, shutdown and level change.
+- **Free camera WASD:** W/S now move along the full aim direction including
+  pitch, so flying while looking up/down climbs or descends; A/D remain
+  horizontal strafe. The movement clock resets when the camera is re-enabled so
+  a stale frame delta cannot jump the new pose.
+- **Ground teleport rejection:** a ground probe that finds no floor (or leaves
+  the body at the probe height) now tries the high probe, then restores the
+  original body position and reports failure instead of leaving the player
+  airborne or under terrain.
+- **Per-level Level Start target:** the first valid player position of each Game
+  task is cached and added to the landmark list, guaranteeing a working
+  teleport destination on every level even when the authored object names do not
+  match a landmark keyword. Its slot is reserved before the 64-choice cap so the
+  list can never overflow when a level also has many authored landmarks.
+- **`invalid menu configuration` retry loop:** live target refresh can produce
+  labels the retail list cannot represent (over 39 bytes, embedded NUL, more
+  than 64 choices, stale default selection) or inverted input ranges. The
+  internal host now repairs those values before compiling, logs the repair, and
+  compiles from one immutable snapshot so validation and generation cannot see
+  different live lists. The generator also reports why script writing failed
+  instead of the old bare message.
+
 ## 0.4 — Heaven bug fixes, IGI-RE free camera, teleport targets and world clocks
+
+- **Menu opening with a resident IGI-RE/ImGui mod:**
+  - `supported retail hook signatures mismatch` was caused by the coexistence
+    probe requiring the foreign jump target to live in a module whose name looks
+    like an IGI menu DLL. IGI-RE's `dinput.dll` patches the display entries with a
+    plain `E9` jump into its own module, so the probe missed a resident hook and
+    both the internal and external menus refused to initialize.
+  - Patched entries are now recognized by their inline-hook stub (`E9`/`EB`,
+    push/ret, `mov eax; jmp eax`, `jmp [mem]`) rather than by module name. When
+    only one entry is owned, the menu chains the free entry; when the dispatcher
+    cannot be chained, `Display_EndFrame` becomes the per-frame driver.
+  - The executable gate now validates that the display addresses belong to the
+    loaded `igi.exe` image and then checks each entry's instruction family, so a
+    rebuilt retail executable no longer disables every option at startup.
 
 - **Heaven control surface (latest):**
   - Removed the read-only Level Tick, Flow Counters and Game Events diagnostics.

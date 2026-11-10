@@ -103,6 +103,10 @@ struct InternalMenuState {
     igi::MenuResource leaveResource;
     std::atomic<std::uint64_t> frameCount{0};
     std::uint64_t lastLiveRefreshTick = 0;
+    // One queued start-key toggle at a time. Two requests arriving before the
+    // game thread drains the queue used to open and immediately close the same
+    // screen.
+    std::atomic<bool> toggleRequestPending{false};
     std::atomic<std::int32_t> observedScreen{0};
     std::atomic<bool> safeToShutdown{true};
     std::atomic<bool> shutdownPending{false};
@@ -136,6 +140,11 @@ struct InternalMenuState {
     // not be popped or deleted from under the game, so the close waits for the
     // game to leave that screen first.
     bool closeDeferredBehindRetailScreen = false;
+    // Retail screen that was open before the injected menu replaced it. It must
+    // survive page switches: rebuilding the leave command from the current screen
+    // after a page switch would see our own page and resume gameplay instead of
+    // returning to the retail pause menu the player opened first.
+    std::int32_t returnScreenId = 0;
     std::uint64_t transitionDeadlineFrame = 0;
     std::atomic<bool> initialAttachPending{false};
 #if defined(_WIN32)
@@ -161,6 +170,7 @@ auto &leaveMenu = g_menu.leaveMenu;
 auto &leaveResource = g_menu.leaveResource;
 auto &frameCount = g_menu.frameCount;
 auto &lastLiveRefreshTick = g_menu.lastLiveRefreshTick;
+auto &toggleRequestPending = g_menu.toggleRequestPending;
 auto &safeToShutdown = g_menu.safeToShutdown;
 auto &shutdownPending = g_menu.shutdownPending;
 auto &shutdownCompleted = g_menu.shutdownCompleted;
@@ -174,6 +184,7 @@ auto &createdScreenId = g_menu.createdScreenId;
 auto &pendingPageDelta = g_menu.pendingPageDelta;
 auto &pageSwitchInFlight = g_menu.pageSwitchInFlight;
 auto &closeDeferredBehindRetailScreen = g_menu.closeDeferredBehindRetailScreen;
+auto &returnScreenId = g_menu.returnScreenId;
 auto &transitionDeadlineFrame = g_menu.transitionDeadlineFrame;
 auto &initialAttachPending = g_menu.initialAttachPending;
 
@@ -487,6 +498,7 @@ void completeShutdownOnGameThread() {
     pendingTransition = MenuTransition::None;
     pageSwitchInFlight = false;
     closeDeferredBehindRetailScreen = false;
+    returnScreenId = 0;
     pendingPageDelta = 0;
     shutdownPending.store(false, std::memory_order_release);
     safeToShutdown.store(true, std::memory_order_release);
@@ -530,9 +542,12 @@ void completeCloseTransition() {
         pageSwitchInFlight = false;
         if (menuBridge)
             menuBridge->cancel(false);
+        // The page switch re-attaches, so the retail screen saved for the leave
+        // command must survive this close-derived rebuild.
         if (startPageSwitch())
             return;
     }
+    returnScreenId = 0;
     // A plain close must never turn into a page change: drop any stale delta.
     pendingPageDelta = 0;
     pageSwitchInFlight = false;
@@ -598,6 +613,7 @@ void processDeferredClose() {
     releaseInjectedMenuScreen();
     menuScreenCreated = false;
     menuScreenAttached = false;
+    returnScreenId = 0;
     releaseScriptSession();
     (void)igi::resumeFromMenu(runtime);
     if (shutdownPending.load(std::memory_order_acquire)) {
@@ -715,11 +731,20 @@ std::string leaveCommandScript() {
         const auto *layout = reinterpret_cast<const RetailMenuManagerLayout *>(manager);
         const int screen = layout->currentScreenId;
         const auto pages = igi::menuPageCount(menuConfig);
-        bool isOurScreen = false;
-        for (std::size_t page = 0; page < pages; ++page) {
-            isOurScreen = isOurScreen || screen == igi::menuPageScreenId(menuConfig, page);
+        const auto isOurScreen = [pages](int id) {
+            for (std::size_t page = 0; page < pages; ++page) {
+                if (id == igi::menuPageScreenId(menuConfig, page))
+                    return true;
+            }
+            return false;
+        };
+        // Prefer the screen that was current before the mod replaced it. This is
+        // the only record of a retail pause menu once our page is on top.
+        if (returnScreenId > 0 && !isOurScreen(returnScreenId) &&
+            IGI::TASK::FIND_BY_ID(returnScreenId) != nullptr) {
+            return "MenuManager_RequestScreen(" + std::to_string(returnScreenId) + ", FALSE);";
         }
-        if (!isOurScreen && retailMenuShown(layout) && screen > 0 &&
+        if (!isOurScreen(screen) && retailMenuShown(layout) && screen > 0 &&
             IGI::TASK::FIND_BY_ID(screen) != nullptr) {
             return "MenuManager_RequestScreen(" + std::to_string(screen) + ", FALSE);";
         }
@@ -733,6 +758,16 @@ bool rebuildMenuResources() {
     std::vector<std::uint8_t> close;
     std::vector<std::uint8_t> leave;
     std::string error;
+    // Live target refresh can add names or selections that the retail list
+    // cannot represent. Repair them before generation instead of failing the
+    // whole screen and retrying forever.
+    std::string repairs;
+    if (igi::sanitizeMenuConfigForCompile(menuConfig, &repairs))
+        igi::log(igi::LogLevel::Warning, "internal menu configuration repaired: " + repairs);
+    std::string invalidReason;
+    if (!igi::validateMenuItemConfig(menuConfig, &invalidReason))
+        igi::log(igi::LogLevel::Error,
+                 "internal menu configuration still invalid before compilation: " + invalidReason);
     if (!igi::compileIgiMenuScreenScript(menuConfig, screen, error) ||
         !igi::compileIgiMenuCommandScript(
             "MenuManager_RequestScreen(" +
@@ -916,6 +951,21 @@ void menuFrameWork() {
                  "internal menu screen: game is paused; waiting for active gameplay");
         return;
     }
+    // Remember the retail screen the player already had open before our screen
+    // replaces it. This snapshot must happen before RequestScreen and must not be
+    // overwritten by a later page-switch attach, where the current screen is ours.
+    if (auto *manager = liveMenuManager()) {
+        const auto *layout = reinterpret_cast<const RetailMenuManagerLayout *>(manager);
+        const int current = layout->currentScreenId;
+        const auto pages = igi::menuPageCount(menuConfig);
+        bool isOurScreen = false;
+        for (std::size_t page = 0; page < pages; ++page)
+            isOurScreen = isOurScreen || current == igi::menuPageScreenId(menuConfig, page);
+        if (!isOurScreen && retailMenuShown(layout) && current > 0 &&
+            IGI::TASK::FIND_BY_ID(current) != nullptr) {
+            returnScreenId = current;
+        }
+    }
     if (menuConfig.refreshLiveItems)
         (void)menuConfig.refreshLiveItems(menuConfig, runtime);
     // Rebuild on every attach so the leave command reflects whether the retail
@@ -1031,6 +1081,7 @@ bool closeMenuScreen() {
         }
         releaseInjectedMenuScreen();
         menuScreenCreated = false;
+        returnScreenId = 0;
         releaseScriptSession();
         (void)igi::resumeFromMenu(runtime);
         safeToShutdown.store(true, std::memory_order_release);
@@ -1117,6 +1168,7 @@ bool prepareMenuForLevelChange() {
     pendingPageDelta = 0;
     pageSwitchInFlight = false;
     closeDeferredBehindRetailScreen = false;
+    returnScreenId = 0;
     transitionDeadlineFrame = 0;
 #if defined(_WIN32)
     unregisterEndFrameCallback();
@@ -1248,12 +1300,24 @@ extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_Internal_Toggle() {
         igi::log(igi::LogLevel::Warning, "internal menu toggle: runtime is not initialized");
         return false;
     }
-    runtime.scheduler().enqueueOnce([] {
-        const bool toggled = toggleMenuScreenOnGameThread();
-        igi::log(toggled ? igi::LogLevel::Info : igi::LogLevel::Error,
-                 toggled ? "internal menu toggle: completed on game frame thread"
-                         : "internal menu toggle: rejected on game frame thread");
-    });
+    if (toggleRequestPending.exchange(true, std::memory_order_acq_rel)) {
+        igi::log(igi::LogLevel::Info,
+                 "internal menu toggle: a start-key request is already queued for the game "
+                 "thread; duplicate ignored");
+        return true;
+    }
+    if (runtime.scheduler().enqueueOnce([] {
+            toggleRequestPending.store(false, std::memory_order_release);
+            const bool toggled = toggleMenuScreenOnGameThread();
+            igi::log(toggled ? igi::LogLevel::Info : igi::LogLevel::Error,
+                     toggled ? "internal menu toggle: completed on game frame thread"
+                             : "internal menu toggle: rejected on game frame thread");
+        }) == 0) {
+        toggleRequestPending.store(false, std::memory_order_release);
+        igi::log(igi::LogLevel::Warning,
+                 "internal menu toggle: game-thread request queue is unavailable");
+        return false;
+    }
     return true;
 #else
     return false;

@@ -193,17 +193,21 @@ bool compileMenuScript(const MenuConfig &config, std::vector<std::uint8_t> &qvm,
                        bool manager) {
     qvm.clear();
     error.clear();
+    // Live target refresh runs immediately before this call. Validate and
+    // generate from one immutable snapshot so a concurrent list update cannot
+    // pass validation in one call and fail generation in the next.
+    MenuConfig stable = config;
     std::ostringstream script;
-    if (!writeMenuScript(script, config, manager)) {
+    if (!writeMenuScript(script, stable, manager)) {
         std::string reason;
-        if (config.items.empty())
+        if (stable.items.empty())
             error = "invalid menu configuration: the menu has no items";
-        else if (config.width <= 0 || config.height <= 0)
+        else if (stable.width <= 0 || stable.height <= 0)
             error = "invalid menu configuration: the menu frame size must be positive";
-        else if (!validateMenuItemConfig(config, &reason))
+        else if (!validateMenuItemConfig(stable, &reason))
             error = "invalid menu configuration: " + reason;
         else
-            error = "invalid menu configuration";
+            error = "invalid menu configuration: generated script could not be written";
         return false;
     }
     auto lexed = qsc::Lex(script.str());
@@ -227,6 +231,81 @@ bool compileMenuScript(const MenuConfig &config, std::vector<std::uint8_t> &qvm,
 } // namespace igi
 
 namespace igi {
+bool sanitizeMenuConfigForCompile(MenuConfig &config, std::string *reason) {
+    bool changed = false;
+    std::string notes;
+    const auto note = [&notes](const std::string &text) {
+        if (!notes.empty())
+            notes += "; ";
+        notes += text;
+    };
+
+    const auto clampedWidth = std::clamp(config.width, 160, 4096);
+    const auto clampedHeight = std::clamp(config.height, 120, 4096);
+    const auto clampedScreen = std::clamp(config.screenId, 1, 4095);
+    if (clampedWidth != config.width || clampedHeight != config.height) {
+        note("frame geometry clamped");
+        config.width = clampedWidth;
+        config.height = clampedHeight;
+        changed = true;
+    }
+    if (clampedScreen != config.screenId) {
+        note("screen id clamped");
+        config.screenId = clampedScreen;
+        changed = true;
+    }
+
+    for (auto &item : config.items) {
+        if (item.kind == ModMenuItemKind::Input) {
+            if (item.inputMinimum > item.inputMaximum) {
+                std::swap(item.inputMinimum, item.inputMaximum);
+                note("input '" + item.id + "' range swapped");
+                changed = true;
+            }
+            const int clampedValue =
+                std::clamp(item.inputValue, item.inputMinimum, item.inputMaximum);
+            if (clampedValue != item.inputValue) {
+                item.inputValue = clampedValue;
+                changed = true;
+            }
+            continue;
+        }
+        if (item.kind != ModMenuItemKind::List)
+            continue;
+
+        const auto invalidValue = [](const std::string &value) {
+            return value.size() >= 40 || value.find('\0') != std::string::npos;
+        };
+        const auto before = item.values.size();
+        std::erase_if(item.values, invalidValue);
+        if (item.values.size() != before) {
+            note("list '" + item.id + "' dropped " + std::to_string(before - item.values.size()) +
+                 " invalid choice(s)");
+            changed = true;
+        }
+        if (item.values.size() > kMaxMenuListChoices) {
+            item.values.resize(kMaxMenuListChoices);
+            note("list '" + item.id + "' truncated to " + std::to_string(kMaxMenuListChoices) +
+                 " choices");
+            changed = true;
+        }
+        if (item.values.empty()) {
+            item.values.emplace_back("Unavailable");
+            note("list '" + item.id + "' had no valid choices");
+            changed = true;
+        }
+        if (item.defaultSelection >= item.values.size()) {
+            item.defaultSelection = 0;
+            note("list '" + item.id + "' default selection reset");
+            changed = true;
+        }
+    }
+
+    if (reason)
+        *reason = std::move(notes);
+    return changed;
+}
+
 bool writeIgiMenuScript(std::ostream &out, const MenuConfig &config) {
     return writeMenuScript(out, config, true);
 }

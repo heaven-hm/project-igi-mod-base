@@ -239,8 +239,8 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
         // LOCAL:humanplayer/humanplayer.qsc, up to the damage/health pair. Move
         // scale (arg 0), jump speed (arg 1), jump height (arg 2), air speed
         // (arg 3), damage scale (arg 7) and fence damage (arg 8) are separate
-        // qvm values. The lean/peek params (args 4..6) are intentionally not
-        // exposed. Integer boxes keep the QVM frontend valid; x10/x100 is noted
+        // qvm values. The peek params (args 4..6) are intentionally not exposed.
+        // Integer boxes keep the QVM frontend valid; x10/x100 is noted
         // in the label so 6.5 km/h is still typable.
         {"human_move_scale",
          igi::ModMenuItemKind::Input,
@@ -712,6 +712,7 @@ bool configureModMenu(igi::MenuConfig &config) {
         (void)igi::renderThirdPersonCrosshair(runtime);
     };
     config.frameUpdate = [](igi::Runtime &runtime) {
+        igi::captureLevelStartPosition(runtime);
         (void)igi::updateFreecam(runtime);
         // End-of-frame is the safe point to unload the level: the retail scene
         // has already been flushed, so deleting the Game task cannot pull tasks

@@ -39,6 +39,10 @@ std::size_t countKind(const igi::MenuConfig &config, igi::ModMenuItemKind kind) 
 
 int main() {
     igi::MenuConfig config;
+    // Optional real deployment config, so the test can reproduce a user's
+    // geometry and key settings without changing the committed defaults.
+    if (const char *configPath = std::getenv("IGI_MENU_CONFIG"))
+        config = igi::loadMenuConfig(configPath);
     assert(configureModMenu(config));
 
     // The shipping menu must cover a real controller set, not a token few.
@@ -166,6 +170,32 @@ int main() {
     std::vector<std::uint8_t> liveQvm;
     std::string liveError;
     assert(igi::compileIgiMenuScreenScript(livePosition, liveQvm, liveError));
+
+    // Live task refresh can exceed the list cap, produce an overlong name, or
+    // leave a NUL in a name. The host must repair these before compiling so the
+    // menu does not get stuck in a per-frame "invalid menu configuration" loop.
+    igi::MenuConfig dirty = config;
+    for (auto &item : dirty.items) {
+        if (item.id == "npc_target") {
+            item.values.assign(igi::kMaxMenuListChoices + 4, "target");
+            item.values[0] = std::string(60, 'X');
+            item.values[1] = std::string("bad") + '\0' + "name";
+            item.defaultSelection = item.values.size();
+        } else if (item.id == "player_teleport_x") {
+            item.inputMinimum = 100;
+            item.inputMaximum = -100;
+            item.inputValue = 500;
+        }
+    }
+    std::string repairs;
+    assert(igi::sanitizeMenuConfigForCompile(dirty, &repairs));
+    assert(!repairs.empty());
+    std::string sanitizedReason;
+    assert(igi::validateMenuItemConfig(dirty, &sanitizedReason));
+    std::vector<std::uint8_t> repairedQvm;
+    std::string repairedError;
+    assert(igi::compileIgiMenuScreenScript(dirty, repairedQvm, repairedError));
+    assert(!repairedQvm.empty());
 
     // The last page draws fewer rows, so its frame must be shorter instead of
     // reserving empty space for rows that do not exist.

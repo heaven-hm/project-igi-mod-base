@@ -29,6 +29,10 @@ std::atomic<bool> hookBehaviorActive{true};
 
 bool addHookCreated = false;
 bool runHookCreated = false;
+// Last-resort per-frame driver. Display_EndFrame runs once per displayed frame
+// right after Display_RunCallbacks, so it is a safe tick source when a foreign
+// mod already owns the dispatch entry and MinHook cannot chain it.
+bool endFrameHookCreated = false;
 bool getStringHookCreated = false;
 // True while the SDK owns a live tick in the game's frame callback list.
 std::atomic<bool> tickRegistered{false};
@@ -63,6 +67,10 @@ using DisplayRemoveFrameCallbackFn = int(__cdecl *)(void *callback);
 // detour is the guaranteed tick driver even if a list reset drops our node.
 using DisplayRunCallbacksFn = int(__cdecl *)(void);
 DisplayRunCallbacksFn displayRunCallbacksOriginal = nullptr;
+
+// Display_EndFrame (0x00491D20) is the per-frame fallback driver.
+using DisplayEndFrameFn = int(__cdecl *)(void);
+DisplayEndFrameFn displayEndFrameOriginal = nullptr;
 
 // MenuManager_GetString (0x00418EA0) formats "RM: %s" into s->text when a menu
 // label is not present in the .RES language files. Stripping the "RM: " prefix
@@ -194,6 +202,9 @@ extern "C" int __cdecl displayAddFrameCallbackDetour(void *callback) {
         return displayAddFrameCallbackOriginal ? displayAddFrameCallbackOriginal(callback) : 0;
     const int result =
         displayAddFrameCallbackOriginal ? displayAddFrameCallbackOriginal(callback) : 0;
+    // Callback-list mutation stays owned by the per-frame driver (which may be
+    // Display_RunCallbacks or the Display_EndFrame fallback). Registering here
+    // would mutate the list outside the verified frame boundary.
     tickRegistrationRequested.store(true, std::memory_order_release);
     return result;
 }
@@ -215,6 +226,17 @@ extern "C" int __cdecl displayRunCallbacksDetour() {
     return result;
 }
 
+// Fallback tick driver used only when Display_RunCallbacks cannot be hooked.
+// It preserves the retail end-frame work and drains the scheduler afterwards.
+extern "C" int __cdecl displayEndFrameDetour() {
+    const int result = displayEndFrameOriginal ? displayEndFrameOriginal() : 0;
+    if (!hookBehaviorActive.load(std::memory_order_acquire))
+        return result;
+    processFrameTickRequests();
+    sdkFrameTick();
+    return result;
+}
+
 extern "C" const char *__cdecl menuManagerGetStringDetour(void *mm, const char *name) {
     const char *res =
         menuManagerGetStringOriginal ? menuManagerGetStringOriginal(mm, name) : nullptr;
@@ -229,6 +251,86 @@ extern "C" const char *__cdecl menuManagerGetStringDetour(void *mm, const char *
     return res;
 }
 
+// Reads the first opcode after confirming the page is committed and readable.
+// This replaces the old all-or-nothing exact-prologue refusal: a patched retail
+// build may move a few bytes but its display entries still start with the same
+// instruction family, and MinHook owns the rest of the relocation.
+bool entryStartsWith(unsigned long address, unsigned char expected) noexcept {
+    const auto *bytes = reinterpret_cast<const unsigned char *>(address);
+    MEMORY_BASIC_INFORMATION info{};
+    if (!bytes || VirtualQuery(bytes, &info, sizeof(info)) != sizeof(info) ||
+        info.State != MEM_COMMIT || (info.Protect & PAGE_NOACCESS) != 0) {
+        return false;
+    }
+    return bytes[0] == expected || bytes[0] == 0xE9;
+}
+
+// Enables the registration entry (Display_AddFrameCallback). When another mod
+// already owns it, this only records its address so our tick can be registered
+// through that detour's registrar call instead of patching over it.
+bool enableAddFrameDriver() noexcept {
+    if (addHookCreated)
+        return MH_EnableHook(reinterpret_cast<void *>(igi::game::displayAddFrameCallback)) == MH_OK;
+    if (igi::game::isPatchedEntry(igi::game::displayAddFrameCallback)) {
+        displayAddFrameCallbackOriginal =
+            reinterpret_cast<DisplayAddFrameCallbackFn>(igi::game::displayAddFrameCallback);
+        return true;
+    }
+    if (!entryStartsWith(igi::game::displayAddFrameCallback, 0x8B))
+        return false;
+    const auto status = MH_CreateHook(reinterpret_cast<void *>(igi::game::displayAddFrameCallback),
+                                      reinterpret_cast<void *>(&displayAddFrameCallbackDetour),
+                                      reinterpret_cast<void **>(&displayAddFrameCallbackOriginal));
+    if (status != MH_OK && status != MH_ERROR_ALREADY_CREATED)
+        return false;
+    addHookCreated = true;
+    return MH_EnableHook(reinterpret_cast<void *>(igi::game::displayAddFrameCallback)) == MH_OK;
+}
+
+// Enables a per-frame driver. Display_RunCallbacks is preferred; Display_EndFrame
+// is the safe fallback when a foreign mod owns the dispatcher.
+bool enableFrameDriver() noexcept {
+    if (runHookCreated)
+        return MH_EnableHook(reinterpret_cast<void *>(igi::game::displayRunCallbacks)) == MH_OK;
+    if (entryStartsWith(igi::game::displayRunCallbacks, 0xE8)) {
+        const auto status = MH_CreateHook(reinterpret_cast<void *>(igi::game::displayRunCallbacks),
+                                          reinterpret_cast<void *>(&displayRunCallbacksDetour),
+                                          reinterpret_cast<void **>(&displayRunCallbacksOriginal));
+        if (status == MH_OK || status == MH_ERROR_ALREADY_CREATED) {
+            runHookCreated = true;
+            if (MH_EnableHook(reinterpret_cast<void *>(igi::game::displayRunCallbacks)) == MH_OK)
+                return true;
+        }
+        igi::log(igi::LogLevel::Warning,
+                 "Display_RunCallbacks hook unavailable; trying Display_EndFrame fallback");
+    }
+    if (endFrameHookCreated)
+        return MH_EnableHook(reinterpret_cast<void *>(igi::game::displayEndFrame)) == MH_OK;
+    if (!entryStartsWith(igi::game::displayEndFrame, 0xE8))
+        return false;
+    const auto status = MH_CreateHook(reinterpret_cast<void *>(igi::game::displayEndFrame),
+                                      reinterpret_cast<void *>(&displayEndFrameDetour),
+                                      reinterpret_cast<void **>(&displayEndFrameOriginal));
+    if (status != MH_OK && status != MH_ERROR_ALREADY_CREATED)
+        return false;
+    endFrameHookCreated = true;
+    return MH_EnableHook(reinterpret_cast<void *>(igi::game::displayEndFrame)) == MH_OK;
+}
+
+void enableMenuStringHook() noexcept {
+    if (!getStringHookCreated) {
+        const auto status = MH_CreateHook(reinterpret_cast<void *>(igi::game::menuManagerGetString),
+                                          reinterpret_cast<void *>(&menuManagerGetStringDetour),
+                                          reinterpret_cast<void **>(&menuManagerGetStringOriginal));
+        if (status == MH_OK || status == MH_ERROR_ALREADY_CREATED)
+            getStringHookCreated = true;
+    }
+    if (getStringHookCreated &&
+        MH_EnableHook(reinterpret_cast<void *>(igi::game::menuManagerGetString)) != MH_OK) {
+        getStringHookCreated = false;
+    }
+}
+
 bool installCoexistenceHook(igi::Scheduler &scheduler, void *&trampolineOut,
                             bool &usedExistingHooks) {
     using igi::LogLevel;
@@ -237,48 +339,33 @@ bool installCoexistenceHook(igi::Scheduler &scheduler, void *&trampolineOut,
         return false;
     activeScheduler.store(&scheduler, std::memory_order_release);
 
-    // Another IGI menu DLL already owns the display entries. Chain only the
-    // per-frame dispatcher so this menu gets a game-thread tick without touching
-    // the other mod's Display_AddFrameCallback detour or the retail prologues.
-    if (!runHookCreated) {
-        const auto status = MH_CreateHook(reinterpret_cast<void *>(igi::game::displayRunCallbacks),
-                                          reinterpret_cast<void *>(&displayRunCallbacksDetour),
-                                          reinterpret_cast<void **>(&displayRunCallbacksOriginal));
-        if (status != MH_OK && status != MH_ERROR_ALREADY_CREATED) {
-            activeScheduler.store(nullptr, std::memory_order_release);
-            igi::log(LogLevel::Error, "coexistence: Display_RunCallbacks chain creation failed");
-            return false;
-        }
-        runHookCreated = true;
+    // Another IGI menu DLL owns at least one display entry. Do not touch its
+    // detour: either register through it, or chain a driver entry it left free.
+    const bool addOwnedByOther = igi::game::isPatchedEntry(igi::game::displayAddFrameCallback);
+    if (addOwnedByOther) {
+        // Calling the foreign entry from our frame driver forwards to the real
+        // registrar and adds this menu's tick to the same list.
+        displayAddFrameCallbackOriginal =
+            reinterpret_cast<DisplayAddFrameCallbackFn>(igi::game::displayAddFrameCallback);
+    } else if (!enableAddFrameDriver()) {
+        igi::log(LogLevel::Warning,
+                 "coexistence: Display_AddFrameCallback is not hookable; relying on the "
+                 "already-installed registrar");
     }
-    if (MH_EnableHook(reinterpret_cast<void *>(igi::game::displayRunCallbacks)) != MH_OK) {
-        MH_DisableHook(reinterpret_cast<void *>(igi::game::displayRunCallbacks));
-        MH_RemoveHook(reinterpret_cast<void *>(igi::game::displayRunCallbacks));
-        runHookCreated = false;
-        displayRunCallbacksOriginal = nullptr;
+
+    if (!enableFrameDriver()) {
+        if (addHookCreated) {
+            MH_DisableHook(reinterpret_cast<void *>(igi::game::displayAddFrameCallback));
+            MH_RemoveHook(reinterpret_cast<void *>(igi::game::displayAddFrameCallback));
+            addHookCreated = false;
+            displayAddFrameCallbackOriginal = nullptr;
+        }
         activeScheduler.store(nullptr, std::memory_order_release);
-        igi::log(LogLevel::Error, "coexistence: Display_RunCallbacks chain enable failed");
+        igi::log(LogLevel::Error, "coexistence: no per-frame display driver could be enabled");
         return false;
     }
 
-    // The game's AddFrameCallback is already detoured by the other mod. Calling
-    // that entry from our run-dispatch detour (game thread) forwards to the real
-    // registrar and adds this menu's tick to the same list.
-    displayAddFrameCallbackOriginal =
-        reinterpret_cast<DisplayAddFrameCallbackFn>(igi::game::displayAddFrameCallback);
-
-    if (!getStringHookCreated) {
-        const auto strStatus =
-            MH_CreateHook(reinterpret_cast<void *>(igi::game::menuManagerGetString),
-                          reinterpret_cast<void *>(&menuManagerGetStringDetour),
-                          reinterpret_cast<void **>(&menuManagerGetStringOriginal));
-        if (strStatus == MH_OK || strStatus == MH_ERROR_ALREADY_CREATED)
-            getStringHookCreated = true;
-    }
-    if (getStringHookCreated &&
-        MH_EnableHook(reinterpret_cast<void *>(igi::game::menuManagerGetString)) != MH_OK) {
-        getStringHookCreated = false;
-    }
+    enableMenuStringHook();
 
     hookBehaviorActive.store(true, std::memory_order_release);
     tickRegistrationRequested.store(true, std::memory_order_release);
@@ -287,26 +374,37 @@ bool installCoexistenceHook(igi::Scheduler &scheduler, void *&trampolineOut,
     frameDispatchThreadId.store(0, std::memory_order_release);
     usedExistingHooks = true;
     trampolineOut = nullptr;
-    igi::log(LogLevel::Info,
-             "coexistence: another IGI mod owns the display hooks; this menu chained "
-             "Display_RunCallbacks and will register its tick through the existing registrar");
+    igi::log(igi::LogLevel::Info,
+             "coexistence: another IGI mod owns a display entry; this menu chained a "
+             "free per-frame driver and will register its tick through the existing registrar");
     return true;
 }
 
 bool installDisplayFrameHook(igi::Scheduler &scheduler, void *&trampolineOut,
                              bool &usedExistingHooks) {
     using igi::LogLevel;
-    if (!igi::game::isSupportedExecutable()) {
-        if (igi::game::hasIgiModHook()) {
-            igi::log(LogLevel::Info,
-                     "Display hooks are already owned by another IGI mod; enabling coexistence "
-                     "mode instead of refusing the internal menu");
-            return installCoexistenceHook(scheduler, trampolineOut, usedExistingHooks);
-        }
-        igi::log(
-            LogLevel::Error,
-            "Display_AddFrameCallback hook refused: supported retail hook signatures mismatch");
+    // Identity first: the addresses must belong to the loaded igi.exe image.
+    // Exact prologue bytes are advisory from here on; a rebuilt retail executable
+    // must still be able to open the menus (the reported failure kept every
+    // option dead because both hosts aborted at runtime initialization).
+    if (!igi::game::isIgiExecutableModule()) {
+        igi::log(LogLevel::Error,
+                 "display hook refused: the target addresses are not inside the loaded "
+                 "igi.exe image");
         return false;
+    }
+    if (igi::game::hasIgiModHook()) {
+        igi::log(LogLevel::Info,
+                 "Display hooks are already owned by another IGI mod; enabling coexistence "
+                 "mode instead of refusing the internal menu");
+        return installCoexistenceHook(scheduler, trampolineOut, usedExistingHooks);
+    }
+    if (!igi::game::isSupportedExecutable() ||
+        !entryStartsWith(igi::game::displayAddFrameCallback, 0x8B) ||
+        !entryStartsWith(igi::game::displayRunCallbacks, 0xE8)) {
+        igi::log(LogLevel::Warning,
+                 "display hook: exact retail prologue differs; continuing with the loaded "
+                 "igi.exe image after per-entry instruction validation");
     }
     const auto initializeStatus = MH_Initialize();
     if (initializeStatus != MH_OK && initializeStatus != MH_ERROR_ALREADY_INITIALIZED)
@@ -314,69 +412,26 @@ bool installDisplayFrameHook(igi::Scheduler &scheduler, void *&trampolineOut,
 
     activeScheduler.store(&scheduler, std::memory_order_release);
 
-    if (!addHookCreated) {
-        const auto status =
-            MH_CreateHook(reinterpret_cast<void *>(igi::game::displayAddFrameCallback),
-                          reinterpret_cast<void *>(&displayAddFrameCallbackDetour),
-                          reinterpret_cast<void **>(&displayAddFrameCallbackOriginal));
-        if (status != MH_OK && status != MH_ERROR_ALREADY_CREATED) {
-            activeScheduler.store(nullptr, std::memory_order_release);
-            igi::log(LogLevel::Error, "Display_AddFrameCallback hook creation failed");
-            return false;
-        }
-        addHookCreated = true;
-    }
-    if (MH_EnableHook(reinterpret_cast<void *>(igi::game::displayAddFrameCallback)) != MH_OK) {
+    if (!enableAddFrameDriver()) {
         activeScheduler.store(nullptr, std::memory_order_release);
-        igi::log(LogLevel::Error, "Display_AddFrameCallback hook enable failed");
+        igi::log(LogLevel::Error,
+                 "Display_AddFrameCallback hook creation failed: the entry is neither the "
+                 "retail registrar prologue nor a chainable jump");
         return false;
     }
-
-    // Guaranteed per-frame driver: hook the display callback dispatch function.
-    if (!runHookCreated) {
-        const auto runStatus =
-            MH_CreateHook(reinterpret_cast<void *>(igi::game::displayRunCallbacks),
-                          reinterpret_cast<void *>(&displayRunCallbacksDetour),
-                          reinterpret_cast<void **>(&displayRunCallbacksOriginal));
-        if (runStatus == MH_OK || runStatus == MH_ERROR_ALREADY_CREATED) {
-            runHookCreated = true;
-        } else {
-            igi::log(
-                LogLevel::Warning,
-                "Display_RunCallbacks hook creation failed; relying on the callback list only");
-        }
-    }
-    if (!runHookCreated ||
-        MH_EnableHook(reinterpret_cast<void *>(igi::game::displayRunCallbacks)) != MH_OK) {
+    if (!enableFrameDriver()) {
         MH_DisableHook(reinterpret_cast<void *>(igi::game::displayAddFrameCallback));
         MH_RemoveHook(reinterpret_cast<void *>(igi::game::displayAddFrameCallback));
         addHookCreated = false;
         displayAddFrameCallbackOriginal = nullptr;
-        if (runHookCreated) {
-            MH_DisableHook(reinterpret_cast<void *>(igi::game::displayRunCallbacks));
-            MH_RemoveHook(reinterpret_cast<void *>(igi::game::displayRunCallbacks));
-            runHookCreated = false;
-            displayRunCallbacksOriginal = nullptr;
-        }
         activeScheduler.store(nullptr, std::memory_order_release);
         igi::log(LogLevel::Error,
-                 "Display_RunCallbacks hook is required to serialize callback-list mutations");
+                 "display hook refused: neither Display_RunCallbacks nor Display_EndFrame "
+                 "could be enabled as the per-frame driver");
         return false;
     }
 
-    if (!getStringHookCreated) {
-        const auto strStatus =
-            MH_CreateHook(reinterpret_cast<void *>(igi::game::menuManagerGetString),
-                          reinterpret_cast<void *>(&menuManagerGetStringDetour),
-                          reinterpret_cast<void **>(&menuManagerGetStringOriginal));
-        if (strStatus == MH_OK || strStatus == MH_ERROR_ALREADY_CREATED) {
-            getStringHookCreated = true;
-        }
-    }
-    if (getStringHookCreated &&
-        MH_EnableHook(reinterpret_cast<void *>(igi::game::menuManagerGetString)) != MH_OK) {
-        getStringHookCreated = false;
-    }
+    enableMenuStringHook();
 
     hookBehaviorActive.store(true, std::memory_order_release);
     trampolineOut = reinterpret_cast<void *>(displayAddFrameCallbackOriginal);
@@ -387,7 +442,10 @@ bool installDisplayFrameHook(igi::Scheduler &scheduler, void *&trampolineOut,
     frameDispatchThreadId.store(0, std::memory_order_release);
     igi::log(LogLevel::Info,
              "IGI 1 Display_AddFrameCallback hook installed at 0x004916C0; frame tick registered");
-    igi::log(LogLevel::Info, "IGI 1 Display_RunCallbacks per-frame driver hooked at 0x00491D00");
+    igi::log(LogLevel::Info,
+             runHookCreated
+                 ? "IGI 1 Display_RunCallbacks per-frame driver hooked at 0x00491D00"
+                 : "IGI 1 Display_EndFrame fallback per-frame driver hooked at 0x00491D20");
     igi::log(LogLevel::Info,
              "Display_AddFrameCallback tick registration requested for the frame thread");
     return true;
@@ -406,6 +464,8 @@ bool HookManager::installDisplayAddFrameCallbackTick() {
             MH_EnableHook(reinterpret_cast<void *>(game::displayAddFrameCallback));
         if (runHookCreated)
             MH_EnableHook(reinterpret_cast<void *>(game::displayRunCallbacks));
+        if (endFrameHookCreated)
+            MH_EnableHook(reinterpret_cast<void *>(game::displayEndFrame));
         if (getStringHookCreated)
             MH_EnableHook(reinterpret_cast<void *>(game::menuManagerGetString));
         // A previous retire made every detour a pass-through. Re-enabling the
@@ -514,6 +574,19 @@ bool HookManager::uninstall(bool restoreHooks) noexcept {
             runHookCreated = false;
             displayRunCallbacksOriginal = nullptr;
         }
+        if (endFrameHookCreated) {
+            MH_DisableHook(reinterpret_cast<void *>(game::displayEndFrame));
+            MH_RemoveHook(reinterpret_cast<void *>(game::displayEndFrame));
+            endFrameHookCreated = false;
+            displayEndFrameOriginal = nullptr;
+        }
+        if (addHookCreated) {
+            // Coexistence may have installed its own registration entry when the
+            // other mod owned only the dispatcher.
+            MH_DisableHook(reinterpret_cast<void *>(game::displayAddFrameCallback));
+            MH_RemoveHook(reinterpret_cast<void *>(game::displayAddFrameCallback));
+            addHookCreated = false;
+        }
         if (getStringHookCreated) {
             MH_DisableHook(reinterpret_cast<void *>(game::menuManagerGetString));
             MH_RemoveHook(reinterpret_cast<void *>(game::menuManagerGetString));
@@ -607,6 +680,17 @@ bool HookManager::uninstall(bool restoreHooks) noexcept {
             displayRunCallbacksOriginal = nullptr;
         }
     }
+    if (endFrameHookCreated) {
+        const auto status = MH_DisableHook(reinterpret_cast<void *>(game::displayEndFrame));
+        if (status != MH_OK && status != MH_ERROR_DISABLED) {
+            log(LogLevel::Error, "Display_EndFrame restore failed; teardown remains pending");
+            restored = false;
+        } else {
+            MH_RemoveHook(reinterpret_cast<void *>(game::displayEndFrame));
+            endFrameHookCreated = false;
+            displayEndFrameOriginal = nullptr;
+        }
+    }
     if (getStringHookCreated) {
         const auto status = MH_DisableHook(reinterpret_cast<void *>(game::menuManagerGetString));
         if (status == MH_OK || status == MH_ERROR_DISABLED) {
@@ -615,9 +699,9 @@ bool HookManager::uninstall(bool restoreHooks) noexcept {
             menuManagerGetStringOriginal = nullptr;
         }
     }
-    if (!restored || !game::isSupportedExecutable()) {
+    if (!restored || !game::isIgiExecutableModule()) {
         log(LogLevel::Error,
-            "hook teardown incomplete: original retail hook bytes are not restored");
+            "hook teardown incomplete: the retail hooks or the igi.exe target are not intact");
         return false;
     }
 

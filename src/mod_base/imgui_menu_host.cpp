@@ -69,6 +69,9 @@ struct ExternalImGuiMenuState {
     std::atomic<bool> safeToShutdown{true};
     std::atomic<bool> shutdownPending{false};
     std::atomic<bool> initialAttachPending{false};
+    // One queued start-key toggle at a time; duplicate queued toggles used to
+    // open then immediately close the same menu.
+    std::atomic<bool> toggleRequestPending{false};
     bool menuVisible = false;
     bool pauseWhileOpen = true;
     std::string activeCategory;
@@ -96,6 +99,7 @@ auto &frameCount = g_menu.frameCount;
 auto &safeToShutdown = g_menu.safeToShutdown;
 auto &shutdownPending = g_menu.shutdownPending;
 auto &initialAttachPending = g_menu.initialAttachPending;
+auto &toggleRequestPending = g_menu.toggleRequestPending;
 auto &menuVisible = g_menu.menuVisible;
 auto &pauseWhileOpen = g_menu.pauseWhileOpen;
 auto &activeCategory = g_menu.activeCategory;
@@ -1106,12 +1110,24 @@ extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_External_Toggle() {
         igi::log(igi::LogLevel::Warning, "external imgui toggle: runtime is not initialized");
         return false;
     }
-    runtime.scheduler().enqueueOnce([] {
-        const bool toggled = toggleImGuiMenuOnGameThread();
-        igi::log(toggled ? igi::LogLevel::Info : igi::LogLevel::Error,
-                 toggled ? "external imgui toggle: completed on game frame thread"
-                         : "external imgui toggle: rejected on game frame thread");
-    });
+    if (toggleRequestPending.exchange(true, std::memory_order_acq_rel)) {
+        igi::log(igi::LogLevel::Info,
+                 "external imgui toggle: a start-key request is already queued for the game "
+                 "thread; duplicate ignored");
+        return true;
+    }
+    if (runtime.scheduler().enqueueOnce([] {
+            toggleRequestPending.store(false, std::memory_order_release);
+            const bool toggled = toggleImGuiMenuOnGameThread();
+            igi::log(toggled ? igi::LogLevel::Info : igi::LogLevel::Error,
+                     toggled ? "external imgui toggle: completed on game frame thread"
+                             : "external imgui toggle: rejected on game frame thread");
+        }) == 0) {
+        toggleRequestPending.store(false, std::memory_order_release);
+        igi::log(igi::LogLevel::Warning,
+                 "external imgui toggle: game-thread request queue is unavailable");
+        return false;
+    }
     return true;
 #else
     return false;

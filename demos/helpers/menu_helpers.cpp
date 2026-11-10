@@ -59,6 +59,12 @@ int g_selectedNpcTaskId = -1;
 int g_selectedCarTaskId = -1;
 int g_selectedHeliTaskId = -1;
 std::atomic<bool> g_thirdPersonCrosshairEnabled{false};
+// Synthetic menu key for the per-level spawn position. Live task keys are
+// non-negative and address-derived, so this value cannot collide in practice.
+constexpr int kLevelStartTargetId = 2147483600;
+void *g_levelStartGame = nullptr;
+std::array<double, 3> g_levelStartPosition{};
+bool g_levelStartValid = false;
 
 // Retail Vec3d is three doubles (IGI-RE types.h). The bindings keep the type
 // opaque, so helpers pass positions through this explicitly sized mirror.
@@ -369,12 +375,21 @@ bool placeHumanOnGround(Runtime &runtime, IGI::Human *human,
     }
     constexpr double kProbeLift = 1.5 * 4096.0;
     constexpr double kHighProbe = 40.0 * 4096.0;
+    // A failed snap must not leave the body parked at the probe height. Keep the
+    // original pose and report failure so the menu can refuse the teleport.
+    const auto original = taskPosition(reinterpret_cast<const IGI::Task *>(human));
     auto probe = position;
     probe[2] += kProbeLift;
     IGI::HUMAN::SET_POSITION(human, probe.data());
     IGI::HUMAN::SNAP_TO_GROUND(human);
     auto grounded = taskPosition(reinterpret_cast<const IGI::Task *>(human));
-    if (!(grounded[2] <= probe[2] + 4096.0)) {
+    const auto unchanged = [](const std::array<double, 3> &a, const std::array<double, 3> &b) {
+        return std::fabs(a[0] - b[0]) < 1.0 && std::fabs(a[1] - b[1]) < 1.0 &&
+               std::fabs(a[2] - b[2]) < 1.0;
+    };
+    // No movement means the probe found no surface and left the body at the
+    // probe height, which is the airborne teleport this guard exists to prevent.
+    if (!(grounded[2] <= probe[2] + 4096.0) || unchanged(grounded, probe)) {
         // The downward probe found nothing and the upward fallback hit a
         // surface above the lift point: the requested point is under terrain or
         // a ceiling. Probe down from well above it so the player lands on the
@@ -384,6 +399,22 @@ bool placeHumanOnGround(Runtime &runtime, IGI::Human *human,
         IGI::HUMAN::SET_POSITION(human, high.data());
         IGI::HUMAN::SNAP_TO_GROUND(human);
         grounded = taskPosition(reinterpret_cast<const IGI::Task *>(human));
+        if (!(grounded[2] <= high[2] + 4096.0) || unchanged(grounded, high)) {
+            std::array<double, 3> restore = original;
+            IGI::HUMAN::SET_POSITION(human, restore.data());
+            log(LogLevel::Warning,
+                "teleport ground probe: no floor below the requested point; player left at "
+                "the original position");
+            return false;
+        }
+    }
+    const double finite = std::fabs(grounded[0]) + std::fabs(grounded[1]) + std::fabs(grounded[2]);
+    if (!std::isfinite(finite)) {
+        std::array<double, 3> restore = original;
+        IGI::HUMAN::SET_POSITION(human, restore.data());
+        log(LogLevel::Warning, "teleport ground probe: surface result was not finite; player left "
+                               "at the original position");
+        return false;
     }
     log(LogLevel::Info, "teleport ground probe: requested " + std::to_string(position[0]) + ", " +
                             std::to_string(position[1]) + ", " + std::to_string(position[2]) +
@@ -809,6 +840,9 @@ std::atomic<bool> g_viewportCallbackRegistered{false};
 // True when this module owns the human input lock for the free camera. The menu
 // pause can own the same lock; disabling freecam must not unlock it then.
 std::atomic<bool> g_freecamInputLocked{false};
+// Reset the frame clock on enable so a re-enabled camera does not jump by the
+// clamped stale delta from the previous session.
+std::atomic<bool> g_freecamClockReset{true};
 struct FreecamPose {
     double position[3]{};
     float pitch = 0.0F;
@@ -934,6 +968,7 @@ bool setFreecamEnabled(Runtime &runtime, bool enabled) {
     // lock this module created so disabling cannot unlock the retail menu.
     g_freecamInputLocked.store(igi::menuPauseActive() ? false : lockHumanInput(),
                                std::memory_order_release);
+    g_freecamClockReset.store(true, std::memory_order_release);
     g_freecamActive.store(true, std::memory_order_release);
     log(LogLevel::Info, "free camera enabled: WASD moves, Space/Ctrl rise/drop, Shift is 4x, "
                         "arrow keys turn; the player body stays in place");
@@ -951,6 +986,8 @@ bool updateFreecam(Runtime &runtime) {
     // Clamp the step so a menu pause or a stalled frame cannot teleport the camera.
     static ULONGLONG lastTick = GetTickCount64();
     const ULONGLONG now = GetTickCount64();
+    if (g_freecamClockReset.exchange(false, std::memory_order_acq_rel))
+        lastTick = now;
     const double dt = std::clamp(static_cast<double>(now - lastTick) / 1000.0, 0.0, 0.1);
     lastTick = now;
     const auto down = [](int key) { return (GetAsyncKeyState(key) & 0x8000) != 0; };
@@ -968,17 +1005,23 @@ bool updateFreecam(Runtime &runtime) {
     g_freecamPose.pitch = std::clamp(g_freecamPose.pitch, -1.5F, 1.5F);
     const float sinYaw = std::sin(g_freecamPose.yaw);
     const float cosYaw = std::cos(g_freecamPose.yaw);
+    const float sinPitch = std::sin(g_freecamPose.pitch);
+    const float cosPitch = std::cos(g_freecamPose.pitch);
     double moveX = 0.0;
     double moveY = 0.0;
     double moveZ = 0.0;
-    // W/S run along the aim direction; A/D strafe along the camera right vector.
+    // W/S run along the full aim direction (including pitch) so looking up and
+    // flying forward climbs; A/D strafe horizontally along the camera right
+    // vector, and Space/Ctrl remain the direct vertical controls.
     if (down('W')) {
-        moveX -= sinYaw;
-        moveY += cosYaw;
+        moveX -= sinYaw * cosPitch;
+        moveY += cosYaw * cosPitch;
+        moveZ += sinPitch;
     }
     if (down('S')) {
-        moveX += sinYaw;
-        moveY -= cosYaw;
+        moveX += sinYaw * cosPitch;
+        moveY -= cosYaw * cosPitch;
+        moveZ -= sinPitch;
     }
     if (down('D')) {
         moveX += cosYaw;
@@ -1096,6 +1139,38 @@ bool readPlayerPosition(Runtime &runtime, std::array<double, 3> &position) {
     IGI::HUMAN::GET_CAMERA_INFO(player, &info);
     position = {info.position[0], info.position[1], info.position[2]};
     return std::isfinite(position[0]) && std::isfinite(position[1]) && std::isfinite(position[2]);
+}
+
+void captureLevelStartPosition(Runtime &runtime) {
+    auto *game = IGI::GAME::GET();
+    if (game != g_levelStartGame) {
+        g_levelStartGame = game;
+        g_levelStartValid = false;
+    }
+    if (!game || g_levelStartValid)
+        return;
+    std::array<double, 3> position{};
+    if (!readPlayerPosition(runtime, position))
+        return;
+    // The first frames of a level can report an unplaced (0,0,0) body; keep
+    // sampling until the retail spawn has actually been applied.
+    const double magnitude =
+        std::fabs(position[0]) + std::fabs(position[1]) + std::fabs(position[2]);
+    if (!std::isfinite(magnitude) || magnitude < 1.0)
+        return;
+    g_levelStartPosition = position;
+    g_levelStartValid = true;
+    log(LogLevel::Info, "level start teleport target captured at " + std::to_string(position[0]) +
+                            ", " + std::to_string(position[1]) + ", " +
+                            std::to_string(position[2]));
+}
+
+bool readLevelStartPosition(Runtime &runtime, std::array<double, 3> &position) {
+    (void)runtime;
+    if (!g_levelStartValid || IGI::GAME::GET() != g_levelStartGame)
+        return false;
+    position = g_levelStartPosition;
+    return true;
 }
 
 bool teleportPlayerToPosition(Runtime &runtime, const std::array<double, 3> &position) {
@@ -1488,6 +1563,9 @@ bool renderThirdPersonCrosshair(Runtime &runtime) {
 bool refreshLiveTargetOptions(MenuConfig &config, Runtime &runtime) {
     if (!requireLiveGameThread(runtime) || !IGI::GAME::GET())
         return false;
+    // The first attach can happen before the end-frame frameUpdate has sampled
+    // the spawn, so make sure the per-level Level Start target exists here too.
+    captureLevelStartPosition(runtime);
     const auto replaceChoices =
         [&config](std::string_view id, const std::vector<LiveTarget> &targets,
                   std::string_view emptyLabel, int selectedTaskId) -> RefreshOutcome {
@@ -1511,6 +1589,11 @@ bool refreshLiveTargetOptions(MenuConfig &config, Runtime &runtime) {
         }
         if (choices.empty())
             choices.emplace_back(emptyLabel);
+        if (choices.size() > kMaxMenuListChoices) {
+            choices.resize(kMaxMenuListChoices);
+            if (selection >= choices.size())
+                selection = 0;
+        }
         const bool changed = item->values != choices;
         item->values = std::move(choices);
         item->defaultSelection = selection;
@@ -1706,6 +1789,15 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
         const auto selected = targetId(value).value_or(-1);
         if (selected < 0) {
             log(LogLevel::Warning, "teleport rejected: pick a level landmark first");
+        } else if (selected == kLevelStartTargetId) {
+            std::array<double, 3> start{};
+            if (readLevelStartPosition(runtime, start) &&
+                teleportPlayerToPosition(runtime, start)) {
+                log(LogLevel::Info, "player returned to the captured level start position");
+            } else {
+                log(LogLevel::Warning,
+                    "teleport rejected: the level start position is not available yet");
+            }
         } else if (teleportPlayerToTarget(runtime, selected)) {
             log(LogLevel::Info, "player teleported to level landmark " + std::string(value));
         } else {
@@ -2715,6 +2807,16 @@ std::vector<LiveTarget> EntityHelpers::landmarkTargets() const {
             if (!already)
                 landmarks.push_back(object);
         }
+    }
+    // Guarantee a valid destination on every level, including missions whose
+    // authored objects are unnamed: the spawn point captured for this Game task.
+    // Reserve its slot before sorting/capping so the synthetic target is never
+    // dropped by the list limit.
+    std::array<double, 3> levelStart{};
+    if (readLevelStartPosition(runtime_, levelStart)) {
+        if (landmarks.size() >= kMaxLiveTargets)
+            landmarks.resize(kMaxLiveTargets - 1);
+        landmarks.push_back({kLevelStartTargetId, "Level Start", levelStart, true});
     }
     std::sort(
         landmarks.begin(), landmarks.end(),

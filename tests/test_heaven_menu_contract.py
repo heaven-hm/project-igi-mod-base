@@ -247,7 +247,11 @@ assert all(
         "human_fence_damage",
     )
 ), "the Human section must expose each qvm physics parameter separately"
-assert "lean" not in HEAVEN.lower(), "the lean/peek params must not be exposed"
+# Match the parameter name as a word: a plain substring test also rejected
+# innocent words such as "clean" in comments.
+assert not re.search(r"\blean\b", HEAVEN, flags=re.IGNORECASE), (
+    "the lean/peek params must not be exposed"
+)
 assert "saveLiveHumanPlayerParams" in HEAVEN and "reloadLiveHumanPlayerParams" in HEAVEN
 assert "readHumanPlayerQvmParams" in HELPERS and "writeHumanPlayerQvmParams" in HELPERS
 assert "HUMAN_PLAYER_LOAD_PARAMETERS" in HELPERS and "reloadHumanPlayerParameters" in HELPERS
@@ -621,6 +625,32 @@ assert "processMissionRestart" in HELPERS and "prepareMenuForLevelChange()" in H
 )
 assert "camera.mode == 2" in HELPERS and "IGI::CAMERA::ROTATE_X" in HELPERS, (
     "the free camera must build the retail camera axes and apply them at the viewport"
+)
+# Pause-menu restoration: the retail screen must be captured before the mod
+# screen replaces it and survive page-switch resource rebuilds.
+assert "returnScreenId" in INTERNAL_HOST and (
+    "returnScreenId > 0" in INTERNAL_HOST
+), "closing the mod menu must return to the retail screen that was open before it"
+assert "returnScreenId = current;" in INTERNAL_HOST, (
+    "the attach path must snapshot the pre-existing retail screen id"
+)
+# Start-key requests must serialize; two queued toggles used to open and close.
+assert "toggleRequestPending" in INTERNAL_HOST and "toggleRequestPending" in IMGUI_HOST, (
+    "both hosts must reject a duplicate queued start-key toggle"
+)
+# Free camera W/S follows the camera pitch, not only the yaw plane.
+assert "sinPitch" in HELPERS and "moveZ += sinPitch" in HELPERS, (
+    "free camera forward/back must follow the full aim direction"
+)
+# A failed ground probe must restore the player rather than leave it airborne.
+assert "unchanged(grounded, probe)" in HELPERS and (
+    "player left at " in HELPERS
+), "a teleport with no floor must be rejected and the body restored"
+assert "kLevelStartTargetId" in HELPERS and "captureLevelStartPosition" in HELPERS, (
+    "every level must expose the cached Level Start teleport target"
+)
+assert "captureLevelStartPosition" in HEAVEN, (
+    "the Heaven frame tick must capture the per-level start position"
 )
 print(
     f"PASS Heaven routes {len(ids)} production controls across {len(categories)} categories"

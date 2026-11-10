@@ -18,4 +18,10 @@ bool compileIgiMenuScreenScript(const MenuConfig &config, std::vector<std::uint8
                                 std::string &error);
 bool compileIgiMenuCommandScript(std::string_view command, std::vector<std::uint8_t> &qvm,
                                  std::string &error);
+// Repairs values that live target refresh can produce at runtime (overlong or
+// embedded-NUL labels, more choices than the retail list accepts, an
+// out-of-range default selection, inverted input ranges, or bad geometry).
+// Returns true when anything changed and appends a short description to
+// `reason`. The sanitized config is what gets compiled and rendered.
+bool sanitizeMenuConfigForCompile(MenuConfig &config, std::string *reason = nullptr);
 } // namespace igi

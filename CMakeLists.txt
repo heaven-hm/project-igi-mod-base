@@ -333,6 +333,20 @@ if(WIN32)
     target_link_options(igi_heaven_layout_tests PRIVATE -static)
 endif()
 
+# The advanced Heaven build adds three more list controls. It must produce the
+# same compilable paged resource and stay under the retail list limits.
+add_executable(igi_heaven_advanced_layout_tests
+    tests/HeavenLayoutTests.cpp
+    demos/heaven/heaven_menu.cpp
+    demos/helpers/menu_helpers.cpp
+)
+target_link_libraries(igi_heaven_advanced_layout_tests PRIVATE mod_base)
+target_include_directories(igi_heaven_advanced_layout_tests PRIVATE src demos)
+target_compile_definitions(igi_heaven_advanced_layout_tests PRIVATE IGI_HEAVEN_ADVANCED=1)
+if(WIN32)
+    target_link_options(igi_heaven_advanced_layout_tests PRIVATE -static)
+endif()
+
 add_executable(igi_simple_layout_tests
     tests/SimpleMenuLayoutTests.cpp
     demos/internal/simple-mod/simple_menu.cpp
@@ -343,6 +357,7 @@ target_include_directories(igi_simple_layout_tests PRIVATE src demos)
 add_test(NAME igi_simple_layout COMMAND igi_simple_layout_tests)
 add_test(NAME igi_sdk_tests COMMAND igi_sdk_tests)
 add_test(NAME igi_heaven_layout COMMAND igi_heaven_layout_tests)
+add_test(NAME igi_heaven_advanced_layout COMMAND igi_heaven_advanced_layout_tests)
 add_test(NAME igi_heaven_menu_contract
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_heaven_menu_contract.py)
 add_test(NAME igi_native_signatures
