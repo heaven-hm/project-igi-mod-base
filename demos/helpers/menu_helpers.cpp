@@ -3093,6 +3093,26 @@ static IGI::Task *findOwnedGun(IGI::Human *player, int gunId) {
     return nullptr;
 }
 
+// Any gun task other than the one being dropped. This finds inventory weapons
+// that are children of the human but not currently in one of the three slots.
+static IGI::Task *findAnyOtherGun(IGI::Human *player, const IGI::Task *excludeTask) {
+    if (!player)
+        return nullptr;
+    const auto gunType = IGI::WEAPON::GUN_GET_TYPE();
+    if (gunType == 0)
+        return nullptr;
+    const auto *layout = reinterpret_cast<const IgiTaskLayout *>(player);
+    for (auto *child = layout->head; child && child->next; child = child->next) {
+        auto *task = reinterpret_cast<IGI::Task *>(child);
+        const auto type = reinterpret_cast<const IgiTaskLayout *>(task)->type;
+        if (type != gunType && IGI::TASK::IS_A(type, gunType) == 0)
+            continue;
+        if (task != excludeTask)
+            return task;
+    }
+    return nullptr;
+}
+
 // Adds reserve rounds and tops the loaded clip for one gun id. If the player
 // does not carry the weapon yet, the retail pickup creates the weapon task and
 // the new task is then filled, so newly added weapons receive the typed ammo.
@@ -3176,14 +3196,14 @@ bool WeaponHelpers::dropCurrentWeapon() const {
         return false;
     }
     const int weaponId = IGI::TASK::GET_ID(weapon);
-    log(LogLevel::Info,
-        "drop weapon: retail death-drop path for task #" + std::to_string(weaponId));
-    // The retail drop sequence (IGI-RE soldier.c die_start):
-    //   1. Weapon_Drop spawns the ground pickup
-    //   2. the carried slot is cleared so the weapon leaves the cycle list
-    //   3. Weapon_DeleteAll removes every leftover weapon task owned by the human
-    // Doing the delete while holding the task pointer crashed the game: the
-    // handler reparents tasks, so the pointer is re-read after each drop.
+    log(LogLevel::Info, "drop weapon: dropping task #" + std::to_string(weaponId) +
+                            " while keeping the rest of the live inventory");
+    // A live player must not follow the retail death path. die_start drops the
+    // held weapon and then calls Weapon_DeleteAll because the human is dying;
+    // doing that to a live player deleted every carried weapon, and the next
+    // gameplay frame crashed on the unarmed state. Stop the draw animation first,
+    // drop only the held task, and let the game's World remove event delete it.
+    IGI::HUMAN::STOP_WEAPON_ANIM(player, 0.0F);
     (void)IGI::WEAPON::DROP(weapon);
     auto **slots = reinterpret_cast<IGI::Task **>(reinterpret_cast<std::uint8_t *>(player) +
                                                   kHumanWeaponSlotsOffset);
@@ -3191,11 +3211,42 @@ bool WeaponHelpers::dropCurrentWeapon() const {
         if (IGI::WEAPON::SLOT_GET(slots, slot) == weapon)
             IGI::WEAPON::SLOT_SET(slots, slot, nullptr);
     }
-    IGI::WEAPON::DELETE_ALL(player);
-    IGI::HUMAN::STOP_WEAPON_ANIM(player, 0.0F);
+
+    // When the dropped gun was the only one, the player would be left unarmed.
+    // IGI's live player state machine expects a weapon task, so grant the retail
+    // sidearm and put it in slot 0. When another carried weapon exists, cycle to
+    // it instead.
+    auto *remaining = IGI::HUMAN::GET_WEAPON(player);
+    if (!remaining) {
+        for (int slot = 1; slot < kHumanWeaponSlots && !remaining; ++slot)
+            remaining = IGI::WEAPON::SLOT_GET(slots, slot);
+    }
+    if (!remaining)
+        remaining = findAnyOtherGun(player, weapon);
+    if (remaining) {
+        // Move the replacement into slot 0 and clear its old slot so the cycle
+        // list does not contain the same task twice.
+        for (int slot = 1; slot < kHumanWeaponSlots; ++slot) {
+            if (IGI::WEAPON::SLOT_GET(slots, slot) == remaining)
+                IGI::WEAPON::SLOT_SET(slots, slot, nullptr);
+        }
+        IGI::WEAPON::SLOT_SET(slots, 0, remaining);
+    } else {
+        const int glockId = IGI::SCRIPT::EVAL_CONST("WEAPON_ID_GLOCK");
+        int message[] = {glockId, 30};
+        IGI::PLAYER::PICK_UP_WEAPON(player, message);
+        auto *glock = findOwnedGun(player, glockId);
+        if (glock)
+            IGI::WEAPON::SLOT_SET(slots, 0, glock);
+        log(glock ? LogLevel::Info : LogLevel::Warning,
+            glock ? "drop weapon: no other weapon remained; equipped the retail Glock sidearm so "
+                    "the live player stays armed"
+                  : "drop weapon: no other weapon remained and the retail sidearm could not be "
+                    "equipped");
+    }
     log(LogLevel::Info,
         "drop weapon: task #" + std::to_string(weaponId) +
-            " dropped, carried slots cleared, weapon tasks deleted and the animation stopped");
+            " dropped; other carried weapons were kept and the player remains armed");
     return true;
 }
 

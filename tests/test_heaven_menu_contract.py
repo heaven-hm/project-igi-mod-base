@@ -372,6 +372,14 @@ assert "IGI::WEAPON::SLOT_SET(slots, slot, nullptr)" in HELPERS, (
 assert "IGI::HUMAN::STOP_WEAPON_ANIM(player, 0.0F)" in HELPERS, (
     "drop must stop the weapon animation"
 )
+# The retail death path deletes every weapon because the human is dying. Doing
+# that to a live player left it unarmed and crashed the next gameplay frame.
+assert "IGI::WEAPON::DELETE_ALL(player)" not in HELPERS, (
+    "dropping a live player's weapon must not delete the rest of the inventory"
+)
+assert "findAnyOtherGun" in HELPERS and "WEAPON_ID_GLOCK" in HELPERS, (
+    "drop must keep another carried weapon or equip the retail sidearm"
+)
 # Ammo must apply to the weapon in hand, not to a menu selection.
 assert "WeaponHelpers::refillCurrentWeapon" in HELPERS, (
     "the ammo control must refill the held weapon"

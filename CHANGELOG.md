@@ -84,6 +84,12 @@
     visible with the start key still working.
   - Renamed the typed destination action label to **Custom Position**.
 - **Weapons:**
+  - Weapon drop no longer follows the retail **death** sequence on a live player.
+    It drops only the held task, lets the game's world remove event delete it,
+    keeps the rest of the inventory, and equips another carried gun or the
+    retail Glock sidearm when the last weapon is dropped. The old
+    `Weapon_DeleteAll` call removed every weapon and left the live player
+    unarmed, which crashed the next gameplay frame.
   - Ammo applies to the selected weapon task (creating it through
     `WeaponGunPickup` when needed), not only the gun in hand; Equip All uses the
     typed amount.
