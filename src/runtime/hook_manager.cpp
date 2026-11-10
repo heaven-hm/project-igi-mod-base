@@ -494,6 +494,20 @@ bool HookManager::uninstall(bool restoreHooks) noexcept {
                 "callback into freed memory");
             return false;
         }
+        if (!scheduler_.isGameThread()) {
+            constexpr DWORD kCoexistDispatchTimeoutMs = 5000;
+            const DWORD deadline = GetTickCount() + kCoexistDispatchTimeoutMs;
+            while (runDispatchActive.load(std::memory_order_acquire) &&
+                   static_cast<LONG>(GetTickCount() - deadline) < 0) {
+                Sleep(1);
+            }
+            if (runDispatchActive.load(std::memory_order_acquire)) {
+                log(LogLevel::Error,
+                    "coexistence: frame dispatch did not leave the detour; preserving the "
+                    "chained hook to avoid patching live code");
+                return false;
+            }
+        }
         if (runHookCreated) {
             MH_DisableHook(reinterpret_cast<void *>(game::displayRunCallbacks));
             MH_RemoveHook(reinterpret_cast<void *>(game::displayRunCallbacks));

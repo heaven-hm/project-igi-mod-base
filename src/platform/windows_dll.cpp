@@ -25,6 +25,10 @@ struct MainThreadState {
     // The end key disables the menu without tearing anything down, so the retail
     // game keeps its own menus and the start key can bring the mod back.
     bool disabled = false;
+    // True once requestShutdown has been accepted for the current unload. The
+    // wait loop must not re-request cleanup every 10 ms; doing so queued the
+    // game-thread shutdown multiple times and double-freed the menu resources.
+    bool shutdownRequested = false;
     bool tickMissingReported = false;
     unsigned watchdogCounter = 0;
     unsigned autoStartCounter = 0;
@@ -180,9 +184,12 @@ bool deactivateMenuRuntime(const igi::DllMenuCallbacks &callbacks) {
     if (!g_state.initialized)
         return true;
 
-    if (callbacks.requestShutdown && !callbacks.requestShutdown()) {
-        igi::log(igi::LogLevel::Error, "internal deactivate: menu close request failed");
-        return false;
+    if (!g_state.shutdownRequested) {
+        if (callbacks.requestShutdown && !callbacks.requestShutdown()) {
+            igi::log(igi::LogLevel::Error, "internal deactivate: menu close request failed");
+            return false;
+        }
+        g_state.shutdownRequested = true;
     }
 
     const DWORD deadline = GetTickCount() + 5000;
@@ -191,6 +198,9 @@ bool deactivateMenuRuntime(const igi::DllMenuCallbacks &callbacks) {
         igi::hotkeys::pollSleep();
     }
     if (callbacks.canUnload && !callbacks.canUnload()) {
+        // Allow a later loop to request cleanup again instead of waiting on a
+        // request that never reached the game thread.
+        g_state.shutdownRequested = false;
         igi::log(igi::LogLevel::Error, "internal deactivate: screen did not detach");
         return false;
     }
@@ -227,6 +237,7 @@ DWORD WINAPI igiSdkMainThread(void *rawModule) {
     const auto &callbacks = igi::getDllMenuCallbacks();
 
     g_state.initialized = false;
+    g_state.shutdownRequested = false;
     g_state.directNativeMode = config.directNativeMode;
     g_state.autoStart = validationAutoStartEnabled();
     g_state.tickMissingReported = false;

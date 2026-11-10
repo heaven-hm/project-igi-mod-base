@@ -43,6 +43,22 @@
   - Mission ids are validated through `Mission_Find` before the current level is
     unloaded, and the switch is deferred to the end-of-frame callback after the
     scene flush instead of deleting the Game task inside the draw pass.
+- **Close and eject stability:**
+  - Closing now recognises the retail `MenuManager` fade-out-to-idle resume
+    transition instead of treating it as an open pause menu, so `resumeFromMenu`
+    re-enables human input again.
+  - Eject requests cleanup once. The host no longer re-queues `RequestShutdown`
+    every `canUnload` poll, and the game-thread cleanup is idempotent; the
+    duplicate cleanup that double-freed menu resources on eject is gone.
+  - Coexistence uninstall waits for the chained dispatch detour to return before
+    removing its hook.
+- **Menu configuration diagnostics:**
+  - Dynamic target labels keep the `[#id]` suffix inside the 40-character QVM
+    limit (address-derived ids used to overflow it and invalidate the whole
+    menu after a live-target refresh).
+  - `loadMenuConfig` clamps a malformed frame size to usable values, and resource
+    compilation now reports the exact invalid item instead of the generic
+    "invalid menu configuration". Added a simple-menu layout/QVM test.
 - **Internal/external menu coexistence:**
   - The internal menu no longer refuses with `supported retail hook signatures
     mismatch` when the external ImGui DLL is still resident. If another IGI menu

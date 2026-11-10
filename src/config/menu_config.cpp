@@ -362,6 +362,12 @@ MenuConfig loadMenuConfig(const std::filesystem::path &path) {
             break;
         }
     }
+    // A malformed frame size used to make every menu resource compilation fail
+    // with the generic "invalid menu configuration". Keep the configured values
+    // usable instead of letting width=0/height=0 disable the whole mod.
+    config.width = std::clamp(config.width, 160, 4096);
+    config.height = std::clamp(config.height, 120, 4096);
+    config.screenId = std::clamp(config.screenId, 1, 4095);
     return config;
 }
 } // namespace igi

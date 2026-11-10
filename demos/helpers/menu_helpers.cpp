@@ -162,12 +162,19 @@ std::optional<int> targetId(std::string_view value) {
 }
 
 std::string targetLabel(std::string name, int id) {
-    constexpr std::size_t kMaxNameLength = 30;
+    // The retail ListBox values must stay below the 40-character QVM limit,
+    // including the " [#id]" suffix. Tasks without a script id use an address
+    // key up to 10 digits, which previously pushed every refreshed label over
+    // the limit and made the whole menu resource invalid.
+    constexpr std::size_t kMaxLabelLength = 39;
+    const std::string suffix = " [#" + std::to_string(id) + "]";
+    const std::size_t maxName =
+        suffix.size() < kMaxLabelLength ? kMaxLabelLength - suffix.size() : 0;
     if (name.empty())
         name = "Unnamed";
-    if (name.size() > kMaxNameLength)
-        name.resize(kMaxNameLength);
-    return name + " [#" + std::to_string(id) + "]";
+    if (name.size() > maxName)
+        name.resize(maxName);
+    return name + suffix;
 }
 
 // QTaskList (IGI-RE qasmtypes.h): count, capacity, then the Task* array.

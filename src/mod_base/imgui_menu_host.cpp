@@ -1125,7 +1125,8 @@ extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_External_RequestShutdown() {
         return true;
     }
     initialAttachPending.store(false, std::memory_order_release);
-    shutdownPending.store(true, std::memory_order_release);
+    if (shutdownPending.exchange(true, std::memory_order_acq_rel))
+        return true;
     safeToShutdown.store(false, std::memory_order_release);
     runtime.scheduler().enqueueOnce([] { completeExternalShutdownOnGameThread(); });
     return true;

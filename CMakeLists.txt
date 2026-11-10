@@ -332,6 +332,14 @@ if(WIN32)
     target_link_options(igi_heaven_layout_tests PRIVATE -static)
 endif()
 
+add_executable(igi_simple_layout_tests
+    tests/SimpleMenuLayoutTests.cpp
+    demos/internal/simple-mod/simple_menu.cpp
+    demos/helpers/menu_helpers.cpp
+)
+target_link_libraries(igi_simple_layout_tests PRIVATE mod_base)
+target_include_directories(igi_simple_layout_tests PRIVATE src demos)
+add_test(NAME igi_simple_layout COMMAND igi_simple_layout_tests)
 add_test(NAME igi_sdk_tests COMMAND igi_sdk_tests)
 add_test(NAME igi_heaven_layout COMMAND igi_heaven_layout_tests)
 add_test(NAME igi_heaven_menu_contract

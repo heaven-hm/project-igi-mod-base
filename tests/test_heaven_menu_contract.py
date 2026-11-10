@@ -500,6 +500,25 @@ assert "shutdownPending.load(std::memory_order_acquire)) {" in IMGUI_HOST, (
 assert "unloadRequested.store(true" in WINDOWS_DLL, (
     "the configured end key must eject instead of only disabling the menu"
 )
+# Closing must not mistake the retail menu's fade-out-to-idle for an open pause
+# menu; doing so left human input locked after the mod menu closed.
+assert "nextState" in INTERNAL_HOST and "retailMenuShown" in INTERNAL_HOST, (
+    "the host must distinguish an open retail menu from a fade-out to gameplay"
+)
+assert "kMenuManagerFadeOutState" in INTERNAL_HOST, (
+    "the close path must recognise the retail menu resume transition"
+)
+# Eject must request cleanup once; re-requesting every poll queued the
+# game-thread cleanup twice and double-freed the menu resources.
+assert "shutdownCompleted.exchange" in INTERNAL_HOST, (
+    "game-thread menu cleanup must be idempotent"
+)
+assert "shutdownPending.exchange(true" in INTERNAL_HOST, (
+    "internal RequestShutdown must be idempotent"
+)
+assert "shutdownRequested" in WINDOWS_DLL, (
+    "the host must not re-queue requestShutdown while waiting for canUnload"
+)
 assert "camera.mode == 2" in HELPERS and "IGI::CAMERA::ROTATE_X" in HELPERS, (
     "the free camera must build the retail camera axes and apply them at the viewport"
 )

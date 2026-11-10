@@ -195,7 +195,15 @@ bool compileMenuScript(const MenuConfig &config, std::vector<std::uint8_t> &qvm,
     error.clear();
     std::ostringstream script;
     if (!writeMenuScript(script, config, manager)) {
-        error = "invalid menu configuration";
+        std::string reason;
+        if (config.items.empty())
+            error = "invalid menu configuration: the menu has no items";
+        else if (config.width <= 0 || config.height <= 0)
+            error = "invalid menu configuration: the menu frame size must be positive";
+        else if (!validateMenuItemConfig(config, &reason))
+            error = "invalid menu configuration: " + reason;
+        else
+            error = "invalid menu configuration";
         return false;
     }
     auto lexed = qsc::Lex(script.str());

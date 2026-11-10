@@ -58,13 +58,27 @@ struct RetailMenuManagerLayout {
     std::int32_t currentScreenId;
     std::int32_t popupScreenId;
     std::int32_t state;
+    std::int32_t nextState;
 };
 
 static_assert(offsetof(RetailMenuManagerLayout, currentScreenId) == 0x20);
 static_assert(offsetof(RetailMenuManagerLayout, state) == 0x28);
+static_assert(offsetof(RetailMenuManagerLayout, nextState) == 0x2C);
 // MenuManager state enum (IGI-RE menumanager.c). IDLE means no retail menu is
 // displayed, even though its screen task may still exist from an earlier open.
 constexpr std::int32_t kMenuManagerIdleState = 9;
+constexpr std::int32_t kMenuManagerFadeOutState = 6;
+
+// A retail screen is only "ours to preserve" while it is open or opening. A
+// fade-out to IDLE is the menu system resuming gameplay; treating that as an
+// still-open retail menu left the player's input locked after closing the mod.
+bool retailMenuShown(const RetailMenuManagerLayout *layout) {
+    if (!layout || layout->state == kMenuManagerIdleState)
+        return false;
+    if (layout->state == kMenuManagerFadeOutState && layout->nextState == kMenuManagerIdleState)
+        return false;
+    return true;
+}
 
 // Consolidated mod-menu state container (BigBase v2 style).
 struct InternalMenuState {
@@ -92,6 +106,10 @@ struct InternalMenuState {
     std::atomic<std::int32_t> observedScreen{0};
     std::atomic<bool> safeToShutdown{true};
     std::atomic<bool> shutdownPending{false};
+    // One game-thread cleanup per session. The deferred-close path and the
+    // queued RequestShutdown task can both reach the cleanup; running it twice
+    // released the QVM resources and deleted the screen task twice.
+    std::atomic<bool> shutdownCompleted{false};
     bool menuScreenCreated = false;
     bool menuScreenAttached = false;
     // Id of the one MenuScreen task this instance created. Cleanup must never
@@ -134,6 +152,7 @@ auto &frameCount = g_menu.frameCount;
 auto &lastLiveRefreshTick = g_menu.lastLiveRefreshTick;
 auto &safeToShutdown = g_menu.safeToShutdown;
 auto &shutdownPending = g_menu.shutdownPending;
+auto &shutdownCompleted = g_menu.shutdownCompleted;
 auto &menuScreenCreated = g_menu.menuScreenCreated;
 auto &menuScreenAttached = g_menu.menuScreenAttached;
 auto &pendingTransition = g_menu.pendingTransition;
@@ -356,7 +375,7 @@ bool anyRetailScreenActive() {
         return false;
     const auto *layout = reinterpret_cast<const RetailMenuManagerLayout *>(manager);
     const auto currentScreen = layout->currentScreenId;
-    if (currentScreen <= 0 || layout->state == kMenuManagerIdleState)
+    if (currentScreen <= 0 || !retailMenuShown(layout))
         return false;
     const auto pages = igi::menuPageCount(menuConfig);
     for (std::size_t page = 0; page < pages; ++page) {
@@ -398,6 +417,8 @@ void releaseInjectedMenuScreen() {
 bool rebuildMenuResources();
 
 void completeShutdownOnGameThread() {
+    if (shutdownCompleted.exchange(true, std::memory_order_acq_rel))
+        return;
 #if defined(_WIN32)
     unregisterEndFrameCallback();
 #endif
@@ -659,7 +680,7 @@ std::string leaveCommandScript() {
         for (std::size_t page = 0; page < pages; ++page) {
             isOurScreen = isOurScreen || screen == igi::menuPageScreenId(menuConfig, page);
         }
-        if (!isOurScreen && layout->state != kMenuManagerIdleState && screen > 0 &&
+        if (!isOurScreen && retailMenuShown(layout) && screen > 0 &&
             IGI::TASK::FIND_BY_ID(screen) != nullptr) {
             return "MenuManager_RequestScreen(" + std::to_string(screen) + ", FALSE);";
         }
@@ -1056,6 +1077,7 @@ bool prepareMenuForLevelChange() {
 extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_Internal_Initialize() {
     igi::log(igi::LogLevel::Debug, "internal initialize: begin");
     menuConfig = igi::loadMenuConfig("project-igi-mod-config.ini");
+    shutdownCompleted.store(false, std::memory_order_release);
     if (!configureModMenu(menuConfig))
         return false;
     igi::log(igi::LogLevel::Debug, menuConfig.enabled ? "internal initialize: config enabled"
@@ -1164,7 +1186,11 @@ extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_Internal_RequestShutdown() {
         return true;
     }
     initialAttachPending.store(false, std::memory_order_release);
-    shutdownPending.store(true, std::memory_order_release);
+    // One shutdown request per session. Re-queueing while the host polls
+    // canUnload ran completeShutdownOnGameThread twice, which freed resources
+    // and deleted the injected screen twice (the eject crash).
+    if (shutdownPending.exchange(true, std::memory_order_acq_rel))
+        return true;
     safeToShutdown.store(false, std::memory_order_release);
     runtime.scheduler().enqueueOnce([] {
         igi::log(igi::LogLevel::Info, "internal unload: game-thread cleanup started");
