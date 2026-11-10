@@ -2,6 +2,7 @@
 
 #include "config/menu_config.hpp"
 #include "natives/mvp_natives.hpp"
+#include "runtime/qvm_param_storage.hpp"
 #include "runtime/runtime.hpp"
 
 #include <array>
@@ -160,9 +161,6 @@ class WorldHelpers {
     std::optional<bool> isPaused() const;
     bool refreshDisplay() const;
     bool setFrameCap(int frames) const;
-    bool reportLevelTick() const;
-    bool reportFlow() const;
-    bool reportEvents() const;
     std::optional<unsigned> event(int eventIndex) const;
     std::optional<int> flowFps() const;
     std::optional<int> flowFrames() const;
@@ -185,6 +183,10 @@ class VehicleHelpers {
     bool explodeCar(IGI::Car *car) const;
     bool resetCar(IGI::Car *car) const;
     bool resetHeli(IGI::Heli *heli) const;
+    // Heli_Control contract (IGI-RE heli/heli.c): axes[0..2] are yaw/pitch/roll
+    // and axes[3] is the target speed; a negative speed reverses. tick 0 is the
+    // reset path, so every drive call uses tick 1.
+    bool driveHeli(IGI::Heli *heli, float targetSpeed, float yaw, float pitch, float roll) const;
     bool reportCarInfo(IGI::Car *car) const;
     bool reportHeliInfo(IGI::Heli *heli) const;
     bool resetVehicleControls(IGI::Task *vehicle) const;
@@ -336,6 +338,12 @@ bool processPendingLevelChange(Runtime &runtime);
 // the detach and LevelRestart after the running menu script has returned.
 bool requestMissionRestart(Runtime &runtime);
 bool processMissionRestart(Runtime &runtime);
+// humanplayer.qvm physics: the retail BSS globals written by
+// DefineHumanPlayerGeneral (jump speed and jump height), plus a reload through
+// HumanPlayer_LoadParameters.
+std::optional<HumanPlayerQvmParams> readLiveHumanPlayerParams(Runtime &runtime);
+bool saveLiveHumanPlayerParams(Runtime &runtime, float jumpSpeedKmh, float jumpUpKmh);
+bool reloadLiveHumanPlayerParams(Runtime &runtime);
 // World clock and independent mission timer (LevelFlow, IGI-RE
 // levelflowtypes.h: nTick +0x68, startHour +0x6C, timeLimit +0x74).
 bool setWorldHour(Runtime &runtime, float hour);

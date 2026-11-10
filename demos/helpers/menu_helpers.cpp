@@ -1318,6 +1318,50 @@ std::optional<int> missionTimeLimitSeconds(Runtime &runtime) {
     return static_cast<int>(reinterpret_cast<const LevelFlowLayout *>(task)->timeLimit);
 }
 
+std::optional<HumanPlayerQvmParams> readLiveHumanPlayerParams(Runtime &runtime) {
+    (void)runtime;
+    if (!humanPlayerParamsAvailable())
+        return std::nullopt;
+    return readHumanPlayerQvmParams();
+}
+
+bool saveLiveHumanPlayerParams(Runtime &runtime, float jumpSpeedKmh, float jumpUpKmh) {
+    if (!requireLiveGameThread(runtime))
+        return false;
+    auto params = readHumanPlayerQvmParams();
+    if (!params) {
+        log(LogLevel::Warning,
+            "human physics rejected: the humanplayer.qvm globals are unavailable");
+        return false;
+    }
+    params->jumpSpeedKmh = jumpSpeedKmh;
+    params->jumpUpKmh = jumpUpKmh;
+    if (!writeHumanPlayerQvmParams(*params)) {
+        log(LogLevel::Warning, "human physics rejected: writing the retail globals failed");
+        return false;
+    }
+    log(LogLevel::Info, "human physics saved: jump speed " + std::to_string(jumpSpeedKmh) +
+                            " km/h, jump height " + std::to_string(jumpUpKmh) + " km/h");
+    return true;
+}
+
+bool reloadLiveHumanPlayerParams(Runtime &runtime) {
+    if (!requireLiveGameThread(runtime))
+        return false;
+    if (!isCallableNative(IGI::HASH::HUMAN_PLAYER_LOAD_PARAMETERS,
+                          "void HumanPlayer_LoadParameters(void)")) {
+        log(LogLevel::Warning,
+            "human physics reload rejected: HumanPlayer_LoadParameters is unavailable");
+        return false;
+    }
+    if (!reloadHumanPlayerParameters()) {
+        log(LogLevel::Warning, "human physics reload rejected: the qvm loader failed");
+        return false;
+    }
+    log(LogLevel::Info, "human physics reloaded from LOCAL:humanplayer/humanplayer.qsc");
+    return true;
+}
+
 bool thirdPersonCrosshairActive(Runtime &runtime) {
     if (!g_thirdPersonCrosshairEnabled.load(std::memory_order_acquire) ||
         !requireLiveGameThread(runtime) || !IGI::GAME::GET())
@@ -1763,6 +1807,29 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
         } else {
             log(LogLevel::Warning, "vehicle drive rejected: Car_Control native was unavailable");
         }
+    } else if (id == "tank_drive") {
+        // Tanks are Car tasks in the retail build, so the same Car_Control path
+        // drives them; the label is separate because the speed presets differ
+        // from what a jeep can use.
+        float targetSpeed = 0.0F;
+        bool brake = false;
+        if (value == "Reverse")
+            targetSpeed = -4.0F;
+        else if (value == "Forward")
+            targetSpeed = 8.0F;
+        else if (value == "Full")
+            targetSpeed = 18.0F;
+        else if (value == "Brake")
+            brake = true;
+        auto *car =
+            reinterpret_cast<IGI::Car *>(findLiveTarget(runtime, g_selectedCarTaskId, isCarTask));
+        if (!car) {
+            reportMissingCarTarget("tank drive");
+        } else if (VehicleHelpers(runtime).driveCar(car, targetSpeed, brake)) {
+            log(LogLevel::Info, "tank drive: selected vehicle set to " + std::string(value));
+        } else {
+            log(LogLevel::Warning, "tank drive rejected: Car_Control native was unavailable");
+        }
     } else if (id == "npc_ensure_weapon") {
         // The demo adapter owns the retail weapon table, so it grants the weapon
         // itself; reaching here means the menu ran without a weapon selection.
@@ -1906,6 +1973,57 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
         } else {
             log(LogLevel::Warning, "heli reset rejected: Heli_Control was unavailable");
         }
+    } else if (id == "heli_stop") {
+        auto *heli = selectedHeli(runtime);
+        if (!heli) {
+            log(LogLevel::Warning, "heli stop rejected: select a live helicopter first");
+        } else if (VehicleHelpers(runtime).driveHeli(heli, 0.0F, 0.0F, 0.0F, 0.0F)) {
+            log(LogLevel::Info,
+                "heli stop: target speed cleared; the heli no longer holds reverse");
+        } else {
+            log(LogLevel::Warning, "heli stop rejected: Heli_Control was unavailable");
+        }
+    } else if (id == "heli_control") {
+        auto *heli = selectedHeli(runtime);
+        if (!heli) {
+            log(LogLevel::Warning, "heli control rejected: select a live helicopter first");
+        } else {
+            // Heli_Control axes: 0 yaw, 1 pitch, 2 roll, 3 target speed. A
+            // negative speed reverses; every steering choice keeps the current
+            // speed command at zero so the heli holds its position while
+            // rotating, and the explicit Stop/Reverse/Forward entries set speed.
+            float speed = 0.0F;
+            float yaw = 0.0F;
+            float pitch = 0.0F;
+            float roll = 0.0F;
+            if (value == "Reverse")
+                speed = -6.0F;
+            else if (value == "Forward")
+                speed = 6.0F;
+            else if (value == "Forward Fast")
+                speed = 20.0F;
+            else if (value == "Yaw Left")
+                yaw = -0.6F;
+            else if (value == "Yaw Right")
+                yaw = 0.6F;
+            else if (value == "Nose Down")
+                pitch = -0.6F;
+            else if (value == "Nose Up")
+                pitch = 0.6F;
+            else if (value == "Roll Left")
+                roll = -0.6F;
+            else if (value == "Roll Right")
+                roll = 0.6F;
+            else if (value != "Stop") {
+                log(LogLevel::Warning,
+                    "heli control rejected: unknown control '" + std::string(value) + "'");
+                return;
+            }
+            if (VehicleHelpers(runtime).driveHeli(heli, speed, yaw, pitch, roll))
+                log(LogLevel::Info, "heli control applied: " + std::string(value));
+            else
+                log(LogLevel::Warning, "heli control rejected: Heli_Control was unavailable");
+        }
     } else if (id == "vehicle_info") {
         auto *car =
             reinterpret_cast<IGI::Car *>(findLiveTarget(runtime, g_selectedCarTaskId, isCarTask));
@@ -1965,26 +2083,24 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
             log(LogLevel::Info, "player status reported from the retail human getters");
         else
             log(LogLevel::Warning, "player status rejected: player unavailable");
+    } else if (id == "human_info") {
+        const auto params = readLiveHumanPlayerParams(runtime);
+        if (!params) {
+            log(LogLevel::Warning,
+                "human params rejected: the humanplayer.qvm globals are unavailable");
+        } else {
+            std::ostringstream status;
+            status << "Humanplayer: jump speed " << params->jumpSpeedKmh << " km/h, height "
+                   << params->jumpUpKmh << " km/h, air " << params->airSpeedKmh << " km/h, move "
+                   << params->moveScale;
+            log(LogLevel::Info, status.str());
+            IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, status.str().c_str());
+        }
     } else if (id == "camera_info") {
         if (CameraHelpers(runtime).reportInfo())
             log(LogLevel::Info, "camera info reported from the retail camera-info native");
         else
             log(LogLevel::Warning, "camera info rejected: player unavailable");
-    } else if (id == "world_level_tick") {
-        if (WorldHelpers(runtime).reportLevelTick())
-            log(LogLevel::Info, "level tick reported");
-        else
-            log(LogLevel::Warning, "level tick readout rejected");
-    } else if (id == "world_flow") {
-        if (WorldHelpers(runtime).reportFlow())
-            log(LogLevel::Info, "flow counters reported");
-        else
-            log(LogLevel::Warning, "flow readout rejected");
-    } else if (id == "world_events") {
-        if (WorldHelpers(runtime).reportEvents())
-            log(LogLevel::Info, "game events reported");
-        else
-            log(LogLevel::Warning, "event readout rejected");
     } else if (id == "audio_rate") {
         int rate = 0;
         const auto parsed = std::from_chars(value.data(), value.data() + value.size(), rate);
@@ -2714,44 +2830,6 @@ bool CameraHelpers::reportInfo() const {
     status << "Camera: " << (info.mode == 2 ? "third person" : "first person") << " mode "
            << info.mode << " fov " << info.fov << " vfov " << info.verticalFov << " eye "
            << info.position[0] << ',' << info.position[1] << ',' << info.position[2];
-    log(LogLevel::Info, status.str());
-    IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, status.str().c_str());
-    return true;
-}
-
-bool WorldHelpers::reportLevelTick() const {
-    if (!requireLiveGameThread(runtime_))
-        return false;
-    if (!IGI::LEVEL::GET()) {
-        log(LogLevel::Warning, "level readout rejected: no active level task");
-        return false;
-    }
-    std::ostringstream status;
-    status << "Level: tick " << IGI::LEVEL::GET_TICK() << " tasks " << IGI::TASK::GET_COUNT();
-    log(LogLevel::Info, status.str());
-    IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, status.str().c_str());
-    return true;
-}
-
-bool WorldHelpers::reportFlow() const {
-    if (!requireLiveGameThread(runtime_))
-        return false;
-    std::ostringstream status;
-    status << "Flow: fps " << IGI::OTHER::FLOW_GET_FPS() << " frames "
-           << IGI::OTHER::FLOW_GET_FRAMES() << " renders " << IGI::OTHER::FLOW_GET_RENDERS();
-    log(LogLevel::Info, status.str());
-    IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, status.str().c_str());
-    return true;
-}
-
-bool WorldHelpers::reportEvents() const {
-    if (!requireLiveGameThread(runtime_))
-        return false;
-    std::ostringstream status;
-    status << "Events: " << static_cast<int>(IGI::GAME::GET_EVENT0()) << ','
-           << static_cast<int>(IGI::GAME::GET_EVENT1()) << ','
-           << static_cast<int>(IGI::GAME::GET_EVENT2()) << ','
-           << static_cast<int>(IGI::GAME::GET_EVENT3()) << " world " << IGI::GAME::GET_WORLD();
     log(LogLevel::Info, status.str());
     IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, status.str().c_str());
     return true;
@@ -3611,6 +3689,23 @@ bool VehicleHelpers::resetCar(IGI::Car *car) const {
     float input[4] = {0.0F, -1.0F, -2.0F, -1.0F};
     IGI::CarControlArg reset{0, input};
     IGI::VEHICLE::CAR_CONTROL(car, &reset);
+    return true;
+}
+bool VehicleHelpers::driveHeli(IGI::Heli *heli, float targetSpeed, float yaw, float pitch,
+                               float roll) const {
+    if (!requireLiveGameThread(runtime_) || !heli)
+        return false;
+    if (!isCallableNative(IGI::HASH::HELI_CONTROL, "void Heli_Control(Heli *h, ControlArg *arg)"))
+        return false;
+    // Heli_Control skips the speed write when axes[3] is exactly -1.0F, so a
+    // "stop" has to be 0.0F, not -1. tick 1 selects the drive path; tick 0 is
+    // the full reset and would teleport the helicopter back to its start.
+    float axes[5] = {yaw, pitch, roll, targetSpeed, -2.0F};
+    IGI::HeliControlArg drive{1, axes};
+    log(LogLevel::Info, "heli control: speed " + std::to_string(targetSpeed) + " yaw " +
+                            std::to_string(yaw) + " pitch " + std::to_string(pitch) + " roll " +
+                            std::to_string(roll));
+    IGI::VEHICLE::HELI_CONTROL(heli, &drive);
     return true;
 }
 bool VehicleHelpers::resetHeli(IGI::Heli *heli) const {

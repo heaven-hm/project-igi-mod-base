@@ -38,19 +38,17 @@ ids = [entry[0] for entry in defs]
 assert len(ids) == len(set(ids)), f"duplicate Heaven item IDs: {ids}"
 
 MIN_OPTIONS = 30
-NORMAL_OPTIONS = 67
+NORMAL_OPTIONS = 73
 assert MIN_OPTIONS <= len(ids) == NORMAL_OPTIONS, (
     f"normal Heaven must ship exactly {NORMAL_OPTIONS} working controls, found {len(ids)}"
 )
 ADVANCED_HEAVEN = HEAVEN.split("#if defined(IGI_HEAVEN_ADVANCED)", 1)[1]
 assert "#if defined(IGI_HEAVEN_ADVANCED)" in HEAVEN and all(
     marker in ADVANCED_HEAVEN
-    for marker in ('"player_ground_state"', '"npc_movement"', '"npc_ground_state"', '"heli_reset"')
-), (
-    "Heaven Advanced must add its live NPC and helicopter controls without changing normal Heaven"
-)
+    for marker in ('"player_ground_state"', '"npc_movement"', '"npc_ground_state"')
+), ("Heaven Advanced must add its live NPC controls without changing normal Heaven")
 
-categories = {"Weapons", "Player", "Camera", "World", "Vehicles", "AI / NPC", "System"}
+categories = {"Weapons", "Player", "Human", "Camera", "World", "Vehicles", "AI / NPC", "System"}
 found_categories = {entry[3] for entry in defs}
 assert found_categories == categories, (
     f"Heaven categories must exactly match the production category set; got {found_categories}"
@@ -108,7 +106,16 @@ assert 'id == "player_ground_state"' in DISPATCHER and "leaveHumanGround(player)
     "Heaven Advanced player ground state must use the retail ground helpers"
 )
 assert 'id == "heli_reset"' in DISPATCHER and "VehicleHelpers(runtime).resetHeli" in DISPATCHER, (
-    "Heaven Advanced selected-helicopter reset must have a dedicated game-thread route"
+    "selected-helicopter reset must have a dedicated game-thread route"
+)
+assert 'id == "heli_stop"' in DISPATCHER and 'id == "heli_control"' in DISPATCHER, (
+    "helicopter stop/drive controls must have dedicated game-thread routes"
+)
+assert "VehicleHelpers(runtime).driveHeli" in DISPATCHER, (
+    "helicopter controls must call the retail Heli_Control native"
+)
+assert 'id == "tank_drive"' in DISPATCHER and "VehicleHelpers(runtime).driveCar" in DISPATCHER, (
+    "tank drive must reuse the retail Car_Control native"
 )
 assert all(native in HELPERS for native in ("IGI::AI::SET_WALK", "IGI::AI::SET_RUN", "IGI::AI::CLEAR_MOVE")), (
     "selected-NPC movement must use the catalogued HumanAI retail calls"
@@ -118,7 +125,16 @@ assert all(native in HELPERS for native in ("IGI::AI::SET_WALK", "IGI::AI::SET_R
 # owns the retail weapon symbol table and its ammo counts.
 adapter_id_equals = {"player_teleport_target", "player_teleport_apply", "player_send_apply"}
 adapter_prefix = "player_teleport_"
-adapter_full = {"weapon_pickup", "weapon_ammo", "npc_ensure_weapon", "weapon_all"}
+adapter_full = {
+    "weapon_pickup",
+    "weapon_ammo",
+    "npc_ensure_weapon",
+    "weapon_all",
+    "human_speed",
+    "human_height",
+    "human_save",
+    "human_reload",
+}
 for item_id in ids:
     if item_id in adapter_id_equals:
         assert f'id == "{item_id}"' in HEAVEN, f"{item_id} lost its adapter route"
@@ -161,9 +177,10 @@ required_native_paths = {
     "player_snap_ground": "PlayerHelpers(runtime).snapToGround",
     "player_collision": "PlayerHelpers(runtime).setCollisionEnabled",
         "camera_info": "CameraHelpers(runtime).reportInfo",
-    "world_level_tick": "WorldHelpers(runtime).reportLevelTick",
-    "world_flow": "WorldHelpers(runtime).reportFlow",
-    "world_events": "WorldHelpers(runtime).reportEvents",
+    "heli_stop": "VehicleHelpers(runtime).driveHeli",
+    "heli_control": "VehicleHelpers(runtime).driveHeli",
+    "tank_drive": "VehicleHelpers(runtime).driveCar",
+    "human_info": "readLiveHumanPlayerParams",
     "npc_reset_damage": "NpcHelpers(runtime).resetDamage",
     "restart_mission": "WorldHelpers(runtime).restartMission",
 }
@@ -199,6 +216,35 @@ assert "findLiveTarget(runtime, g_selectedCarTaskId, isCarTask)" in HELPERS, (
 assert "findLiveTarget(runtime, g_selectedNpcTaskId, isNpcTask)" in HELPERS, (
     "NPC actions must resolve the selected live NPC by task identity at action time"
 )
+
+# The old read-only diagnostics were removed from the production menu.
+assert not ({"world_level_tick", "world_flow", "world_events"} & set(ids)), (
+    "Level Tick, Flow Counters and Game Events must stay out of the Heaven menu"
+)
+
+# humanplayer.qvm physics: speed and height must be read from the live BSS block
+# and written back, with a reload through HumanPlayer_LoadParameters.
+assert '"human_speed"' in HEAVEN and '"human_height"' in HEAVEN
+assert "saveLiveHumanPlayerParams" in HEAVEN and "reloadLiveHumanPlayerParams" in HEAVEN
+assert "readHumanPlayerQvmParams" in HELPERS and "writeHumanPlayerQvmParams" in HELPERS
+assert "HUMAN_PLAYER_LOAD_PARAMETERS" in HELPERS and "reloadHumanPlayerParameters" in HELPERS
+assert "constexpr std::uintptr_t kJumpSpeed = 0x56E1EC;" in (
+    ROOT / "src/runtime/qvm_param_storage.cpp"
+).read_text(encoding="utf-8"), (
+    "jump speed must read the retail gJumpSpeed global"
+)
+assert "constexpr std::uintptr_t kJumpUp = 0x56E1F0;" in (
+    ROOT / "src/runtime/qvm_param_storage.cpp"
+).read_text(encoding="utf-8"), (
+    "jump height must read the retail gJumpUp global"
+)
+
+# Eject must never free the module from the worker thread; the game can still be
+# inside a retired detour (the End-key/F12 eject crash).
+assert "FreeLibraryAndExitThread" not in WINDOWS_DLL, (
+    "eject must keep the DLL resident instead of freeing it from the worker thread"
+)
+assert "stays resident" in WINDOWS_DLL, "eject must report the resident safe-unload path"
 assert "findLiveTarget(runtime, *selected, isHeliTask)" in HELPERS, (
     "heli actions must resolve the selected live helicopter by task identity at action time"
 )

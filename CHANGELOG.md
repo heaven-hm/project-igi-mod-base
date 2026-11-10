@@ -2,6 +2,25 @@
 
 ## 0.4 — Heaven bug fixes, IGI-RE free camera, teleport targets and world clocks
 
+- **Heaven control surface (latest):**
+  - Removed the read-only Level Tick, Flow Counters and Game Events diagnostics.
+  - Added a Human section: Jump Speed and Jump Height inputs (tenths of km/h)
+    that read the live `humanplayer.qvm` BSS globals (`gJumpSpeed` 0x56E1EC,
+    `gJumpUp` 0x56E1F0) and write them back on Save; `Reload From
+    humanplayer.qvm` re-runs `HumanPlayer_LoadParameters` (0x4137A0) to restore
+    the authored values.
+  - Added helicopter controls through `Heli_Control` (0x431B70): Stop Reverse
+    (target speed 0), Reverse/Forward/Forward Fast, Yaw, Nose pitch and Roll,
+    plus selected-helicopter reset.
+  - Added `Selected Tank Drive` through the existing `Car_Control` path, with
+    tank-specific speed presets.
+- **Eject crash:**
+  - The worker no longer calls `FreeLibraryAndExitThread`. The End key/F12 eject
+    path stops the callbacks and retires the detours, then keeps the module
+    resident until the game exits. Freeing the module while the game thread could
+    still be entering a retired detour was the post-eject page fault.
+
+
 - **Menu lifecycle fixes:**
   - Read the current screen from the live `MenuManager` task instead of
     `Flow_GetScreen()` (which returns the Flow Screen task). The wrong object made

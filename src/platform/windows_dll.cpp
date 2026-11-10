@@ -35,7 +35,6 @@ struct MainThreadState {
 };
 
 MainThreadState g_state;
-HMODULE g_module = nullptr;
 
 BOOL WINAPI consoleControlHandler(DWORD event) {
     switch (event) {
@@ -216,7 +215,7 @@ bool deactivateMenuRuntime(const igi::DllMenuCallbacks &callbacks) {
 }
 
 DWORD WINAPI igiSdkMainThread(void *rawModule) {
-    g_module = static_cast<HMODULE>(rawModule);
+    (void)rawModule;
     const auto config = igi::loadMenuConfig("project-igi-mod-config.ini");
     igi::setLogFile(config.logFile);
     igi::setLogLevel(config.minimumLogLevel);
@@ -255,9 +254,8 @@ DWORD WINAPI igiSdkMainThread(void *rawModule) {
         const bool ejectRequested = g_state.endKey && keys.isPressedOnce(g_state.endKey);
         if (ejectRequested && !unloadRequested) {
             // The configured end key ejects the mod: the menu closes, the retail
-            // callbacks are removed and the DLL unloads (or stays resident only
-            // when the hooks could not be restored). The start key must not be
-            // able to bring the menu back after an eject.
+            // callbacks are removed and the DLL stays resident with pass-through
+            // hooks. The start key must not bring the menu back after an eject.
             g_state.unloadRequested.store(true, std::memory_order_release);
             igi::log(igi::LogLevel::Info,
                      "internal menu: eject requested by the configured end key");
@@ -266,22 +264,26 @@ DWORD WINAPI igiSdkMainThread(void *rawModule) {
             if (!deactivateMenuRuntime(callbacks))
                 continue;
             g_state.running.store(false, std::memory_order_release);
-            // Unloading is only safe once the retail hooks are restored. Otherwise
-            // the game still calls into this module and freeing it freezes the game.
+            // Never FreeLibrary from this worker. The eject path removed the
+            // retail callback and retired the detours, but the game thread may
+            // still be inside a Display_AddFrameCallback/RunCallbacks detour or
+            // about to enter one; freeing the module there was the F12/End-key
+            // eject crash ("safe unload: releasing DLL" immediately before the
+            // page fault). A retired detour is a pass-through, so keeping the
+            // module resident costs nothing and can never execute freed code.
             if (callbacks.hooksResident && callbacks.hooksResident()) {
                 igi::log(igi::LogLevel::Error,
-                         "safe unload refused: retail hooks are still installed; the mod is "
-                         "disabled and the DLL stays resident until the game exits");
-                igi::log(igi::LogLevel::Info, "internal host stopped; DLL remains resident safely");
-                detachConsole();
-                igi::closeLogFile();
-                return 0;
+                         "eject: retail hooks are still installed; mod disabled and the DLL "
+                         "stays resident until the game exits");
+            } else {
+                igi::log(igi::LogLevel::Info,
+                         "eject: callbacks stopped and hooks retired; the DLL stays resident "
+                         "until the game exits (safe unload on Windows x86)");
             }
-            igi::log(igi::LogLevel::Info,
-                     "safe unload: callbacks stopped; releasing DLL from its host thread");
+            igi::log(igi::LogLevel::Info, "internal host stopped; DLL remains resident safely");
             detachConsole();
             igi::closeLogFile();
-            FreeLibraryAndExitThread(g_module, 0);
+            return 0;
         }
         igi::hotkeys::pollSleep();
     }
@@ -305,8 +307,9 @@ BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID) {
 }
 
 extern "C" __declspec(dllexport) BOOL __cdecl IGI_SDK_RequestSafeUnload() {
-    // This only requests unloading. igiSdkMainThread removes every game callback
-    // before it calls FreeLibraryAndExitThread on itself.
+    // This only requests the eject. igiSdkMainThread retires the retail
+    // callbacks and keeps the module resident so the game can never call into
+    // freed code.
     if (!g_state.running.load(std::memory_order_acquire))
         return FALSE;
     g_state.unloadRequested.store(true, std::memory_order_release);

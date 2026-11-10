@@ -102,6 +102,7 @@ add_library(mod_base STATIC
     src/runtime/scheduler.cpp
     src/runtime/target_profile.cpp
     src/runtime/runtime.cpp
+    src/runtime/qvm_param_storage.cpp
     src/runtime/hook_manager.cpp
     src/runtime/macos_hook_backend.cpp
 )
