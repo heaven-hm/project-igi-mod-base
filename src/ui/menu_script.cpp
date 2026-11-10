@@ -165,7 +165,7 @@ bool writeMenuScript(std::ostream &out, const MenuConfig &config, bool standalon
                 << frameY + rowsOnPage * rowPitch + (paged ? 2 * rowPitch : 0) << ", " << frameWidth
                 << ", 25, 8, 20, 4, FALSE, "
                    "Task_New(-1, \"MenuText\", \"restart\", \"Restart\", \"font3.fnt\", 2, "
-                   "\"IGI_SDK_Cancel() - MenuManager_LeaveMenus(900, 12)\", \"menu_ok\"), "
+                   "\"IGI_SDK_Restart()\", \"menu_ok\"), "
                    "Task_New(-1, \"MenuText\", \"okay\", \"Okay\", \"font3.fnt\", 2, "
                    "\"IGI_SDK_Apply() - MenuManager_LeaveMenus(900, 9)\", \"menu_ok\"), "
                    "Task_New(-1, \"MenuText\", \"cancel\", \"Cancel\", \"font3.fnt\", 2, "

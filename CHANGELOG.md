@@ -73,6 +73,23 @@
     chain and callback.
   - Re-enabling a retired menu restores `hookBehaviorActive`, so a re-injected
     menu DLL ticks again instead of staying a pass-through.
+- **Level restart stability:**
+  - The generated Restart button now queues `IGI_SDK_Restart`; the host
+    completes the detach from the end-frame path (after the draw pass) and
+    releases the QVM resources **before** `LevelRestart`. Previously the retail `LeaveMenus(900, 12)` path destroyed
+    the LevelFlow/MenuManager and invalidated the QVM resource while the mod
+    still thought it was registered, so the next F5 produced frames with no
+    options and eject could not restore the retail pause menu.
+  - The demo `Restart Mission` action uses the same queued
+    `requestMissionRestart`/`processMissionRestart` path, so both restart
+    controls share one safe transition and one cleanup.
+  - A full close now releases the QVM resource and unregisters `IGI_SDK_*`
+    callbacks. Keeping them across a close let a level restart invalidate the
+    resource while the host still skipped re-registration, which produced
+    frames with no options on the next F5.
+  - The frame tick also detects a replaced `MenuManager` (level restart or next
+    mission) and releases the previous level's menu session before the new
+    level can use it.
 - **Exit/eject:**
   - Added a routed **Exit Mod** action to both the internal QVM and external
     ImGui Heaven menus. It calls `IGI_SDK_RequestSafeUnload`, closes the menu,

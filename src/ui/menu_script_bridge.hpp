@@ -14,13 +14,16 @@ class MenuScriptBridge final {
     using SelectionHandler = std::function<void(std::size_t, std::string_view)>;
     using CloseHandler = std::function<void()>;
     using PageHandler = std::function<void(int)>;
+    // Runs on the game frame after the Restart button returns; the host detaches
+    // the menu and reloads the level through the retail restart path.
+    using RestartHandler = std::function<void()>;
     explicit MenuScriptBridge(const MenuConfig &config, SelectionHandler onSelection = {},
                               CloseHandler onClose = {}, bool deferUntilApply = false,
-                              PageHandler onPage = {})
+                              PageHandler onPage = {}, RestartHandler onRestart = {})
         : values_(config), commands_(buildMenuCommands(config)),
           onSelection_(std::move(onSelection)), onClose_(std::move(onClose)),
           deferUntilApply_(deferUntilApply), onPage_(std::move(onPage)),
-          screenId_(config.screenId) {}
+          onRestart_(std::move(onRestart)), screenId_(config.screenId) {}
     // Item index used by the generated script for the flattened command list.
     static constexpr int kCommandList = -1;
     // The retail ListBox is a fixed-size widget, so the flattened command list is
@@ -44,6 +47,8 @@ class MenuScriptBridge final {
     void close();
     // Retail menu page navigation (IGI_SDK_Page script symbol).
     void page(int delta);
+    // Restart requested from the generated button bar.
+    void restart();
     void apply();
     // A host completing an already-observed retail close must revert values
     // without feeding the close callback back into a second transition.
@@ -65,6 +70,7 @@ class MenuScriptBridge final {
     SelectionHandler onSelection_;
     CloseHandler onClose_;
     PageHandler onPage_;
+    RestartHandler onRestart_;
     bool deferUntilApply_ = false;
     int screenId_ = -1;
 };
@@ -103,6 +109,7 @@ class MenuScriptCallbacks final {
     IgiScriptValue *close(IgiScriptValue *output, void *args);
     IgiScriptValue *apply(IgiScriptValue *output, void *args);
     IgiScriptValue *cancel(IgiScriptValue *output, void *args);
+    IgiScriptValue *restart(IgiScriptValue *output, void *args);
 
   private:
     MenuScriptBridge &bridge_;

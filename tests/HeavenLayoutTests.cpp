@@ -108,6 +108,9 @@ int main() {
     assert(text.find("IGI_SDK_FillList(-1)") == std::string::npos);
     assert(text.find("ListBox") != std::string::npos);
     assert(text.find("IGI_SDK_Apply()") != std::string::npos);
+    // Restart is a host frame-tick action: calling LeaveMenus(900, 12) directly
+    // invalidates the QVM resource while the screen is still attached.
+    assert(text.find("IGI_SDK_Restart()") != std::string::npos);
     const std::size_t pages = igi::menuPageCount(config);
     assert(pages > 1);
     assert(text.find("IGI_SDK_FillList(") != std::string::npos);

@@ -404,6 +404,7 @@ void broadcastPlayerPosition(IGI::Human *player) {
 }
 
 std::atomic<int> g_pendingLevel{0};
+std::atomic<bool> g_restartRequested{false};
 
 void appendTargetsTo(std::vector<LiveTarget> &destination, const std::vector<LiveTarget> &source) {
     for (const auto &target : source) {
@@ -1194,6 +1195,40 @@ bool processPendingLevelChange(Runtime &runtime) {
     if (levelId <= 0)
         return false;
     return changeLevel(runtime, levelId);
+}
+
+bool requestMissionRestart(Runtime &runtime) {
+    if (!requireLiveGameThread(runtime) || !IGI::GAME::GET())
+        return false;
+    if (g_restartRequested.exchange(true, std::memory_order_acq_rel))
+        return true;
+    log(LogLevel::Info,
+        "mission restart queued; the host detaches the injected menu before LevelRestart");
+    return true;
+}
+
+bool processMissionRestart(Runtime &runtime) {
+    if (!g_restartRequested.exchange(false, std::memory_order_acq_rel))
+        return false;
+    if (!requireLiveGameThread(runtime) || !IGI::GAME::GET())
+        return false;
+    clearLiveTargetSelections("mission restart rebuilds the level task list");
+    (void)setFreecamEnabled(runtime, false);
+    g_thirdPersonCrosshairEnabled.store(false, std::memory_order_release);
+    (void)removePrecipitationTask();
+    (void)igi::resumeFromMenu(runtime);
+    igi::abandonMenuPause();
+    (void)igi::unlockHumanInput();
+    IGI::GAME::SET_PAUSED(0);
+    if (!prepareMenuForLevelChange()) {
+        log(LogLevel::Error, "mission restart: injected menu cleanup failed");
+        return false;
+    }
+    IGI::GAME::RESTART();
+    log(LogLevel::Info,
+        "mission restart: menu detached and resources released before LevelRestart; press F5 "
+        "after the level loads to open a fresh menu");
+    return true;
 }
 
 bool setWorldHour(Runtime &runtime, float hour) {
@@ -3335,12 +3370,11 @@ bool WorldHelpers::changeLevel(int level) const {
     return igi::changeLevel(runtime_, level);
 }
 bool WorldHelpers::restartMission() const {
-    if (!requireLiveGameThread(runtime_) || !IGI::GAME::GET())
-        return false;
-    clearLiveTargetSelections("mission restart rebuilds the level task list");
-    IGI::GAME::RESTART();
-    log(LogLevel::Info, "mission restart requested via IGI::GAME::RESTART");
-    return true;
+    // This runs inside the retail menu script. Deleting the MenuScreen task or
+    // its QVM resource here would pull the code out from under the running
+    // script, so only queue the request; the host frame tick performs the
+    // detach and LevelRestart after the script returns.
+    return requestMissionRestart(runtime_);
 }
 bool WorldHelpers::setWeather(std::string_view weather) const {
     return igi::setWeather(runtime_, weather);

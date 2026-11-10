@@ -332,6 +332,10 @@ bool requestModExit();
 // Game task is never deleted in the middle of the draw pass.
 bool requestLevelChange(Runtime &runtime, int levelId);
 bool processPendingLevelChange(Runtime &runtime);
+// Mission restart. Queue it from a menu action; the host frame-tick performs
+// the detach and LevelRestart after the running menu script has returned.
+bool requestMissionRestart(Runtime &runtime);
+bool processMissionRestart(Runtime &runtime);
 // World clock and independent mission timer (LevelFlow, IGI-RE
 // levelflowtypes.h: nTick +0x68, startHour +0x6C, timeLimit +0x74).
 bool setWorldHour(Runtime &runtime, float hour);

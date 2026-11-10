@@ -48,7 +48,7 @@ int scriptItemsAdded = 0;
 int scriptRegistrations = 0;
 int scriptRemovals = 0;
 bool scriptSymbolExists = false;
-igi::ScriptCallback registeredCallbacks[10]{};
+igi::ScriptCallback registeredCallbacks[16]{};
 void* registeredContext = nullptr;
 int fakeResourceObject = 0;
 void* fakeResourceCurrent = nullptr;
@@ -76,7 +76,7 @@ int throwingScriptGetInt(void*, int) { throw std::runtime_error("script argument
 void fakeScriptAddItem(const char*, int id) { assert(id == scriptItemsAdded++); }
 void fakeRegister(const char*, igi::ScriptCallback callback, void* context, int argc) {
     assert(callback && context && (argc == 0 || argc == 1 || argc == 2));
-    registeredCallbacks[scriptRegistrations % 10] = callback;
+    registeredCallbacks[scriptRegistrations % 16] = callback;
     registeredContext = context;
     ++scriptRegistrations;
 }
@@ -466,7 +466,7 @@ int main() {
     scriptSymbolExists = true;
     assert(!igi::registerMenuScriptCallbacks(callbacks, registry) && scriptRegistrations == 0);
     scriptSymbolExists = false;
-    assert(igi::registerMenuScriptCallbacks(callbacks, registry) && scriptRegistrations == 10);
+    assert(igi::registerMenuScriptCallbacks(callbacks, registry) && scriptRegistrations == 11);
     assert(registeredCallbacks[0] && registeredContext == &callbacks);
     // The page symbol is appended last so earlier symbol positions are stable.
     assert(registeredCallbacks[9] &&
@@ -491,7 +491,7 @@ int main() {
     assert(scriptResult.integer == 1);
     scriptSymbolExists = true;
     igi::unregisterMenuScriptCallbacks(callbacks, registry);
-    assert(scriptRemovals == 10);
+    assert(scriptRemovals == 11);
     igi::MenuScriptRegistration registration;
     scriptSymbolExists = false;
     assert(registration.start(callbacks, registry));
@@ -499,7 +499,7 @@ int main() {
     scriptSymbolExists = true;
     registration.stop();
     registration.stop();
-    assert(!registration.active() && scriptRemovals == 20);
+    assert(!registration.active() && scriptRemovals == 22);
     scriptArgs[1] = -1;
     assert(callbacks.set(&scriptResult, scriptArgs)->integer == 0);
     std::ostringstream menuScript;
@@ -527,7 +527,10 @@ int main() {
     assert(menuScript.str().find("Task_New(-1, \"MenuText\", \"restart\", \"Restart\"") != std::string::npos);
     assert(menuScript.str().find("Task_New(-1, \"MenuText\", \"okay\", \"Okay\"") != std::string::npos);
     assert(menuScript.str().find("Task_New(-1, \"MenuText\", \"cancel\", \"Cancel\"") != std::string::npos);
-    assert(menuScript.str().find("IGI_SDK_Cancel() - MenuManager_LeaveMenus(900, 12)") != std::string::npos);
+    // The Restart button queues a host frame-tick restart; it must not call the
+    // retail LeaveMenus(900, 12) directly because LevelRestart destroys the QVM
+    // resources while the menu is still attached.
+    assert(menuScript.str().find("IGI_SDK_Restart()") != std::string::npos);
     assert(menuScript.str().find("IGI_SDK_Apply() - MenuManager_LeaveMenus(900, 9)") != std::string::npos);
     assert(menuScript.str().find("IGI_SDK_Cancel() - MenuManager_PopScreen(FALSE)") !=
            std::string::npos);

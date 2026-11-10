@@ -527,6 +527,26 @@ assert "shutdownPending.exchange(true" in INTERNAL_HOST, (
 assert "shutdownRequested" in WINDOWS_DLL, (
     "the host must not re-queue requestShutdown while waiting for canUnload"
 )
+# LevelRestart destroys the LevelFlow/MenuManager and invalidates the level QVM
+# resources. The restart button must detach first, or the next F5 runs a stale
+# resource (frames with no options) and eject cannot restore the retail menu.
+assert "IGI_SDK_Restart" in SCRIPT, (
+    "the Restart button must use the host restart action, not LeaveMenus(900, 12)"
+)
+assert "restartPending" in INTERNAL_HOST and "hostRestartPending" in INTERNAL_HOST, (
+    "the restart must be deferred past the menu script and the draw pass"
+)
+assert "releaseScriptSession" in INTERNAL_HOST and "lastMenuManager" in INTERNAL_HOST, (
+    "a close or level/menu-manager change must release the stale QVM session"
+)
+assert "requestMissionRestart" in HELPERS.split("WorldHelpers::restartMission", 1)[1][:600], (
+    "the demo restart action must queue the restart instead of deleting its own screen"
+)
+assert "processMissionRestart" in HELPERS and "prepareMenuForLevelChange()" in HELPERS.split(
+    "bool processMissionRestart", 1
+)[1][:1600], (
+    "the frame tick must detach the injected menu before GAME_RESTART"
+)
 assert "camera.mode == 2" in HELPERS and "IGI::CAMERA::ROTATE_X" in HELPERS, (
     "the free camera must build the retail camera axes and apply them at the viewport"
 )

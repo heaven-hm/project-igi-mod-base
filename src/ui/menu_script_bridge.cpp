@@ -176,6 +176,11 @@ void MenuScriptBridge::page(int delta) {
         onPage_(delta);
 }
 
+void MenuScriptBridge::restart() {
+    if (onRestart_)
+        onRestart_();
+}
+
 void MenuScriptBridge::close() {
     if (onClose_)
         onClose_();
@@ -296,6 +301,11 @@ IgiScriptValue *MenuScriptCallbacks::cancel(IgiScriptValue *output, void *) {
     return result(output, 1);
 }
 
+IgiScriptValue *MenuScriptCallbacks::restart(IgiScriptValue *output, void *) {
+    bridge_.restart();
+    return result(output, 1);
+}
+
 namespace {
 IgiScriptValue *fillCallback(IgiScriptValue *out, void *context, void *args) {
     try {
@@ -387,6 +397,16 @@ IgiScriptValue *cancelCallback(IgiScriptValue *out, void *context, void *args) {
         return result(out, 0);
     }
 }
+
+IgiScriptValue *restartCallback(IgiScriptValue *out, void *context, void *args) {
+    try {
+        return context ? static_cast<MenuScriptCallbacks *>(context)->restart(out, args)
+                       : result(out, 0);
+    } catch (...) {
+        log(LogLevel::Error, "IGI_SDK_Restart: callback threw");
+        return result(out, 0);
+    }
+}
 } // namespace
 
 bool registerMenuScriptCallbacks(MenuScriptCallbacks &callbacks,
@@ -399,7 +419,7 @@ bool registerMenuScriptCallbacks(MenuScriptCallbacks &callbacks,
         registry.containsSymbol("IGI_SDK_GetToggle") ||
         registry.containsSymbol("IGI_SDK_SetToggle") || registry.containsSymbol("IGI_SDK_Action") ||
         registry.containsSymbol("IGI_SDK_CloseMenu") || registry.containsSymbol("IGI_SDK_Apply") ||
-        registry.containsSymbol("IGI_SDK_Cancel"))
+        registry.containsSymbol("IGI_SDK_Cancel") || registry.containsSymbol("IGI_SDK_Restart"))
         return false;
     registry.registerFunction("IGI_SDK_FillList", fillCallback, &callbacks, 1);
     registry.registerIntFunction("IGI_SDK_GetList", getCallback, &callbacks, 1);
@@ -411,6 +431,7 @@ bool registerMenuScriptCallbacks(MenuScriptCallbacks &callbacks,
     registry.registerFunction("IGI_SDK_Apply", applyCallback, &callbacks, 0);
     registry.registerFunction("IGI_SDK_Cancel", cancelCallback, &callbacks, 0);
     registry.registerFunction("IGI_SDK_Page", pageCallback, &callbacks, 1);
+    registry.registerFunction("IGI_SDK_Restart", restartCallback, &callbacks, 0);
     return true;
 }
 
@@ -439,6 +460,8 @@ void unregisterMenuScriptCallbacks(MenuScriptCallbacks &callbacks,
         registry.removeSymbol("IGI_SDK_Apply");
     if (registry.matchesSymbol("IGI_SDK_Cancel", cancelCallback, &callbacks))
         registry.removeSymbol("IGI_SDK_Cancel");
+    if (registry.matchesSymbol("IGI_SDK_Restart", restartCallback, &callbacks))
+        registry.removeSymbol("IGI_SDK_Restart");
 }
 
 bool MenuScriptRegistration::start(MenuScriptCallbacks &callbacks,

@@ -110,6 +110,17 @@ struct InternalMenuState {
     // queued RequestShutdown task can both reach the cleanup; running it twice
     // released the QVM resources and deleted the screen task twice.
     std::atomic<bool> shutdownCompleted{false};
+    // The generated Restart button only queues the request; the game-thread
+    // frame tick detaches the menu and runs the retail LevelRestart.
+    std::atomic<bool> restartPending{false};
+    // Menus without a Restart Mission item use the generic host restart. It is
+    // completed from the end-frame callback, after the draw pass, like a level
+    // change; LevelRestart reloads the level and must not run inside the frame
+    // callback that precedes Screen_Draw.
+    std::atomic<bool> hostRestartPending{false};
+    // Detects a LevelRestart / next-mission rebuild that replaced the retail
+    // MenuManager. The old QVM resource and screen belong to the previous level.
+    void *lastMenuManager = nullptr;
     bool menuScreenCreated = false;
     bool menuScreenAttached = false;
     // Id of the one MenuScreen task this instance created. Cleanup must never
@@ -153,6 +164,9 @@ auto &lastLiveRefreshTick = g_menu.lastLiveRefreshTick;
 auto &safeToShutdown = g_menu.safeToShutdown;
 auto &shutdownPending = g_menu.shutdownPending;
 auto &shutdownCompleted = g_menu.shutdownCompleted;
+auto &restartPending = g_menu.restartPending;
+auto &hostRestartPending = g_menu.hostRestartPending;
+auto &lastMenuManager = g_menu.lastMenuManager;
 auto &menuScreenCreated = g_menu.menuScreenCreated;
 auto &menuScreenAttached = g_menu.menuScreenAttached;
 auto &pendingTransition = g_menu.pendingTransition;
@@ -209,6 +223,22 @@ void unregisterEndFrameCallback() noexcept {
     g_menu.endFrameNode.callback = nullptr;
 }
 
+void completeHostRestart() {
+    (void)igi::resumeFromMenu(runtime);
+    igi::abandonMenuPause();
+    (void)igi::unlockHumanInput();
+    IGI::GAME::SET_PAUSED(0);
+    if (!igi::prepareMenuForLevelChange()) {
+        igi::log(igi::LogLevel::Error,
+                 "internal menu restart: unable to detach the menu; restart skipped");
+        return;
+    }
+    IGI::GAME::RESTART();
+    igi::log(igi::LogLevel::Info,
+             "internal menu restart: menu detached, resources released and LevelRestart "
+             "requested; press F5 after the level loads to open a fresh menu");
+}
+
 extern "C" void __cdecl onInternalDisplayEndFrame() noexcept {
     if (!runtime.initialized())
         return;
@@ -223,6 +253,8 @@ extern "C" void __cdecl onInternalDisplayEndFrame() noexcept {
     // Continuous mod features (free camera) must run even while the menu is open.
     if (menuConfig.frameUpdate)
         menuConfig.frameUpdate(runtime);
+    if (hostRestartPending.exchange(false, std::memory_order_acq_rel))
+        completeHostRestart();
     if (menuScreenAttached || !menuConfig.renderEndFrame)
         return;
     menuConfig.renderEndFrame(runtime);
@@ -298,6 +330,14 @@ bool installMenuScriptCallbacks() {
             pageSwitchInFlight = true;
             igi::log(igi::LogLevel::Info,
                      "internal menu page: requested; switching after the retail screen pop");
+        },
+        [] {
+            // Never tear down the QVM resource or MenuScreen from inside the
+            // script callback that is running. The frame tick does it after the
+            // script returns.
+            restartPending.store(true, std::memory_order_release);
+            igi::log(igi::LogLevel::Info,
+                     "internal menu restart: queued; detaching the menu before LevelRestart");
         });
     menuCallbacks = std::make_unique<igi::MenuScriptCallbacks>(*menuBridge, script);
     if (!menuRegistration.start(*menuCallbacks, registry)) {
@@ -416,14 +456,12 @@ void releaseInjectedMenuScreen() {
 
 bool rebuildMenuResources();
 
-void completeShutdownOnGameThread() {
-    if (shutdownCompleted.exchange(true, std::memory_order_acq_rel))
-        return;
-#if defined(_WIN32)
-    unregisterEndFrameCallback();
-#endif
-    releaseInjectedMenuScreen();
-    IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, "IGI SDK Mod Menu: disabled");
+// Releases the QVM resources and unregisters the IGI_SDK_* script callbacks for
+// the current menu session. A full close must do this: keeping the resource
+// registered across a level restart left it pointing at QVM memory that
+// Level_Clear had already invalidated, so the next F5 produced frames with no
+// options. Every open re-registers/recompiles from the in-memory bytes instead.
+void releaseScriptSession() {
     menuRegistration.stop();
     menuCallbacks.reset();
     menuBridge.reset();
@@ -433,6 +471,17 @@ void completeShutdownOnGameThread() {
     reopenResource.release();
     closeResource.release();
     leaveResource.release();
+}
+
+void completeShutdownOnGameThread() {
+    if (shutdownCompleted.exchange(true, std::memory_order_acq_rel))
+        return;
+#if defined(_WIN32)
+    unregisterEndFrameCallback();
+#endif
+    releaseInjectedMenuScreen();
+    IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, "IGI SDK Mod Menu: disabled");
+    releaseScriptSession();
     menuScreenCreated = false;
     menuScreenAttached = false;
     pendingTransition = MenuTransition::None;
@@ -460,13 +509,7 @@ bool startPageSwitch() {
         return false;
     menuConfig.pageIndex = static_cast<std::size_t>(page);
     releaseInjectedMenuScreen();
-    menuRegistration.stop();
-    menuCallbacks.reset();
-    menuBridge.reset();
-    menuResource.release();
-    reopenResource.release();
-    closeResource.release();
-    leaveResource.release();
+    releaseScriptSession();
     menuScreenCreated = false;
     menuScreenAttached = false;
     if (!rebuildMenuResources()) {
@@ -502,6 +545,7 @@ void completeCloseTransition() {
     closeDeferredBehindRetailScreen = false;
     if (menuBridge)
         menuBridge->cancel(false);
+    releaseScriptSession();
     if (anyRetailScreenActive()) {
         // Popping our screen exposed the game's own pause menu again. That menu
         // owns the pause and input lock now; resuming here would close it from
@@ -554,6 +598,7 @@ void processDeferredClose() {
     releaseInjectedMenuScreen();
     menuScreenCreated = false;
     menuScreenAttached = false;
+    releaseScriptSession();
     (void)igi::resumeFromMenu(runtime);
     if (shutdownPending.load(std::memory_order_acquire)) {
         completeShutdownOnGameThread();
@@ -630,13 +675,7 @@ void processPendingMenuTransition() {
     // The retail manager can be left pointing at a screen task that no longer
     // exists. Detach everything and let the frame tick build the screen again,
     // which also clears any wedged state instead of leaving the game stuck.
-    menuRegistration.stop();
-    menuCallbacks.reset();
-    menuBridge.reset();
-    menuResource.release();
-    reopenResource.release();
-    closeResource.release();
-    leaveResource.release();
+    releaseScriptSession();
     if (rebuildMenuResources()) {
         initialAttachPending.store(true, std::memory_order_release);
         safeToShutdown.store(false, std::memory_order_release);
@@ -805,6 +844,44 @@ void menuFrameWork() {
 #if defined(_WIN32)
     ensureEndFrameCallbackRegistered();
 #endif
+    // A level restart / next-mission transition replaces the MenuManager. If it
+    // changed while the menu was open, release the previous level's QVM
+    // resource and screen before anything can run them against the new level.
+    if (auto *manager = liveMenuManager()) {
+        if (lastMenuManager && manager != lastMenuManager &&
+            (menuScreenAttached || menuScreenCreated || menuResource.active())) {
+            igi::log(igi::LogLevel::Warning,
+                     "internal menu: the level MenuManager changed; releasing the previous "
+                     "level's menu resource and screen");
+            (void)igi::resumeFromMenu(runtime);
+            (void)igi::prepareMenuForLevelChange();
+            igi::abandonMenuPause();
+            IGI::GAME::SET_PAUSED(0);
+        }
+        lastMenuManager = manager;
+    }
+    if (restartPending.exchange(false, std::memory_order_acq_rel)) {
+        // Prefer the demo's Restart Mission action when it has one. The action
+        // queues requestMissionRestart; the demo frameUpdate performs the detach
+        // and LevelRestart after this frame, which also de-duplicates a click on
+        // both the button bar and the Restart Mission row.
+        for (std::size_t index = 0; index < menuConfig.items.size(); ++index) {
+            const auto &item = menuConfig.items[index];
+            if (item.id != "restart_mission" && item.nativeAction != "GameRestart")
+                continue;
+            runModMenu(menuConfig, runtime, index, "");
+            igi::log(igi::LogLevel::Info,
+                     "internal menu restart: demo restart action queued for the frame tick");
+            return;
+        }
+        // Menus without a restart action use the generic host path. It is
+        // completed from the end-frame callback, after the draw pass, because
+        // LevelRestart reloads the whole level.
+        hostRestartPending.store(true, std::memory_order_release);
+        igi::log(igi::LogLevel::Info,
+                 "internal menu restart: queued for the end-frame restart handler");
+        return;
+    }
     processPendingMenuTransition();
     processDeferredClose();
     if (pageSwitchInFlight && pendingTransition == MenuTransition::None && menuScreenAttached) {
@@ -954,6 +1031,7 @@ bool closeMenuScreen() {
         }
         releaseInjectedMenuScreen();
         menuScreenCreated = false;
+        releaseScriptSession();
         (void)igi::resumeFromMenu(runtime);
         safeToShutdown.store(true, std::memory_order_release);
         igi::log(igi::LogLevel::Info,
@@ -1078,6 +1156,9 @@ extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_Internal_Initialize() {
     igi::log(igi::LogLevel::Debug, "internal initialize: begin");
     menuConfig = igi::loadMenuConfig("project-igi-mod-config.ini");
     shutdownCompleted.store(false, std::memory_order_release);
+    restartPending.store(false, std::memory_order_release);
+    hostRestartPending.store(false, std::memory_order_release);
+    lastMenuManager = nullptr;
     if (!configureModMenu(menuConfig))
         return false;
     igi::log(igi::LogLevel::Debug, menuConfig.enabled ? "internal initialize: config enabled"
@@ -1284,15 +1365,7 @@ extern "C" IGI_DEMO_EXPORT void IGI_MenuManager_Internal_Shutdown() {
     // A detached leftover page task is ours and safe to remove before the QVM
     // resource goes away.
     releaseInjectedMenuScreen();
-    menuRegistration.stop();
-    menuCallbacks.reset();
-    menuBridge.reset();
-    if (!menuResource.release())
-        igi::log(igi::LogLevel::Error,
-                 "internal menu resource: release refused because ownership changed");
-    reopenResource.release();
-    closeResource.release();
-    leaveResource.release();
+    releaseScriptSession();
     gameMenu.reset();
     if (!runtime.shutdown()) {
         // The game can still call into this module. Keep every resource alive and

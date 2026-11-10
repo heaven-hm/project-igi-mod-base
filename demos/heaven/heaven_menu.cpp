@@ -573,6 +573,7 @@ bool configureModMenu(igi::MenuConfig &config) {
         // has already been flushed, so deleting the Game task cannot pull tasks
         // out from under the draw pass (the "next level" crash).
         (void)igi::processPendingLevelChange(runtime);
+        (void)igi::processMissionRestart(runtime);
     };
     config.crosshairActive = [](igi::Runtime &runtime) {
         return igi::thirdPersonCrosshairActive(runtime);
