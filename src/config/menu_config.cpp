@@ -159,8 +159,9 @@ bool validateMenuItemConfig(const MenuConfig &config, std::string *reason) {
         if (item.kind == ModMenuItemKind::Input) {
             if (item.inputMinimum > item.inputMaximum)
                 return reject("menu input '" + item.id + "' has an inverted range");
-            if (item.inputValue < item.inputMinimum || item.inputValue > item.inputMaximum)
-                return reject("menu input '" + item.id + "' has an out-of-range value");
+            // The current value is a display hint, not a constraint. Clamping it
+            // at use sites keeps one stale/large live value from invalidating the
+            // entire menu resource (the player position is in world units).
             continue;
         }
         if (item.kind != ModMenuItemKind::List)

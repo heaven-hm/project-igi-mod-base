@@ -59,6 +59,11 @@
   - `loadMenuConfig` clamps a malformed frame size to usable values, and resource
     compilation now reports the exact invalid item instead of the generic
     "invalid menu configuration". Added a simple-menu layout/QVM test.
+  - Teleport/Send coordinate inputs cover the full retail world-unit range
+    (4096 units per metre, map coordinates in the tens of millions) and the
+    live-player prefill is clamped. A large map coordinate can no longer fail
+    validation on the first refresh; an out-of-range display hint is likewise
+    ignored instead of invalidating the whole menu.
 - **Internal/external menu coexistence:**
   - The internal menu no longer refuses with `supported retail hook signatures
     mismatch` when the external ImGui DLL is still resident. If another IGI menu

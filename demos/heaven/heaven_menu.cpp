@@ -2,6 +2,7 @@
 #include "helpers/menu_helpers.hpp"
 #include "logging/logging.hpp"
 
+#include <algorithm>
 #include <array>
 #include <charconv>
 #include <cstdlib>
@@ -459,10 +460,13 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
                 item.inputMaximum = 86400;
                 item.inputStep = 30;
             } else {
+                // IGI world units are 4096 per metre and map coordinates reach
+                // tens of millions, so the old +/-1,000,000 validation range
+                // rejected the live player position during the first refresh.
                 item.inputValue = 0;
-                item.inputMinimum = -1000000;
-                item.inputMaximum = 1000000;
-                item.inputStep = 100;
+                item.inputMinimum = -1000000000;
+                item.inputMaximum = 1000000000;
+                item.inputStep = 1000;
             }
         }
         items.push_back(std::move(item));
@@ -528,9 +532,14 @@ bool prefillTeleportCoordinates(igi::MenuConfig &config, igi::Runtime &runtime) 
             return;
         for (std::size_t axis = 0; axis < position.size(); ++axis) {
             destination[axis] = position[axis];
-            const auto rounded = static_cast<int>(position[axis]);
             for (auto &item : config.items) {
-                if (item.id == ids[axis] && item.inputValue != rounded) {
+                if (item.id != ids[axis])
+                    continue;
+                const double clamped =
+                    std::clamp(position[axis], static_cast<double>(item.inputMinimum),
+                               static_cast<double>(item.inputMaximum));
+                const auto rounded = static_cast<int>(clamped);
+                if (item.inputValue != rounded) {
                     item.inputValue = rounded;
                     changed = true;
                 }
