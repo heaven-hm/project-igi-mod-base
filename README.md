@@ -38,7 +38,7 @@ combo boxes, and buttons alongside the retail game display.
 
 ### Heaven Mod Menu (Production)
 
-Heaven's Mod is the flagship production menu shipping 67 verified native gameplay controls across Weapons, Player, Camera, World, Vehicles, AI, and Live Target Selection. Available in both internal QVM and external DirectX 7 ImGui frontends, featuring the IGI-RE camera-override free camera with WASD flight, live Object/landmark teleport targets, Send Player Position destinations and custom XYZ, independent world/mission clocks, 3D NPC movement, vehicle physics, weather control, an aligned third-person crosshair, and an Exit Mod eject action in both frontends. The retail menu frame grows with the control set and pages the remaining rows.
+Heaven's Mod is the flagship production menu shipping 67 verified native gameplay controls across Weapons, Player, Camera, World, Vehicles, AI, and Live Target Selection. Available in both internal QVM and external DirectX 7 ImGui frontends, featuring the IGI-RE camera-override free camera with WASD flight, live Object/landmark teleport targets, Send Player Position destinations and custom XYZ, independent world/mission clocks, 3D NPC movement, vehicle physics, weather control, an aligned third-person crosshair, and an Exit Mod eject action in both frontends. The internal menu can also chain onto an already-resident external menu's display hooks, so switching menus does not require restarting the game. The retail menu frame grows with the control set and pages the remaining rows.
 
 | ![AI & NPC Controls](assets/heaven-mod-npc-controls.png) | ![Vehicle Controls](assets/heaven-mod-vehicle-controls.png) | ![World Controls](assets/heaven-mod-world-controls.png) |
 |:---:|:---:|:---:|

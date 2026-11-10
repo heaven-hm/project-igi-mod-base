@@ -229,9 +229,80 @@ extern "C" const char *__cdecl menuManagerGetStringDetour(void *mm, const char *
     return res;
 }
 
-bool installDisplayFrameHook(igi::Scheduler &scheduler, void *&trampolineOut) {
+bool installCoexistenceHook(igi::Scheduler &scheduler, void *&trampolineOut,
+                            bool &usedExistingHooks) {
+    using igi::LogLevel;
+    const auto initializeStatus = MH_Initialize();
+    if (initializeStatus != MH_OK && initializeStatus != MH_ERROR_ALREADY_INITIALIZED)
+        return false;
+    activeScheduler.store(&scheduler, std::memory_order_release);
+
+    // Another IGI menu DLL already owns the display entries. Chain only the
+    // per-frame dispatcher so this menu gets a game-thread tick without touching
+    // the other mod's Display_AddFrameCallback detour or the retail prologues.
+    if (!runHookCreated) {
+        const auto status = MH_CreateHook(reinterpret_cast<void *>(igi::game::displayRunCallbacks),
+                                          reinterpret_cast<void *>(&displayRunCallbacksDetour),
+                                          reinterpret_cast<void **>(&displayRunCallbacksOriginal));
+        if (status != MH_OK && status != MH_ERROR_ALREADY_CREATED) {
+            activeScheduler.store(nullptr, std::memory_order_release);
+            igi::log(LogLevel::Error, "coexistence: Display_RunCallbacks chain creation failed");
+            return false;
+        }
+        runHookCreated = true;
+    }
+    if (MH_EnableHook(reinterpret_cast<void *>(igi::game::displayRunCallbacks)) != MH_OK) {
+        MH_DisableHook(reinterpret_cast<void *>(igi::game::displayRunCallbacks));
+        MH_RemoveHook(reinterpret_cast<void *>(igi::game::displayRunCallbacks));
+        runHookCreated = false;
+        displayRunCallbacksOriginal = nullptr;
+        activeScheduler.store(nullptr, std::memory_order_release);
+        igi::log(LogLevel::Error, "coexistence: Display_RunCallbacks chain enable failed");
+        return false;
+    }
+
+    // The game's AddFrameCallback is already detoured by the other mod. Calling
+    // that entry from our run-dispatch detour (game thread) forwards to the real
+    // registrar and adds this menu's tick to the same list.
+    displayAddFrameCallbackOriginal =
+        reinterpret_cast<DisplayAddFrameCallbackFn>(igi::game::displayAddFrameCallback);
+
+    if (!getStringHookCreated) {
+        const auto strStatus =
+            MH_CreateHook(reinterpret_cast<void *>(igi::game::menuManagerGetString),
+                          reinterpret_cast<void *>(&menuManagerGetStringDetour),
+                          reinterpret_cast<void **>(&menuManagerGetStringOriginal));
+        if (strStatus == MH_OK || strStatus == MH_ERROR_ALREADY_CREATED)
+            getStringHookCreated = true;
+    }
+    if (getStringHookCreated &&
+        MH_EnableHook(reinterpret_cast<void *>(igi::game::menuManagerGetString)) != MH_OK) {
+        getStringHookCreated = false;
+    }
+
+    hookBehaviorActive.store(true, std::memory_order_release);
+    tickRegistrationRequested.store(true, std::memory_order_release);
+    tickRemovalRequested.store(false, std::memory_order_release);
+    tickRemovalCompleted.store(true, std::memory_order_release);
+    frameDispatchThreadId.store(0, std::memory_order_release);
+    usedExistingHooks = true;
+    trampolineOut = nullptr;
+    igi::log(LogLevel::Info,
+             "coexistence: another IGI mod owns the display hooks; this menu chained "
+             "Display_RunCallbacks and will register its tick through the existing registrar");
+    return true;
+}
+
+bool installDisplayFrameHook(igi::Scheduler &scheduler, void *&trampolineOut,
+                             bool &usedExistingHooks) {
     using igi::LogLevel;
     if (!igi::game::isSupportedExecutable()) {
+        if (igi::game::hasIgiModHook()) {
+            igi::log(LogLevel::Info,
+                     "Display hooks are already owned by another IGI mod; enabling coexistence "
+                     "mode instead of refusing the internal menu");
+            return installCoexistenceHook(scheduler, trampolineOut, usedExistingHooks);
+        }
         igi::log(
             LogLevel::Error,
             "Display_AddFrameCallback hook refused: supported retail hook signatures mismatch");
@@ -337,13 +408,17 @@ bool HookManager::installDisplayAddFrameCallbackTick() {
             MH_EnableHook(reinterpret_cast<void *>(game::displayRunCallbacks));
         if (getStringHookCreated)
             MH_EnableHook(reinterpret_cast<void *>(game::menuManagerGetString));
+        // A previous retire made every detour a pass-through. Re-enabling the
+        // menu must turn the behaviour back on or the tick request is ignored.
+        hookBehaviorActive.store(true, std::memory_order_release);
+        retired_ = false;
         tickRegistrationRequested.store(true, std::memory_order_release);
         installed_ = true;
         log(LogLevel::Info, "IGI 1 Display_AddFrameCallback hook re-enabled");
         return true;
     }
     void *trampoline = nullptr;
-    if (!installDisplayFrameHook(scheduler_, trampoline))
+    if (!installDisplayFrameHook(scheduler_, trampoline, usedExistingHooks_))
         return false;
     trampoline_ = trampoline;
     installed_ = true;
@@ -391,6 +466,57 @@ bool HookManager::uninstall(bool restoreHooks) noexcept {
     // Stop draining first: an in-flight tick then observes a null scheduler and
     // returns without touching SDK state that is about to be destroyed.
     activeScheduler.store(nullptr, std::memory_order_release);
+
+    if (usedExistingHooks_) {
+        // We only chained the other mod's Display_RunCallbacks detour. Remove our
+        // tick through that detour (game thread request), then remove our chain.
+        // Disabling our chain restores the other mod's jump, never retail code,
+        // so this path cannot freeze the game the way restoring the prologues did.
+        if (scheduler_.isGameThread()) {
+            unregisterFrameTick();
+            tickRemovalCompleted.store(true, std::memory_order_release);
+        } else {
+            tickRemovalCompleted.store(false, std::memory_order_release);
+            tickRemovalRequested.store(true, std::memory_order_release);
+            constexpr DWORD kCoexistRemovalTimeoutMs = 5000;
+            const DWORD deadline = GetTickCount() + kCoexistRemovalTimeoutMs;
+            while (!tickRemovalCompleted.load(std::memory_order_acquire) &&
+                   static_cast<LONG>(GetTickCount() - deadline) < 0) {
+                Sleep(1);
+            }
+        }
+        if (!tickRemovalCompleted.load(std::memory_order_acquire)) {
+            // Never unload while the game's callback list still points at this
+            // module's tick. Keep the chain resident; the next displayed frame
+            // will process the removal request and Exit Mod can be retried.
+            log(LogLevel::Error,
+                "coexistence: callback removal timed out; keeping the module resident to avoid a "
+                "callback into freed memory");
+            return false;
+        }
+        if (runHookCreated) {
+            MH_DisableHook(reinterpret_cast<void *>(game::displayRunCallbacks));
+            MH_RemoveHook(reinterpret_cast<void *>(game::displayRunCallbacks));
+            runHookCreated = false;
+            displayRunCallbacksOriginal = nullptr;
+        }
+        if (getStringHookCreated) {
+            MH_DisableHook(reinterpret_cast<void *>(game::menuManagerGetString));
+            MH_RemoveHook(reinterpret_cast<void *>(game::menuManagerGetString));
+            getStringHookCreated = false;
+            menuManagerGetStringOriginal = nullptr;
+        }
+        displayAddFrameCallbackOriginal = nullptr;
+        hookBehaviorActive.store(false, std::memory_order_release);
+        installed_ = false;
+        retired_ = false;
+        usedExistingHooks_ = false;
+        tickRemovalRequested.store(false, std::memory_order_release);
+        log(LogLevel::Info,
+            "coexistence: this menu's chained hooks and callback were removed; the other mod's "
+            "hooks are intact");
+        return true;
+    }
 
     if (scheduler_.isGameThread()) {
         unregisterFrameTick();

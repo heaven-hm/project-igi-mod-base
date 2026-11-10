@@ -52,11 +52,31 @@ def test_hook_restore_waits_for_an_active_frame_detour_to_return():
     assert uninstall, "missing HookManager::uninstall"
     assert "runDispatchActive.store(true" in frame_dispatch
     assert "runDispatchActive.store(false" in frame_dispatch
-    assert "runDispatchActive.load" in uninstall.group("body")
-    assert "frame dispatch did not leave the detour" in uninstall.group("body")
-    assert uninstall.group("body").index("runDispatchActive.load") < uninstall.group("body").index(
+    body_text = uninstall.group("body")
+    assert "runDispatchActive.load" in body_text
+    assert "frame dispatch did not leave the detour" in body_text
+    # The coexistence branch removes only our chained hook (the other mod's jump
+    # is restored), so the retail prologue restore ordering applies to the normal
+    # path after the retire decision.
+    normal = body_text.split("if (!restoreHooks) {", 1)[-1]
+    assert normal.index("runDispatchActive.load") < normal.index(
         "MH_DisableHook(reinterpret_cast<void *>(game::displayRunCallbacks))"
     )
+
+
+def test_a_second_igi_menu_chains_instead_of_refusing():
+    source = SOURCE.read_text(encoding="utf-8")
+    assert "bool installCoexistenceHook(" in source
+    assert "hasIgiModHook()" in source
+    assert "already owned by another IGI mod" in source
+    header = (ROOT / "src/runtime/hook_manager.hpp").read_text(encoding="utf-8")
+    assert "usedExistingHooks_" in header
+    uninstall = re.search(
+        r"bool HookManager::uninstall\(bool restoreHooks\) noexcept \{(?P<body>[\s\S]*?)\n}\n",
+        source,
+    ).group("body")
+    assert "if (usedExistingHooks_)" in uninstall
+    assert "hooks are intact" in uninstall
 
 
 def test_runtime_shutdown_retires_hooks_instead_of_patching_live_code():
@@ -97,5 +117,6 @@ def test_runtime_shutdown_retires_hooks_instead_of_patching_live_code():
 
 if __name__ == "__main__":
     test_callback_list_work_is_owned_by_frame_dispatch()
+    test_a_second_igi_menu_chains_instead_of_refusing()
     test_runtime_shutdown_retires_hooks_instead_of_patching_live_code()
     test_hook_restore_waits_for_an_active_frame_detour_to_return()

@@ -43,6 +43,15 @@
   - Mission ids are validated through `Mission_Find` before the current level is
     unloaded, and the switch is deferred to the end-of-frame callback after the
     scene flush instead of deleting the Game task inside the draw pass.
+- **Internal/external menu coexistence:**
+  - The internal menu no longer refuses with `supported retail hook signatures
+    mismatch` when the external ImGui DLL is still resident. If another IGI menu
+    owns the display hooks, the internal menu chains only
+    `Display_RunCallbacks`, registers its tick through the existing registrar,
+    and leaves the other mod's hooks intact. Its own eject removes only that
+    chain and callback.
+  - Re-enabling a retired menu restores `hookBehaviorActive`, so a re-injected
+    menu DLL ticks again instead of staying a pass-through.
 - **Exit/eject:**
   - Added a routed **Exit Mod** action to both the internal QVM and external
     ImGui Heaven menus. It calls `IGI_SDK_RequestSafeUnload`, closes the menu,

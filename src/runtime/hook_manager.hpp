@@ -41,6 +41,9 @@ class HookManager final {
     Scheduler &scheduler_;
     bool installed_ = false;
     bool retired_ = false;
+    // True when another IGI menu DLL already owned the display hooks and this
+    // manager only chained on top of its Display_RunCallbacks detour.
+    bool usedExistingHooks_ = false;
     void *trampoline_ = nullptr;
 };
 } // namespace igi
