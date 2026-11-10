@@ -38,7 +38,7 @@ ids = [entry[0] for entry in defs]
 assert len(ids) == len(set(ids)), f"duplicate Heaven item IDs: {ids}"
 
 MIN_OPTIONS = 30
-NORMAL_OPTIONS = 73
+NORMAL_OPTIONS = 77
 assert MIN_OPTIONS <= len(ids) == NORMAL_OPTIONS, (
     f"normal Heaven must ship exactly {NORMAL_OPTIONS} working controls, found {len(ids)}"
 )
@@ -130,10 +130,16 @@ adapter_full = {
     "weapon_ammo",
     "npc_ensure_weapon",
     "weapon_all",
-    "human_speed",
-    "human_height",
     "human_save",
     "human_reload",
+}
+adapter_human_params = {
+    "human_move_scale",
+    "human_jump_speed",
+    "human_jump_height",
+    "human_air_speed",
+    "human_damage",
+    "human_fence_damage",
 }
 for item_id in ids:
     if item_id in adapter_id_equals:
@@ -151,6 +157,11 @@ for item_id in ids:
         continue
     if item_id in adapter_full:
         assert f'config.items[item].id == "{item_id}"' in HEAVEN
+        continue
+    if item_id in adapter_human_params:
+        assert "kHumanParamIds" in HEAVEN and f'"{item_id}"' in HEAVEN, (
+            f"{item_id} lost its Human parameter adapter route"
+        )
         continue
     assert item_id in dispatched, (
         f"unrouted Heaven control {item_id!r}: no dedicated branch in executeMenuNativeAction"
@@ -222,21 +233,36 @@ assert not ({"world_level_tick", "world_flow", "world_events"} & set(ids)), (
     "Level Tick, Flow Counters and Game Events must stay out of the Heaven menu"
 )
 
-# humanplayer.qvm physics: speed and height must be read from the live BSS block
-# and written back, with a reload through HumanPlayer_LoadParameters.
-assert '"human_speed"' in HEAVEN and '"human_height"' in HEAVEN
+# humanplayer.qvm physics: every DefineHumanPlayerGeneral param up to the
+# damage/health pair must be read from the live BSS block and written back, with
+# a reload through HumanPlayer_LoadParameters. The lean/peek params stay out.
+assert all(
+    f'"{item_id}"' in HEAVEN
+    for item_id in (
+        "human_move_scale",
+        "human_jump_speed",
+        "human_jump_height",
+        "human_air_speed",
+        "human_damage",
+        "human_fence_damage",
+    )
+), "the Human section must expose each qvm physics parameter separately"
+assert "lean" not in HEAVEN.lower(), "the lean/peek params must not be exposed"
 assert "saveLiveHumanPlayerParams" in HEAVEN and "reloadLiveHumanPlayerParams" in HEAVEN
 assert "readHumanPlayerQvmParams" in HELPERS and "writeHumanPlayerQvmParams" in HELPERS
 assert "HUMAN_PLAYER_LOAD_PARAMETERS" in HELPERS and "reloadHumanPlayerParameters" in HELPERS
-assert "constexpr std::uintptr_t kJumpSpeed = 0x56E1EC;" in (
-    ROOT / "src/runtime/qvm_param_storage.cpp"
-).read_text(encoding="utf-8"), (
-    "jump speed must read the retail gJumpSpeed global"
-)
-assert "constexpr std::uintptr_t kJumpUp = 0x56E1F0;" in (
-    ROOT / "src/runtime/qvm_param_storage.cpp"
-).read_text(encoding="utf-8"), (
-    "jump height must read the retail gJumpUp global"
+STORAGE = (ROOT / "src/runtime/qvm_param_storage.cpp").read_text(encoding="utf-8")
+for address, name in (
+    ("0x56E1E8", "gMoveScale"),
+    ("0x56E1EC", "gJumpSpeed"),
+    ("0x56E1F0", "gJumpUp"),
+    ("0x56E1F4", "gHumanAirSpeed"),
+    ("0x56E204", "gMaxDamage"),
+    ("0x56E208", "gFenceDamage"),
+):
+    assert address in STORAGE, f"{name} must read the retail {address} global"
+assert "0x56E1F8" not in STORAGE and "0x56E200" not in STORAGE, (
+    "the lean/peek globals must not be read or written"
 )
 
 # Eject must never free the module from the worker thread; the game can still be

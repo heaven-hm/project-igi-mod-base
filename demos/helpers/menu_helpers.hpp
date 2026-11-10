@@ -342,7 +342,7 @@ bool processMissionRestart(Runtime &runtime);
 // DefineHumanPlayerGeneral (jump speed and jump height), plus a reload through
 // HumanPlayer_LoadParameters.
 std::optional<HumanPlayerQvmParams> readLiveHumanPlayerParams(Runtime &runtime);
-bool saveLiveHumanPlayerParams(Runtime &runtime, float jumpSpeedKmh, float jumpUpKmh);
+bool saveLiveHumanPlayerParams(Runtime &runtime, const HumanPlayerQvmParams &values);
 bool reloadLiveHumanPlayerParams(Runtime &runtime);
 // World clock and independent mission timer (LevelFlow, IGI-RE
 // levelflowtypes.h: nTick +0x68, startHour +0x6C, timeLimit +0x74).

@@ -1325,23 +1325,30 @@ std::optional<HumanPlayerQvmParams> readLiveHumanPlayerParams(Runtime &runtime) 
     return readHumanPlayerQvmParams();
 }
 
-bool saveLiveHumanPlayerParams(Runtime &runtime, float jumpSpeedKmh, float jumpUpKmh) {
+bool saveLiveHumanPlayerParams(Runtime &runtime, const HumanPlayerQvmParams &values) {
     if (!requireLiveGameThread(runtime))
         return false;
-    auto params = readHumanPlayerQvmParams();
-    if (!params) {
+    auto current = readHumanPlayerQvmParams();
+    if (!current) {
         log(LogLevel::Warning,
             "human physics rejected: the humanplayer.qvm globals are unavailable");
         return false;
     }
-    params->jumpSpeedKmh = jumpSpeedKmh;
-    params->jumpUpKmh = jumpUpKmh;
-    if (!writeHumanPlayerQvmParams(*params)) {
+    // Keep the live conversion factor so the typed km/h values are written in
+    // the same units the retail qvm used.
+    HumanPlayerQvmParams updated = values;
+    updated.kmhScale = current->kmhScale;
+    updated.live = true;
+    if (!writeHumanPlayerQvmParams(updated)) {
         log(LogLevel::Warning, "human physics rejected: writing the retail globals failed");
         return false;
     }
-    log(LogLevel::Info, "human physics saved: jump speed " + std::to_string(jumpSpeedKmh) +
-                            " km/h, jump height " + std::to_string(jumpUpKmh) + " km/h");
+    log(LogLevel::Info, "human physics saved: move " + std::to_string(updated.moveScale) +
+                            ", jump speed " + std::to_string(updated.jumpSpeedKmh) +
+                            " km/h, jump height " + std::to_string(updated.jumpUpKmh) +
+                            " km/h, air " + std::to_string(updated.airSpeedKmh) + " km/h, damage " +
+                            std::to_string(updated.maxDamage) + ", fence damage " +
+                            std::to_string(updated.fenceDamage));
     return true;
 }
 
@@ -2090,9 +2097,10 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
                 "human params rejected: the humanplayer.qvm globals are unavailable");
         } else {
             std::ostringstream status;
-            status << "Humanplayer: jump speed " << params->jumpSpeedKmh << " km/h, height "
-                   << params->jumpUpKmh << " km/h, air " << params->airSpeedKmh << " km/h, move "
-                   << params->moveScale;
+            status << "Humanplayer: move " << params->moveScale << ", jump speed "
+                   << params->jumpSpeedKmh << " km/h, jump height " << params->jumpUpKmh
+                   << " km/h, air " << params->airSpeedKmh << " km/h, damage " << params->maxDamage
+                   << ", fence damage " << params->fenceDamage;
             log(LogLevel::Info, status.str());
             IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, status.str().c_str());
         }

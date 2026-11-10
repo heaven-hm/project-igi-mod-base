@@ -15,6 +15,8 @@ constexpr std::uintptr_t kMoveScale = 0x56E1E8;
 constexpr std::uintptr_t kJumpSpeed = 0x56E1EC;
 constexpr std::uintptr_t kJumpUp = 0x56E1F0;
 constexpr std::uintptr_t kAirSpeed = 0x56E1F4;
+constexpr std::uintptr_t kMaxDamage = 0x56E204;
+constexpr std::uintptr_t kFenceDamage = 0x56E208;
 constexpr std::uintptr_t kPerFrameHour = 0x5334A0;
 constexpr std::uintptr_t kKmhToUnits = 0x5334A4;
 
@@ -51,8 +53,11 @@ std::optional<HumanPlayerQvmParams> readHumanPlayerQvmParams() {
     float rawJump = 0.0F;
     float rawUp = 0.0F;
     float rawAir = 0.0F;
+    float rawDamage = 0.0F;
+    float rawFence = 0.0F;
     if (!readFloat(kMoveScale, rawMove) || !readFloat(kJumpSpeed, rawJump) ||
-        !readFloat(kJumpUp, rawUp) || !readFloat(kAirSpeed, rawAir)) {
+        !readFloat(kJumpUp, rawUp) || !readFloat(kAirSpeed, rawAir) ||
+        !readFloat(kMaxDamage, rawDamage) || !readFloat(kFenceDamage, rawFence)) {
         return std::nullopt;
     }
     float perFrameHour = 0.0F;
@@ -70,6 +75,8 @@ std::optional<HumanPlayerQvmParams> readHumanPlayerQvmParams() {
     values.jumpSpeedKmh = toKmh(rawJump);
     values.jumpUpKmh = toKmh(rawUp);
     values.airSpeedKmh = toKmh(rawAir);
+    values.maxDamage = rawDamage;
+    values.fenceDamage = rawFence;
     values.live = true;
     return values;
 #else
@@ -84,17 +91,16 @@ bool writeHumanPlayerQvmParams(const HumanPlayerQvmParams &values) {
     const auto toRaw = [&values](float kmh) {
         return values.kmhScale != 0.0F ? kmh * values.kmhScale : kmh;
     };
-    // Write the two editable globals first; when either fails, leave the other
-    // two untouched instead of producing a half-applied physics change.
-    if (!writeFloat(kJumpSpeed, toRaw(values.jumpSpeedKmh)) ||
-        !writeFloat(kJumpUp, toRaw(values.jumpUpKmh))) {
+    // Movement scale and jump/air speeds first. When one write fails, stop so a
+    // half-applied physics change cannot leave the player in a mixed state.
+    if (!writeFloat(kMoveScale, values.moveScale) ||
+        !writeFloat(kJumpSpeed, toRaw(values.jumpSpeedKmh)) ||
+        !writeFloat(kJumpUp, toRaw(values.jumpUpKmh)) ||
+        !writeFloat(kAirSpeed, toRaw(values.airSpeedKmh)) ||
+        !writeFloat(kMaxDamage, values.maxDamage)) {
         return false;
     }
-    // Keep the air speed aligned with the new jump height so the player cannot
-    // out-fly their own jump arc.
-    if (!writeFloat(kAirSpeed, toRaw(values.airSpeedKmh)))
-        return false;
-    return writeFloat(kMoveScale, values.moveScale);
+    return writeFloat(kFenceDamage, values.fenceDamage);
 #else
     (void)values;
     return false;

@@ -46,12 +46,26 @@ bool g_teleportPosSet = false;
 // Send Player Position custom destination, edited through three text fields.
 double g_sendPos[3] = {0.0, 0.0, 0.0};
 bool g_sendPosSet = false;
-// humanplayer.qvm physics in tenths of km/h: 65 == 6.5 km/h. Speed maps to
-// gJumpSpeed and height to gJumpUp; Save writes the live retail globals.
-int g_humanSpeedX10 = 65;
-int g_humanHeightX10 = 50;
-bool g_humanSpeedSet = false;
-bool g_humanHeightSet = false;
+// The separate DefineHumanPlayerGeneral parameters exposed by the Human
+// section. Values are display units: move/damage x100, speeds x10. Slot order
+// must match kHumanParamIds.
+enum HumanParamSlot {
+    kHumanMoveScale,
+    kHumanJumpSpeed,
+    kHumanJumpHeight,
+    kHumanAirSpeed,
+    kHumanDamage,
+    kHumanFenceDamage,
+    kHumanParamCount
+};
+constexpr std::array<const char *, kHumanParamCount> kHumanParamIds = {
+    "human_move_scale", "human_jump_speed", "human_jump_height",
+    "human_air_speed",  "human_damage",     "human_fence_damage"};
+int g_humanParamValue[kHumanParamCount] = {100, 65, 50, 65, 300, 100};
+bool g_humanParamSet[kHumanParamCount] = {};
+// Last live block returned by the qvm; Save patches these fields so the live
+// km/h conversion factor is preserved.
+igi::HumanPlayerQvmParams g_humanParams{};
 
 // Replaced at runtime from the retail mission table, so the list only offers
 // ids that actually exist (selecting a missing id used to hang the game).
@@ -221,21 +235,48 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
          "PlayerSendApply",
          {}},
 
-        // Human: values authored by LOCAL:humanplayer/humanplayer.qsc. Speed maps
-        // to gJumpSpeed (DefineHumanPlayerGeneral arg 1) and height to gJumpUp
-        // (arg 2). Values are typed in tenths of km/h so the text box stays an
-        // integer while still allowing 6.5 km/h.
-        {"human_speed",
+        // Human: the DefineHumanPlayerGeneral params authored by
+        // LOCAL:humanplayer/humanplayer.qsc, up to the damage/health pair. Move
+        // scale (arg 0), jump speed (arg 1), jump height (arg 2), air speed
+        // (arg 3), damage scale (arg 7) and fence damage (arg 8) are separate
+        // qvm values. The lean/peek params (args 4..6) are intentionally not
+        // exposed. Integer boxes keep the QVM frontend valid; x10/x100 is noted
+        // in the label so 6.5 km/h is still typable.
+        {"human_move_scale",
+         igi::ModMenuItemKind::Input,
+         "Move Speed Scale (x100)",
+         "Human",
+         "HumanParam",
+         {}},
+        {"human_jump_speed",
          igi::ModMenuItemKind::Input,
          "Jump Speed (km/h x10)",
          "Human",
-         "HumanSpeed",
+         "HumanParam",
          {}},
-        {"human_height",
+        {"human_jump_height",
          igi::ModMenuItemKind::Input,
          "Jump Height (km/h x10)",
          "Human",
-         "HumanHeight",
+         "HumanParam",
+         {}},
+        {"human_air_speed",
+         igi::ModMenuItemKind::Input,
+         "Air Speed (km/h x10)",
+         "Human",
+         "HumanParam",
+         {}},
+        {"human_damage",
+         igi::ModMenuItemKind::Input,
+         "Damage Scale (x100)",
+         "Human",
+         "HumanParam",
+         {}},
+        {"human_fence_damage",
+         igi::ModMenuItemKind::Input,
+         "Fence Damage (x100)",
+         "Human",
+         "HumanParam",
          {}},
         {"human_save",
          igi::ModMenuItemKind::Action,
@@ -513,15 +554,21 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
                 item.inputMinimum = 1;
                 item.inputMaximum = 9999;
                 item.inputStep = 30;
-            } else if (item.id == "human_speed" || item.id == "human_height") {
-                // Tenths of km/h: 65 means 6.5 km/h. The qvm values are small
-                // (single-digit km/h), so a 0.1 resolution is enough to tune
-                // jump feel without a floating-point text box.
-                item.inputValue = item.id == "human_speed" ? 65 : 50;
-                // 2.5 km/h .. 100 km/h in 2.5 km/h steps. The retail QVM input
-                // is a five-entry ListBox, so 25/50/75/100 keeps the useful
-                // presets visible; the ImGui frontend accepts any integer.
-                item.inputMinimum = 25;
+            } else if (item.id == "human_move_scale") {
+                item.inputValue = 100;
+                item.inputMinimum = 10;
+                item.inputMaximum = 1000;
+                item.inputStep = 25;
+            } else if (item.id == "human_damage" || item.id == "human_fence_damage") {
+                item.inputValue = item.id == "human_damage" ? 300 : 100;
+                item.inputMinimum = 0;
+                item.inputMaximum = 2000;
+                item.inputStep = 25;
+            } else if (item.id == "human_jump_speed" || item.id == "human_jump_height" ||
+                       item.id == "human_air_speed") {
+                // Tenths of km/h: 65 means 6.5 km/h.
+                item.inputValue = item.id == "human_jump_speed" ? 65 : 50;
+                item.inputMinimum = 0;
                 item.inputMaximum = 1000;
                 item.inputStep = 25;
             } else if (item.id == "world_time_hour") {
@@ -589,8 +636,7 @@ bool prefillTeleportCoordinates(igi::MenuConfig &config, igi::Runtime &runtime) 
         lastGame = game;
         g_teleportPosSet = false;
         g_sendPosSet = false;
-        g_humanSpeedSet = false;
-        g_humanHeightSet = false;
+        std::fill(std::begin(g_humanParamSet), std::end(g_humanParamSet), false);
     }
     std::array<double, 3> position{};
     if (!igi::readPlayerPosition(runtime, position))
@@ -624,30 +670,32 @@ bool prefillTeleportCoordinates(igi::MenuConfig &config, igi::Runtime &runtime) 
     fill(g_teleportPos, g_teleportPosSet, kTeleportIds);
     fill(g_sendPos, g_sendPosSet, kSendIds);
     // Show what humanplayer.qvm actually wrote into the live BSS, converted back
-    // to the authored km/h unit. A value <= 0 means the script has not run yet,
-    // so leave the configured defaults alone.
-    if (const auto params = igi::readLiveHumanPlayerParams(runtime)) {
-        const auto prefill = [&config, &changed](const char *id, int &stored, bool &flag,
-                                                 float kmh) {
-            if (flag)
-                return;
-            const int value = static_cast<int>(std::lround(kmh * 10.0F));
-            if (value <= 0)
-                return;
-            stored = value;
+    // to the authored units. moveScale > 0 means the script has run; before that
+    // every global is zero and must not overwrite the configured defaults.
+    if (const auto params = igi::readLiveHumanPlayerParams(runtime);
+        params && params->moveScale > 0.0F) {
+        g_humanParams = *params;
+        const int values[kHumanParamCount] = {
+            static_cast<int>(std::lround(params->moveScale * 100.0F)),
+            static_cast<int>(std::lround(params->jumpSpeedKmh * 10.0F)),
+            static_cast<int>(std::lround(params->jumpUpKmh * 10.0F)),
+            static_cast<int>(std::lround(params->airSpeedKmh * 10.0F)),
+            static_cast<int>(std::lround(params->maxDamage * 100.0F)),
+            static_cast<int>(std::lround(params->fenceDamage * 100.0F))};
+        for (std::size_t slot = 0; slot < kHumanParamCount; ++slot) {
+            if (g_humanParamSet[slot])
+                continue;
+            g_humanParamValue[slot] = values[slot];
             for (auto &item : config.items) {
-                if (item.id != id)
+                if (item.id != kHumanParamIds[slot])
                     continue;
-                const int clamped = std::clamp(value, item.inputMinimum, item.inputMaximum);
+                const int clamped = std::clamp(values[slot], item.inputMinimum, item.inputMaximum);
                 if (item.inputValue != clamped) {
                     item.inputValue = clamped;
                     changed = true;
                 }
             }
-            flag = true;
-        };
-        prefill("human_speed", g_humanSpeedX10, g_humanSpeedSet, params->jumpSpeedKmh);
-        prefill("human_height", g_humanHeightX10, g_humanHeightSet, params->jumpUpKmh);
+        }
     }
     return changed;
 }
@@ -809,34 +857,35 @@ void runModMenu(const igi::MenuConfig &config, igi::Runtime &runtime, std::size_
                         : "send player position rejected: the live player was unavailable");
         return;
     }
-    if (inRange &&
-        (config.items[item].id == "human_speed" || config.items[item].id == "human_height")) {
-        int tenths = 0;
-        const auto parsed = std::from_chars(value.data(), value.data() + value.size(), tenths);
-        if (parsed.ec != std::errc{} || tenths <= 0) {
-            igi::log(igi::LogLevel::Warning,
-                     "human physics rejected: enter a positive value in tenths of km/h");
+    if (inRange) {
+        for (std::size_t slot = 0; slot < kHumanParamCount; ++slot) {
+            if (config.items[item].id != kHumanParamIds[slot])
+                continue;
+            int typed = 0;
+            const auto parsed = std::from_chars(value.data(), value.data() + value.size(), typed);
+            if (parsed.ec != std::errc{} || typed < 0) {
+                igi::log(igi::LogLevel::Warning,
+                         "human physics rejected: enter a non-negative display value");
+                return;
+            }
+            g_humanParamValue[slot] = typed;
+            g_humanParamSet[slot] = true;
+            igi::log(igi::LogLevel::Info, "human physics: " + std::string(kHumanParamIds[slot]) +
+                                              " set to " + std::to_string(typed) + " (press Save)");
             return;
         }
-        if (config.items[item].id == "human_speed") {
-            g_humanSpeedX10 = tenths;
-            g_humanSpeedSet = true;
-        } else {
-            g_humanHeightX10 = tenths;
-            g_humanHeightSet = true;
-        }
-        igi::log(igi::LogLevel::Info,
-                 std::string("human physics: ") +
-                     (config.items[item].id == "human_speed" ? "jump speed set to "
-                                                             : "jump height set to ") +
-                     std::to_string(tenths / 10) + "." + std::to_string(tenths % 10) +
-                     " km/h (press Save)");
-        return;
     }
     if (inRange && config.items[item].id == "human_save") {
-        const bool saved =
-            igi::saveLiveHumanPlayerParams(runtime, static_cast<float>(g_humanSpeedX10) / 10.0F,
-                                           static_cast<float>(g_humanHeightX10) / 10.0F);
+        // Convert display units back to the qvm's units. Slot order is move,
+        // jump speed, jump height, air speed, damage, fence damage.
+        g_humanParams.moveScale = static_cast<float>(g_humanParamValue[kHumanMoveScale]) / 100.0F;
+        g_humanParams.jumpSpeedKmh = static_cast<float>(g_humanParamValue[kHumanJumpSpeed]) / 10.0F;
+        g_humanParams.jumpUpKmh = static_cast<float>(g_humanParamValue[kHumanJumpHeight]) / 10.0F;
+        g_humanParams.airSpeedKmh = static_cast<float>(g_humanParamValue[kHumanAirSpeed]) / 10.0F;
+        g_humanParams.maxDamage = static_cast<float>(g_humanParamValue[kHumanDamage]) / 100.0F;
+        g_humanParams.fenceDamage =
+            static_cast<float>(g_humanParamValue[kHumanFenceDamage]) / 100.0F;
+        const bool saved = igi::saveLiveHumanPlayerParams(runtime, g_humanParams);
         igi::log(saved ? igi::LogLevel::Info : igi::LogLevel::Warning,
                  saved ? "human physics saved to the live retail globals"
                        : "human physics rejected: the live globals were unavailable");
@@ -845,8 +894,7 @@ void runModMenu(const igi::MenuConfig &config, igi::Runtime &runtime, std::size_
     if (inRange && config.items[item].id == "human_reload") {
         if (igi::reloadLiveHumanPlayerParams(runtime)) {
             // Force the input boxes to re-read the reloaded qvm values.
-            g_humanSpeedSet = false;
-            g_humanHeightSet = false;
+            std::fill(std::begin(g_humanParamSet), std::end(g_humanParamSet), false);
             igi::log(igi::LogLevel::Info,
                      "human physics reloaded from humanplayer.qvm; inputs refresh on the next "
                      "menu frame");
