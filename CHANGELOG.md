@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.8 — Self-healing attach after a level change
+
+- The log showed the injected screen task being created after a level change,
+  but its option widgets never appeared (frame with no options, only after
+  loading another level). The attach now counts the List/Toggle/Input widget
+  tasks the screen script must have created (pageScreenId+1+row) and, when any
+  are missing, rebuilds the whole session on a fresh task-id range (up to 2
+  attempts) instead of showing a dead frame. A persistent failure is logged as
+  CRIT with the missing ids.
+- `IGI_SDK_FillList` now logs loudly when a fill produces zero entries - the
+  exact "frame with no options" signature - so the next report pinpoints whether
+  the screen's expression evaluation or the option data failed.
+
+
 ## 0.4.7 — Human inputs display the authored units
 
 - The Human boxes no longer show opaque x10 integers ("175", "25"). A new

@@ -122,6 +122,8 @@ struct InternalMenuState {
     // change; LevelRestart reloads the level and must not run inside the frame
     // callback that precedes Screen_Draw.
     std::atomic<bool> hostRestartPending{false};
+    // Self-heal attempts for a screen that attached without its widget tasks.
+    int attachHealAttempts = 0;
     // Detects a LevelRestart / next-mission rebuild that replaced the retail
     // MenuManager. The old QVM resource and screen belong to the previous level.
     void *lastMenuManager = nullptr;
@@ -176,6 +178,7 @@ auto &shutdownPending = g_menu.shutdownPending;
 auto &shutdownCompleted = g_menu.shutdownCompleted;
 auto &restartPending = g_menu.restartPending;
 auto &hostRestartPending = g_menu.hostRestartPending;
+auto &attachHealAttempts = g_menu.attachHealAttempts;
 auto &lastMenuManager = g_menu.lastMenuManager;
 auto &menuScreenCreated = g_menu.menuScreenCreated;
 auto &menuScreenAttached = g_menu.menuScreenAttached;
@@ -875,6 +878,30 @@ void refreshAttachedLiveItems() {
              "internal menu: live target lists refreshed for the attached screen");
 }
 
+// After the screen script runs, the List/Toggle/Input rows must have created
+// their widget task at pageScreenId+1+row. A level change rebuilds the retail
+// script context; when the screen's own child creation or the IGI_SDK_FillList
+// expressions fail there, the frame renders with no options. Counting the
+// widgets makes that state detectable instead of a silent empty menu.
+int countMissingPageWidgets(std::string &missingIds) {
+    const int pageScreenId = igi::menuPageScreenId(menuConfig, menuConfig.pageIndex);
+    const auto firstRow = menuConfig.pageIndex * igi::kMenuRowsPerPage;
+    const auto rows = igi::menuRowsOnPage(menuConfig);
+    int missing = 0;
+    for (std::size_t row = 0; row < rows; ++row) {
+        const auto &item = menuConfig.items[firstRow + row];
+        if (item.kind != igi::ModMenuItemKind::List && item.kind != igi::ModMenuItemKind::Input &&
+            item.kind != igi::ModMenuItemKind::Toggle)
+            continue;
+        const int widgetId = pageScreenId + 1 + static_cast<int>(row);
+        if (!IGI::TASK::FIND_BY_ID(widgetId)) {
+            ++missing;
+            missingIds += " " + std::to_string(widgetId);
+        }
+    }
+    return missing;
+}
+
 // Runs on the verified Display_AddFrameCallback thread once the tick fires.
 // Registers the script callbacks, then attaches the generated menu screen to
 // the game root task. Every step is logged so an in-game failure points at the
@@ -1043,6 +1070,45 @@ void menuFrameWork() {
         igi::log(igi::LogLevel::Info,
                  "internal menu natives: screen parameter initialization completed");
     }
+    std::string missingWidgetIds;
+    const int missingWidgets = countMissingPageWidgets(missingWidgetIds);
+    if (missingWidgets > 0) {
+        if (attachHealAttempts < 2) {
+            ++attachHealAttempts;
+            igi::log(igi::LogLevel::Error,
+                     "internal menu attach: " + std::to_string(missingWidgets) +
+                         " widget tasks did not initialize (missing ids" + missingWidgetIds +
+                         "); rebuilding the screen on a fresh task-id range (attempt " +
+                         std::to_string(attachHealAttempts) + " of 2)");
+            releaseInjectedMenuScreen();
+            menuScreenCreated = false;
+            menuScreenAttached = false;
+            releaseScriptSession();
+            // Move to the next free range: whatever consumed the expressions in
+            // this level may also hold ids near the old one.
+            const auto span = igi::menuScreenIdSpan(menuConfig);
+            for (int candidate = menuConfig.screenId + static_cast<int>(span);
+                 candidate + static_cast<int>(span) <= 4095; candidate += static_cast<int>(span)) {
+                if (isTaskIdRangeFree(candidate, span)) {
+                    menuConfig.screenId = candidate;
+                    break;
+                }
+            }
+            if (!rebuildMenuResources()) {
+                igi::log(igi::LogLevel::Error,
+                         "internal menu attach: self-heal resource rebuild failed");
+                return;
+            }
+            initialAttachPending.store(true, std::memory_order_release);
+            return;
+        }
+        igi::log(igi::LogLevel::Critical,
+                 "internal menu attach: the screen is still missing " +
+                     std::to_string(missingWidgets) + " widget tasks after 2 rebuilds; leaving " +
+                     "the screen in place and keeping diagnostics enabled");
+    } else {
+        attachHealAttempts = 0;
+    }
     menuScreenCreated = screen != nullptr;
     // Only ever track the task at the id the page script creates. RUN_SCRIPT can
     // return the parent task on some paths, and deleting that would take the
@@ -1194,6 +1260,7 @@ bool prepareMenuForLevelChange() {
     closeDeferredBehindRetailScreen = false;
     returnScreenId = 0;
     transitionDeadlineFrame = 0;
+    attachHealAttempts = 0;
 #if defined(_WIN32)
     unregisterEndFrameCallback();
 #endif
@@ -1268,6 +1335,7 @@ extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_Internal_Initialize() {
     shutdownCompleted.store(false, std::memory_order_release);
     restartPending.store(false, std::memory_order_release);
     hostRestartPending.store(false, std::memory_order_release);
+    attachHealAttempts = 0;
     lastMenuManager = nullptr;
     if (!configureModMenu(menuConfig))
         return false;

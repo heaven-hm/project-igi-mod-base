@@ -343,9 +343,9 @@ bool processPendingLevelChange(Runtime &runtime);
 bool requestMissionRestart(Runtime &runtime);
 bool processMissionRestart(Runtime &runtime);
 // humanplayer.qvm physics: the retail BSS globals written by
-// DefineHumanPlayerGeneral (jump speed and jump height), plus a reload through
-// HumanPlayer_LoadParameters.
-std::optional<HumanPlayerQvmParams> readLiveHumanPlayerParams(Runtime &runtime);
+// DefineHumanPlayerGeneral, applied and read back live, plus a reload through
+// HumanPlayer_LoadParameters. Reading goes through readHumanPlayerQvmParams
+// (src/runtime/qvm_param_storage.hpp) - there is exactly one read method.
 bool saveLiveHumanPlayerParams(Runtime &runtime, const HumanPlayerQvmParams &values);
 bool reloadLiveHumanPlayerParams(Runtime &runtime);
 // Runs the retail HumanPlayer_LoadParameters once and reads the globals back,

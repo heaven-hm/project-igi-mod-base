@@ -28,7 +28,16 @@ bool MenuScriptBridge::fillList(int item,
         }
         return true;
     }
-    return item >= 0 && values_.fill(static_cast<std::size_t>(item), addItem);
+    if (item < 0)
+        return false;
+    const bool filled = values_.fill(static_cast<std::size_t>(item), addItem);
+    if (!filled) {
+        // A zero-entry fill is the "frame with no options" state: the screen's
+        // ListBox initializes against this callback, so log it loudly.
+        log(LogLevel::Warning, "IGI_SDK_FillList: produced no entries for item " +
+                                   std::to_string(item) + "; the screen will show an empty list");
+    }
+    return filled;
 }
 
 bool MenuScriptBridge::resync(const MenuConfig &config) {

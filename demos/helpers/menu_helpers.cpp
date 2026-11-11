@@ -1393,13 +1393,6 @@ std::optional<int> missionTimeLimitSeconds(Runtime &runtime) {
     return static_cast<int>(reinterpret_cast<const LevelFlowLayout *>(task)->timeLimit);
 }
 
-std::optional<HumanPlayerQvmParams> readLiveHumanPlayerParams(Runtime &runtime) {
-    (void)runtime;
-    if (!humanPlayerParamsAvailable())
-        return std::nullopt;
-    return readHumanPlayerQvmParams();
-}
-
 bool saveLiveHumanPlayerParams(Runtime &runtime, const HumanPlayerQvmParams &values) {
     if (!requireLiveGameThread(runtime))
         return false;
@@ -2260,7 +2253,7 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
         else
             log(LogLevel::Warning, "player status rejected: player unavailable");
     } else if (id == "human_info") {
-        const auto params = readLiveHumanPlayerParams(runtime);
+        const auto params = readHumanPlayerQvmParams();
         if (!params) {
             log(LogLevel::Warning,
                 "human params rejected: the humanplayer.qvm globals are unavailable");

@@ -15,8 +15,10 @@
 
 namespace {
 
-// The DefineHumanPlayerGeneral parameters exposed by the Human section. Display
-// units match the internal Heaven menu: move/damage x100, speeds x10.
+// The DefineHumanPlayerGeneral parameters, shown in the Player section like the
+// Heaven menu. Internal values are integers; inputDisplayDivisor renders the
+// authored unit ("1.75", "17.5 km/h"). Display units: move/damage x100,
+// speeds x10. Slot order must match kHumanParamIds.
 enum HumanParamSlot {
     kHumanMoveScale,
     kHumanJumpSpeed,
@@ -32,98 +34,116 @@ constexpr std::array<const char *, kHumanParamCount> kHumanParamIds = {
     "human_air_speed",  "human_damage",     "human_fence_damage",
 };
 
-// Internal and external Advanced menus share this exact file, so both expose the
-// same option set; only the UI (QVM rows versus ImGui widgets) differs.
-int g_humanParamValue[kHumanParamCount] = {100, 65, 50, 65, 300, 100};
+int g_humanParamValue[kHumanParamCount] = {};
 bool g_humanParamSet[kHumanParamCount] = {};
 
-// Last live block returned by the qvm. Save patches these fields so the live
-// km/h conversion factor is preserved.
+// The values HumanPlayer_LoadParameters produced for the current level; the
+// input boxes prefill from this baseline, never from hard-coded guesses.
+igi::HumanPlayerQvmParams g_humanBaseline{};
+bool g_humanBaselineCaptured = false;
+void *g_humanBaselineGame = nullptr;
+// Last live block; Apply patches these fields so the live km/h conversion
+// factor is preserved.
 igi::HumanPlayerQvmParams g_humanParams{};
 
 void addHumanControls(igi::MenuConfig &config) {
     struct Def {
         const char *id;
         const char *label;
-        int value;
-        int minimum;
-        int maximum;
+        int divisor;
     };
     constexpr Def defs[kHumanParamCount] = {
-        {"human_move_scale", "Move Speed Scale (x100)", 100, 10, 1000},
-        {"human_jump_speed", "Jump Speed (km/h x10)", 65, 0, 1000},
-        {"human_jump_height", "Jump Height (km/h x10)", 50, 0, 1000},
-        {"human_air_speed", "Air Speed (km/h x10)", 65, 0, 1000},
-        {"human_damage", "Damage Scale (x100)", 300, 0, 2000},
-        {"human_fence_damage", "Fence Damage (x100)", 100, 0, 2000},
+        {"human_move_scale", "Move Speed Scale", 100},
+        {"human_jump_speed", "Jump Speed (km/h)", 10},
+        {"human_jump_height", "Jump Height (km/h)", 10},
+        {"human_air_speed", "Air Speed (km/h)", 10},
+        {"human_damage", "Damage Scale", 100},
+        {"human_fence_damage", "Fence Damage", 100},
     };
     for (std::size_t slot = 0; slot < kHumanParamCount; ++slot) {
         igi::ModMenuItemConfig item;
         item.id = defs[slot].id;
         item.kind = igi::ModMenuItemKind::Input;
         item.label = defs[slot].label;
-        item.category = "Human";
+        item.category = "Player";
         item.nativeAction = "HumanParam";
-        item.inputValue = defs[slot].value;
-        item.inputMinimum = defs[slot].minimum;
-        item.inputMaximum = defs[slot].maximum;
-        item.inputStep = 25;
+        item.inputDisplayDivisor = defs[slot].divisor;
+        item.inputValue = 0;
+        item.inputMinimum = 0;
+        item.inputMaximum = 100000;
+        item.inputStep = 1;
         config.items.push_back(std::move(item));
     }
     igi::ModMenuItemConfig save;
     save.id = "human_save";
     save.kind = igi::ModMenuItemKind::Action;
     save.label = "Save Player Physics";
-    save.category = "Human";
+    save.category = "Player";
     save.nativeAction = "HumanSaveParams";
     config.items.push_back(std::move(save));
     igi::ModMenuItemConfig reload;
     reload.id = "human_reload";
     reload.kind = igi::ModMenuItemKind::Action;
     reload.label = "Reload From humanplayer.qvm";
-    reload.category = "Human";
+    reload.category = "Player";
     reload.nativeAction = "HumanReloadParams";
     config.items.push_back(std::move(reload));
     igi::ModMenuItemConfig info;
     info.id = "human_info";
     info.kind = igi::ModMenuItemKind::Action;
     info.label = "Read Humanplayer Values";
-    info.category = "Human";
+    info.category = "Player";
     info.nativeAction = "HumanParamsInfo";
     config.items.push_back(std::move(info));
 }
 
-// Prefill the boxes from the live BSS block once per level, so the menu shows the
-// values humanplayer.qvm actually authored.
-void refreshHumanControls(igi::MenuConfig &config, igi::Runtime &runtime) {
-    static void *lastGame = nullptr;
+// Prefill from the baseline HumanPlayer_LoadParameters produces for the current
+// level, and offer samples as meaningful fractions/multiples of it.
+void prefillHumanControls(igi::MenuConfig &config, igi::Runtime &runtime) {
     auto *game = IGI::GAME::GET();
-    if (game && game != lastGame) {
-        lastGame = game;
+    if (game && game != g_humanBaselineGame) {
+        g_humanBaselineGame = game;
+        g_humanBaselineCaptured = false;
         std::fill(std::begin(g_humanParamSet), std::end(g_humanParamSet), false);
     }
-    const auto params = igi::readLiveHumanPlayerParams(runtime);
-    if (!params || params->moveScale <= 0.0F)
-        return;
-    g_humanParams = *params;
+    if (!g_humanBaselineCaptured) {
+        if (!igi::captureHumanPlayerBaseline(runtime, g_humanBaseline))
+            return; // retries on the next refresh
+        g_humanBaselineCaptured = true;
+    }
+    g_humanParams = g_humanBaseline;
     const int values[kHumanParamCount] = {
-        static_cast<int>(std::lround(params->moveScale * 100.0F)),
-        static_cast<int>(std::lround(params->jumpSpeedKmh * 10.0F)),
-        static_cast<int>(std::lround(params->jumpUpKmh * 10.0F)),
-        static_cast<int>(std::lround(params->airSpeedKmh * 10.0F)),
-        static_cast<int>(std::lround(params->maxDamage * 100.0F)),
-        static_cast<int>(std::lround(params->fenceDamage * 100.0F)),
+        static_cast<int>(std::lround(g_humanBaseline.moveScale * 100.0F)),
+        static_cast<int>(std::lround(g_humanBaseline.jumpSpeedKmh * 10.0F)),
+        static_cast<int>(std::lround(g_humanBaseline.jumpUpKmh * 10.0F)),
+        static_cast<int>(std::lround(g_humanBaseline.airSpeedKmh * 10.0F)),
+        static_cast<int>(std::lround(g_humanBaseline.maxDamage * 100.0F)),
+        static_cast<int>(std::lround(g_humanBaseline.fenceDamage * 100.0F)),
     };
     for (std::size_t slot = 0; slot < kHumanParamCount; ++slot) {
-        if (g_humanParamSet[slot])
-            continue;
-        g_humanParamValue[slot] = values[slot];
         for (auto &item : config.items) {
             if (item.id != kHumanParamIds[slot])
                 continue;
-            item.inputValue = std::clamp(values[slot], item.inputMinimum, item.inputMaximum);
+            const int base = values[slot];
+            item.inputSampleValues = {0, std::max(1, base / 2), base, base * 2, base * 4};
+            if (!g_humanParamSet[slot]) {
+                g_humanParamValue[slot] = base;
+                item.inputValue = std::clamp(base, item.inputMinimum, item.inputMaximum);
+            }
         }
     }
+}
+
+// Applies the displayed values to the retail globals immediately, then verifies
+// with a live read-back (saveLiveHumanPlayerParams does both).
+void applyHumanPhysics(igi::Runtime &runtime) {
+    g_humanParams.moveScale = static_cast<float>(g_humanParamValue[kHumanMoveScale]) / 100.0F;
+    g_humanParams.jumpSpeedKmh = static_cast<float>(g_humanParamValue[kHumanJumpSpeed]) / 10.0F;
+    g_humanParams.jumpUpKmh = static_cast<float>(g_humanParamValue[kHumanJumpHeight]) / 10.0F;
+    g_humanParams.airSpeedKmh = static_cast<float>(g_humanParamValue[kHumanAirSpeed]) / 10.0F;
+    g_humanParams.maxDamage = static_cast<float>(g_humanParamValue[kHumanDamage]) / 100.0F;
+    g_humanParams.fenceDamage = static_cast<float>(g_humanParamValue[kHumanFenceDamage]) / 100.0F;
+    (void)igi::saveLiveHumanPlayerParams(runtime, g_humanParams);
 }
 
 bool handleHumanAction(const igi::MenuConfig &config, igi::Runtime &runtime, std::size_t item,
@@ -137,33 +157,22 @@ bool handleHumanAction(const igi::MenuConfig &config, igi::Runtime &runtime, std
         int typed = 0;
         const auto parsed = std::from_chars(value.data(), value.data() + value.size(), typed);
         if (parsed.ec != std::errc{} || typed < 0) {
-            igi::log(igi::LogLevel::Warning,
-                     "human physics rejected: enter a non-negative display value");
+            igi::log(igi::LogLevel::Warning, "human physics rejected: enter a non-negative value");
             return true;
         }
         g_humanParamValue[slot] = typed;
         g_humanParamSet[slot] = true;
-        igi::log(igi::LogLevel::Info, "human physics: " + std::string(id) + " set to " +
-                                          std::to_string(typed) + " (press Save)");
+        applyHumanPhysics(runtime);
         return true;
     }
     if (id == "human_save") {
-        g_humanParams.moveScale = static_cast<float>(g_humanParamValue[kHumanMoveScale]) / 100.0F;
-        g_humanParams.jumpSpeedKmh = static_cast<float>(g_humanParamValue[kHumanJumpSpeed]) / 10.0F;
-        g_humanParams.jumpUpKmh = static_cast<float>(g_humanParamValue[kHumanJumpHeight]) / 10.0F;
-        g_humanParams.airSpeedKmh = static_cast<float>(g_humanParamValue[kHumanAirSpeed]) / 10.0F;
-        g_humanParams.maxDamage = static_cast<float>(g_humanParamValue[kHumanDamage]) / 100.0F;
-        g_humanParams.fenceDamage =
-            static_cast<float>(g_humanParamValue[kHumanFenceDamage]) / 100.0F;
-        const bool saved = igi::saveLiveHumanPlayerParams(runtime, g_humanParams);
-        igi::log(saved ? igi::LogLevel::Info : igi::LogLevel::Warning,
-                 saved ? "human physics saved to the live retail globals"
-                       : "human physics rejected: the live globals were unavailable");
+        applyHumanPhysics(runtime);
         return true;
     }
     if (id == "human_reload") {
         if (igi::reloadLiveHumanPlayerParams(runtime)) {
             std::fill(std::begin(g_humanParamSet), std::end(g_humanParamSet), false);
+            g_humanBaselineCaptured = false;
             igi::log(igi::LogLevel::Info, "human physics reloaded from humanplayer.qvm");
         } else {
             igi::log(igi::LogLevel::Warning, "human physics reload was rejected");
@@ -211,12 +220,13 @@ bool configureModMenu(igi::MenuConfig &config) {
     config.items.back().category = "Player/Camera";
     config.items.push_back({"display", igi::ModMenuItemKind::Action, "Refresh Display", "", {}});
     config.items.back().category = "Display/Utilities";
-    // Same Human section as the internal menu, generated from this shared table.
+    // Same Player/Human controls as the internal menu, generated from this
+    // shared table; only the frontend UI differs.
     addHumanControls(config);
     const auto inherited = config.refreshLiveItems;
     config.refreshLiveItems = [inherited](igi::MenuConfig &live, igi::Runtime &runtime) {
         const bool changed = inherited ? inherited(live, runtime) : false;
-        refreshHumanControls(live, runtime);
+        prefillHumanControls(live, runtime);
         return changed;
     };
     return true;

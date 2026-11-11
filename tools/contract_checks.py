@@ -45,7 +45,7 @@ def check_heaven_surface() -> int:
     if len(ids) != expected:
         raise SystemExit(f"normal Heaven must ship exactly {expected} controls, found {len(ids)}")
 
-    categories = {"Weapons", "Player", "Human", "Camera", "World", "Vehicles", "AI / NPC", "System"}
+    categories = {"Weapons", "Player", "Camera", "World", "Vehicles", "AI / NPC", "System"}
     found = {entry[3] for entry in seen.values()}
     if found != categories:
         raise SystemExit(f"Heaven categories drifted: {found}")
@@ -105,6 +105,11 @@ def check_heaven_surface() -> int:
     assert "prefillHumanControls" in heaven and "captureHumanPlayerBaseline" in heaven, (
         "Human boxes must prefill from a HumanPlayer_LoadParameters baseline"
     )
+    for source in (heaven, helpers):
+        assert "readLiveHumanPlayerParams" not in source, (
+            "reading the humanplayer.qvm globals must go through exactly one method "
+            "(readHumanPlayerQvmParams)"
+        )
     assert "applyHumanPhysics" in heaven, "human input changes must apply immediately"
     assert "inputDisplayDivisor" in heaven, "human values must display in authored units"
     assert "inputSampleValues" in heaven, "samples must derive from the qvm baseline"
@@ -127,6 +132,12 @@ def check_heaven_surface() -> int:
     # Stale script state must be reclaimed so a restart reopens a full menu.
     assert "isOwnScriptHandler" in _read("src/ui/menu_script_bridge.cpp")
     assert "ownedName" in _read("src/ui/menu_resource.cpp")
+    assert "countMissingPageWidgets" in internal_host and "attachHealAttempts" in internal_host, (
+        "an attach without its widget tasks must self-heal onto a fresh task-id range"
+    )
+    assert "produced no entries for item" in _read("src/ui/menu_script_bridge.cpp"), (
+        "a zero-entry FillList must be logged loudly"
+    )
     assert "revertMenuState" in internal_host and "releaseScriptSession" in internal_host
 
     # External ImGui parity: shared table, DirectX 7 renderer, shutdown exports.
