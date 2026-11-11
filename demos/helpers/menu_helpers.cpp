@@ -123,10 +123,12 @@ void clearLiveTargetSelections(const std::string &reason) {
         log(LogLevel::Info, "live target selections cleared: " + reason);
 }
 
-void reportMissingCarTarget(std::string_view action) {
+void reportMissingCarTarget(Runtime &runtime, std::string_view action) {
     if (g_selectedCarTaskId < 0) {
-        log(LogLevel::Info,
-            std::string(action) + ": no car selected; pick a live car target first");
+        EntityHelpers entities(runtime);
+        log(LogLevel::Info, std::string(action) + ": no car selected; " +
+                                std::to_string(entities.carTargets().size()) +
+                                " live car(s) on this level - pick one in Live Car / Tank Target");
         return;
     }
     g_selectedCarTaskId = -1;
@@ -257,6 +259,26 @@ IGI::Task *findLiveTarget(Runtime &runtime, int id, Predicate &&predicate) {
     if (!task)
         return nullptr;
     return predicate(task) ? task : nullptr;
+}
+
+// The single live car on a level is adopted automatically, mirroring the heli
+// actions, so Explode/Reset work without visiting the picker first.
+IGI::Car *autoAdoptSingleCar(Runtime &runtime, std::string_view action) {
+    auto *car = reinterpret_cast<IGI::Car *>(findLiveTarget(
+        runtime, g_selectedCarTaskId, [](IGI::Task *task) { return isCarTask(task); }));
+    if (car)
+        return car;
+    EntityHelpers entities(runtime);
+    const auto cars = entities.carTargets();
+    if (cars.size() != 1)
+        return nullptr;
+    g_selectedCarTaskId = cars.front().taskId;
+    car = reinterpret_cast<IGI::Car *>(findLiveTarget(
+        runtime, g_selectedCarTaskId, [](IGI::Task *task) { return isCarTask(task); }));
+    if (car)
+        log(LogLevel::Info, std::string(action) + ": using the only live car [" +
+                                std::to_string(g_selectedCarTaskId) + "]");
+    return car;
 }
 
 // Retail LevelFlow layout (IGI-RE levelflowtypes.h). The world clock and the
@@ -1933,20 +1955,18 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
     } else if (id == "restart_mission") {
         WorldHelpers(runtime).restartMission();
     } else if (id == "vehicle_reset") {
-        auto *car =
-            reinterpret_cast<IGI::Car *>(findLiveTarget(runtime, g_selectedCarTaskId, isCarTask));
+        auto *car = autoAdoptSingleCar(runtime, "vehicle reset");
         if (!car) {
-            reportMissingCarTarget("vehicle reset");
+            reportMissingCarTarget(runtime, "vehicle reset");
         } else if (VehicleHelpers(runtime).resetCar(car)) {
             log(LogLevel::Info, "vehicle reset: restored selected car through retail control flow");
         } else {
             log(LogLevel::Warning, "vehicle reset rejected: Car_Control native was unavailable");
         }
     } else if (id == "vehicle_explode") {
-        auto *car =
-            reinterpret_cast<IGI::Car *>(findLiveTarget(runtime, g_selectedCarTaskId, isCarTask));
+        auto *car = autoAdoptSingleCar(runtime, "vehicle explode");
         if (!car) {
-            reportMissingCarTarget("vehicle explode");
+            reportMissingCarTarget(runtime, "vehicle explode");
         } else if (VehicleHelpers(runtime).explodeCar(car)) {
             log(LogLevel::Info, "vehicle explode: triggered explosion for selected car");
         } else {
@@ -1970,7 +1990,7 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
         auto *car =
             reinterpret_cast<IGI::Car *>(findLiveTarget(runtime, g_selectedCarTaskId, isCarTask));
         if (!car) {
-            reportMissingCarTarget("vehicle drive");
+            reportMissingCarTarget(runtime, "vehicle drive");
         } else if (VehicleHelpers(runtime).driveCar(car, targetSpeed, brake)) {
             log(LogLevel::Info, "vehicle drive: selected car set to " + std::string(value));
         } else {
@@ -1993,7 +2013,7 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
         auto *car =
             reinterpret_cast<IGI::Car *>(findLiveTarget(runtime, g_selectedCarTaskId, isCarTask));
         if (!car) {
-            reportMissingCarTarget("tank drive");
+            reportMissingCarTarget(runtime, "tank drive");
         } else if (VehicleHelpers(runtime).driveCar(car, targetSpeed, brake)) {
             log(LogLevel::Info, "tank drive: selected vehicle set to " + std::string(value));
         } else {
@@ -2194,20 +2214,18 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
                 log(LogLevel::Warning, "heli control rejected: Heli_Control was unavailable");
         }
     } else if (id == "vehicle_info") {
-        auto *car =
-            reinterpret_cast<IGI::Car *>(findLiveTarget(runtime, g_selectedCarTaskId, isCarTask));
+        auto *car = autoAdoptSingleCar(runtime, "vehicle info");
         if (!car) {
-            reportMissingCarTarget("vehicle info");
+            reportMissingCarTarget(runtime, "vehicle info");
         } else if (VehicleHelpers(runtime).reportCarInfo(car)) {
             log(LogLevel::Info, "vehicle info reported from the retail control-info native");
         } else {
             log(LogLevel::Warning, "vehicle info rejected: control-info native was unavailable");
         }
     } else if (id == "vehicle_controls_reset") {
-        auto *car =
-            reinterpret_cast<IGI::Car *>(findLiveTarget(runtime, g_selectedCarTaskId, isCarTask));
+        auto *car = autoAdoptSingleCar(runtime, "vehicle controls reset");
         if (!car) {
-            reportMissingCarTarget("vehicle controls reset");
+            reportMissingCarTarget(runtime, "vehicle controls reset");
         } else if (VehicleHelpers(runtime).resetVehicleControls(
                        reinterpret_cast<IGI::Task *>(car))) {
             log(LogLevel::Info, "vehicle controls reset through the retail vehicle native");
@@ -3489,15 +3507,23 @@ bool WeaponHelpers::dropCurrentWeapon() const {
         return false;
     }
     const int weaponId = IGI::TASK::GET_ID(weapon);
-    log(LogLevel::Info, "drop weapon: dropping task #" + std::to_string(weaponId) +
-                            " while keeping the rest of the live inventory");
+    // Weapon_Drop spawns a world casing and dereferences the gun's world task
+    // registration. A held gun with no registered id (GET_ID -1) crashed there;
+    // such a gun is only safe to remove from the inventory slots.
+    const bool worldDroppable = weaponId >= 0;
+    log(LogLevel::Info, worldDroppable
+                            ? "drop weapon: dropping task #" + std::to_string(weaponId) +
+                                  " while keeping the rest of the live inventory"
+                            : "drop weapon: the held gun has no world task id; removing it from "
+                              "the inventory slots only");
     // A live player must not follow the retail death path. die_start drops the
     // held weapon and then calls Weapon_DeleteAll because the human is dying;
     // doing that to a live player deleted every carried weapon, and the next
     // gameplay frame crashed on the unarmed state. Stop the draw animation first,
     // drop only the held task, and let the game's World remove event delete it.
     IGI::HUMAN::STOP_WEAPON_ANIM(player, 0.0F);
-    (void)IGI::WEAPON::DROP(weapon);
+    if (worldDroppable)
+        (void)IGI::WEAPON::DROP(weapon);
     auto **slots = reinterpret_cast<IGI::Task **>(reinterpret_cast<std::uint8_t *>(player) +
                                                   kHumanWeaponSlotsOffset);
     for (int slot = 0; slot < kHumanWeaponSlots; ++slot) {

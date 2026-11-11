@@ -41,7 +41,7 @@ def check_heaven_surface() -> int:
         raise SystemExit("Heaven menu has no configured items")
     if len(ids) != len(set(ids)):
         raise SystemExit(f"duplicate Heaven item ids: {ids}")
-    expected = 69
+    expected = 68
     if len(ids) != expected:
         raise SystemExit(f"normal Heaven must ship exactly {expected} controls, found {len(ids)}")
 
@@ -54,6 +54,7 @@ def check_heaven_surface() -> int:
         "world_level_tick", "world_flow", "world_events",
         "player_teleport_x", "player_teleport_y", "player_teleport_z", "player_teleport_apply",
         "player_send_x", "player_send_y", "player_send_z", "player_send_apply",
+        "human_info",
     }
     leftovers = removed & set(ids)
     if leftovers:

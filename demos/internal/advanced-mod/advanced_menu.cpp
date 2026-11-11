@@ -10,6 +10,7 @@
 #include <array>
 #include <charconv>
 #include <cmath>
+#include <cstdlib>
 #include <cstddef>
 #include <string>
 
@@ -84,17 +85,10 @@ void addHumanControls(igi::MenuConfig &config) {
     igi::ModMenuItemConfig reload;
     reload.id = "human_reload";
     reload.kind = igi::ModMenuItemKind::Action;
-    reload.label = "Reload From humanplayer.qvm";
+    reload.label = "Read Humanplayer (Load qvm Values)";
     reload.category = "Player";
     reload.nativeAction = "HumanReloadParams";
     config.items.push_back(std::move(reload));
-    igi::ModMenuItemConfig info;
-    info.id = "human_info";
-    info.kind = igi::ModMenuItemKind::Action;
-    info.label = "Read Humanplayer Values";
-    info.category = "Player";
-    info.nativeAction = "HumanParamsInfo";
-    config.items.push_back(std::move(info));
 }
 
 // Prefill from the baseline HumanPlayer_LoadParameters produces for the current
@@ -146,6 +140,8 @@ void applyHumanPhysics(igi::Runtime &runtime) {
     (void)igi::saveLiveHumanPlayerParams(runtime, g_humanParams);
 }
 
+void prefillHumanControls(igi::MenuConfig &config, igi::Runtime &runtime);
+
 bool handleHumanAction(const igi::MenuConfig &config, igi::Runtime &runtime, std::size_t item,
                        std::string_view value) {
     if (item >= config.items.size())
@@ -154,9 +150,26 @@ bool handleHumanAction(const igi::MenuConfig &config, igi::Runtime &runtime, std
     for (std::size_t slot = 0; slot < kHumanParamCount; ++slot) {
         if (id != kHumanParamIds[slot])
             continue;
-        int typed = 0;
-        const auto parsed = std::from_chars(value.data(), value.data() + value.size(), typed);
-        if (parsed.ec != std::errc{} || typed < 0) {
+        // The QVM ListBox sends the DISPLAYED label ("17.5"), not the raw
+        // internal integer. Convert it back by the item's display divisor.
+        double display = 0.0;
+        const std::string text(value);
+        {
+            char *end = nullptr;
+            display = std::strtod(text.c_str(), &end);
+            if (end == text.c_str() || *end != '\0') {
+                igi::log(igi::LogLevel::Warning,
+                         "human physics rejected: '" + text + "' is not a number");
+                return true;
+            }
+        }
+        int divisor = 1;
+        for (const auto &candidate : config.items) {
+            if (candidate.id == id && candidate.inputDisplayDivisor > 0)
+                divisor = candidate.inputDisplayDivisor;
+        }
+        const int typed = static_cast<int>(std::llround(display * divisor));
+        if (typed < 0) {
             igi::log(igi::LogLevel::Warning, "human physics rejected: enter a non-negative value");
             return true;
         }
@@ -171,16 +184,17 @@ bool handleHumanAction(const igi::MenuConfig &config, igi::Runtime &runtime, std
     }
     if (id == "human_reload") {
         if (igi::reloadLiveHumanPlayerParams(runtime)) {
+            // Read = load the qvm and push its authored values straight into the
+            // input boxes: reset the per-level capture and prefill now.
             std::fill(std::begin(g_humanParamSet), std::end(g_humanParamSet), false);
             g_humanBaselineCaptured = false;
-            igi::log(igi::LogLevel::Info, "human physics reloaded from humanplayer.qvm");
+            g_humanBaselineGame = nullptr;
+            prefillHumanControls(const_cast<igi::MenuConfig &>(config), runtime);
+            igi::log(igi::LogLevel::Info,
+                     "human physics: the humanplayer.qvm values are back in the inputs");
         } else {
-            igi::log(igi::LogLevel::Warning, "human physics reload was rejected");
+            igi::log(igi::LogLevel::Warning, "human physics read was rejected");
         }
-        return true;
-    }
-    if (id == "human_info") {
-        igi::executeMenuNativeAction(config, runtime, item, value);
         return true;
     }
     return false;

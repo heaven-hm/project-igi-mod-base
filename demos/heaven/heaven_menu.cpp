@@ -268,15 +268,9 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
          {}},
         {"human_reload",
          igi::ModMenuItemKind::Action,
-         "Reload From humanplayer.qvm",
+         "Read Humanplayer (Load qvm Values)",
          "Player",
          "HumanReloadParams",
-         {}},
-        {"human_info",
-         igi::ModMenuItemKind::Action,
-         "Read Humanplayer Values",
-         "Player",
-         "HumanParamsInfo",
          {}},
 
         // Camera
@@ -537,7 +531,7 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
                 item.inputMaximum = 9999;
                 item.inputStep = 30;
             } else if (item.id.starts_with("human_") && item.id != "human_save" &&
-                       item.id != "human_reload" && item.id != "human_info") {
+                       item.id != "human_reload") {
                 // Internal values are integers; inputDisplayDivisor makes every
                 // frontend render the authored unit ("1.75", "17.5", ...). The
                 // numbers here are placeholders only until prefillHumanControls
@@ -781,11 +775,30 @@ void runModMenu(const igi::MenuConfig &config, igi::Runtime &runtime, std::size_
         for (std::size_t slot = 0; slot < kHumanParamCount; ++slot) {
             if (config.items[item].id != kHumanParamIds[slot])
                 continue;
-            int typed = 0;
-            const auto parsed = std::from_chars(value.data(), value.data() + value.size(), typed);
-            if (parsed.ec != std::errc{} || typed < 0) {
+            // The QVM ListBox sends the DISPLAYED label ("17.5"), not the raw
+            // internal integer. Convert it back by the item's display divisor,
+            // or picking "35" wrote 3.5 km/h instead of 35.
+            double display = 0.0;
+            const std::string text(value);
+            {
+                char *end = nullptr;
+                display = std::strtod(text.c_str(), &end);
+                if (end == text.c_str() || *end != '\0') {
+                    igi::log(igi::LogLevel::Warning,
+                             "human physics rejected: '" + text + "' is not a number");
+                    return;
+                }
+            }
+            const auto self = std::find_if(
+                config.items.begin(), config.items.end(),
+                [slot](const auto &candidate) { return candidate.id == kHumanParamIds[slot]; });
+            const int divisor = self != config.items.end() && self->inputDisplayDivisor > 0
+                                    ? self->inputDisplayDivisor
+                                    : 1;
+            const int typed = static_cast<int>(std::llround(display * divisor));
+            if (typed < 0) {
                 igi::log(igi::LogLevel::Warning,
-                         "human physics rejected: enter a non-negative display value");
+                         "human physics rejected: enter a non-negative value");
                 return;
             }
             g_humanParamValue[slot] = typed;
@@ -804,13 +817,17 @@ void runModMenu(const igi::MenuConfig &config, igi::Runtime &runtime, std::size_
     }
     if (inRange && config.items[item].id == "human_reload") {
         if (igi::reloadLiveHumanPlayerParams(runtime)) {
-            // Force the input boxes to re-read the reloaded qvm values.
+            // Read = load the qvm and push its authored values straight into the
+            // input boxes on both frontends: reset the per-level capture and
+            // prefill now instead of waiting for the next frame refresh.
             std::fill(std::begin(g_humanParamSet), std::end(g_humanParamSet), false);
-            igi::log(igi::LogLevel::Info,
-                     "human physics reloaded from humanplayer.qvm; inputs refresh on the next "
-                     "menu frame");
+            g_humanBaselineCaptured = false;
+            g_humanBaselineGame = nullptr;
+            if (prefillHumanControls(const_cast<igi::MenuConfig &>(config), runtime))
+                igi::log(igi::LogLevel::Info,
+                         "human physics: the humanplayer.qvm values are back in the inputs");
         } else {
-            igi::log(igi::LogLevel::Warning, "human physics reload was rejected");
+            igi::log(igi::LogLevel::Warning, "human physics read was rejected");
         }
         return;
     }

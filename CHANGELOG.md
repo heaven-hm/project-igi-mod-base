@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.5.0 — Drop crash, qvm-unit parsing, one Read option and car adoption
+
+- **Weapon drop crash:** the held gun's world task id can be -1 (unregistered);
+  `Weapon_Drop` dereferences the world casing path there and crashed. The drop
+  now removes an id-less gun from the inventory slots only (stop animation,
+  clear slot, re-equip fallback) and runs the retail world drop only for
+  registered ids.
+- **Human values from the qvm, parsed in authored units:** the QVM ListBox sends
+  the displayed label ("17.5") while the adapter parsed it as the raw internal
+  integer, so picking "35" wrote 3.5 km/h. Both the Heaven and Advanced menus now
+  convert the label back by the item's display divisor; the values you pick are
+  what the log writes and reads back.
+- **One Read option:** "Read Humanplayer (Load qvm Values)" replaces
+  "Reload From humanplayer.qvm" + "Read Humanplayer Values". It runs
+  HumanPlayer_LoadParameters and immediately pushes the authored
+  humanplayer.qvm defaults into the input boxes on the internal and external
+  menus (68 controls).
+- **Vehicle explode/reset/info:** when no car is selected and exactly one car is
+  live, it is adopted automatically (like the heli actions); the refusal now
+  states how many live cars exist on the level, so "no car selected" is
+  actionable.
+
+
 ## 0.4.9 — Close button no longer corrupts the retail MenuManager
 
 - After closing the mod menu with its own Close button and ejecting, Escape no
