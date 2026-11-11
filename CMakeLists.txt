@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(project_igi_mod_base VERSION 0.2.0 LANGUAGES C CXX)
+project(project_igi_mod_base VERSION 0.6.0 LANGUAGES C CXX)
 
 # Project I.G.I. (igi.exe) is strictly a 32-bit (x86) Windows PE executable.
 # 64-bit / x64 builds are strictly forbidden across all Windows targets.

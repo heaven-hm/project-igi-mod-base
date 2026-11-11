@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.6.0 — Heaven release: humanplayer physics, vehicle control and menu stability
+
+Release DLLs (all Win32 x86, inject one per igi.exe session):
+`igi-heaven-mod-internal.dll` / `igi-heaven-mod-external.dll` (flagship),
+`igi-heaven-mod-advanced-internal.dll` / `igi-heaven-mod-advanced-external.dll`
+(+ player/NPC ground state and movement), plus the basic, simple and advanced
+mod variants.
+
+**humanplayer.qvm physics (Human inside Player):** move speed scale, jump speed,
+jump height, air speed, damage scale and fence damage — read live from the retail
+BSS, prefilled by running `HumanPlayer_LoadParameters` (the authored qvm values,
+verified against `humanplayer-org.qvm`), applied immediately on selection with a
+live read-back verified in the log, decimal authored units (17.5, 1.75, 3), and
+one "Read Humanplayer" option that pushes the qvm defaults into both frontends.
+Lean/peek parameters are intentionally not exposed.
+
+**Teleport, exactly two paths:** "Teleport To Any Object / AI" (one merged list:
+live NPCs, vehicles, world objects, landmarks, captured Level Start) and typed
+X/Y/Z with a Metres / World Units switch (prefilled from the live player
+position, stored in world units internally, ground-probed). Address-keyed
+id-less objects are excluded — they crashed the teleport.
+
+**Vehicles:** helicopter Stop Reverse, drive, yaw/pitch/roll and reset through
+`Heli_Control`; tank drive presets through `Car_Control`; car Explode/Reset/Info
+auto-adopt the only live car and report the live-car count.
+
+**Menu stability:** one F5 press opens even during a level load; a level change
+or restart reclaims the stale script session so the menu never reopens empty;
+the close button unwinds through the retail leave path so the pause menu keeps
+working after eject; eject keeps the DLL resident instead of freeing it under
+the game thread; an attach whose widgets fail self-heals onto a fresh task-id
+range; weapon drop no longer runs the world-drop path on id-less guns (the
+crash).
+
+**Verification:** `tools/run-unicorn-tests.sh` — Unicorn-only suite (contract
+checks, frame dispatch, 7 heaven flows, 4 humanplayer-physics checks, 6
+menu-helper checks), ctest removed; `tools/build-all.sh` builds and deploys all
+10 DLLs.
+
 ## 0.5.3 — Teleport crash on id-less objects and typed XYZ unit consistency
 
 - The game crashed teleporting to target #142191460 - an address-derived key for
