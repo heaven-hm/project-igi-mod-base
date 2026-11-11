@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.4.7 — Human inputs display the authored units
+
+- The Human boxes no longer show opaque x10 integers ("175", "25"). A new
+  `inputDisplayDivisor` renders every frontend in authored units: the QVM
+  ListBox entries, the command list labels and the ImGui widget all show
+  "17.5", "1.75", "3" (divisor 10 for speeds, 100 for scales), and the ImGui
+  widget is a decimal input that converts back on Apply.
+- The QVM sample entries are now meaningful fractions/multiples of the
+  humanplayer.qvm baseline captured by `HumanPlayer_LoadParameters`
+  (0, x0.5, x1, x2, x4) instead of arbitrary steps (0/25/50/75/1000), so picking
+  "half" or "x2" scales the jump predictably. Picking 25 used to write 2.5 km/h
+  against a 27 km/h authored height - effectively "the jump stopped working".
+- Verified against the shipped `humanplayer-org.qvm`: 17.5 (jump speed km/h)
+  and 3.0 (damage) are present as authored floats, matching the live baseline
+  capture exactly.
+
+
 ## 0.4.6 — Unicorn-emulator verification for the human physics path
 
 - New `--verify-human-physics` mode in `tools/igi_runtime_harness.py` runs the

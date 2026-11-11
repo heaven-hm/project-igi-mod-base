@@ -536,23 +536,21 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
                 item.inputMinimum = 1;
                 item.inputMaximum = 9999;
                 item.inputStep = 30;
-            } else if (item.id == "human_move_scale") {
-                item.inputValue = 100;
-                item.inputMinimum = 10;
-                item.inputMaximum = 1000;
-                item.inputStep = 25;
-            } else if (item.id == "human_damage" || item.id == "human_fence_damage") {
-                item.inputValue = item.id == "human_damage" ? 300 : 100;
+            } else if (item.id.starts_with("human_") && item.id != "human_save" &&
+                       item.id != "human_reload" && item.id != "human_info") {
+                // Internal values are integers; inputDisplayDivisor makes every
+                // frontend render the authored unit ("1.75", "17.5", ...). The
+                // numbers here are placeholders only until prefillHumanControls
+                // replaces them with what HumanPlayer_LoadParameters produced.
+                item.inputDisplayDivisor =
+                    (item.id == "human_move_scale" || item.id == "human_damage" ||
+                     item.id == "human_fence_damage")
+                        ? 100
+                        : 10;
+                item.inputValue = 0;
                 item.inputMinimum = 0;
-                item.inputMaximum = 2000;
-                item.inputStep = 25;
-            } else if (item.id == "human_jump_speed" || item.id == "human_jump_height" ||
-                       item.id == "human_air_speed") {
-                // Tenths of km/h: 65 means 6.5 km/h.
-                item.inputValue = item.id == "human_jump_speed" ? 65 : 50;
-                item.inputMinimum = 0;
-                item.inputMaximum = 1000;
-                item.inputStep = 25;
+                item.inputMaximum = 100000;
+                item.inputStep = 1;
             } else if (item.id == "world_time_hour") {
                 item.inputValue = 10;
                 item.inputMinimum = 0;
@@ -669,16 +667,21 @@ bool prefillHumanControls(igi::MenuConfig &config, igi::Runtime &runtime) {
         static_cast<int>(std::lround(g_humanBaseline.fenceDamage * 100.0F))};
     bool changed = false;
     for (std::size_t slot = 0; slot < kHumanParamCount; ++slot) {
-        if (g_humanParamSet[slot])
-            continue;
-        g_humanParamValue[slot] = values[slot];
         for (auto &item : config.items) {
             if (item.id != kHumanParamIds[slot])
                 continue;
-            const int clamped = std::clamp(values[slot], item.inputMinimum, item.inputMaximum);
-            if (item.inputValue != clamped) {
-                item.inputValue = clamped;
-                changed = true;
+            // Sample entries are meaningful fractions/multiples of the authored
+            // value - not arbitrary steps - so the jump scales predictably:
+            // "half" softens it, "x2"/"x4" push it higher/faster.
+            const int base = values[slot];
+            item.inputSampleValues = {0, std::max(1, base / 2), base, base * 2, base * 4};
+            if (!g_humanParamSet[slot]) {
+                g_humanParamValue[slot] = base;
+                const int clamped = std::clamp(base, item.inputMinimum, item.inputMaximum);
+                if (item.inputValue != clamped) {
+                    item.inputValue = clamped;
+                    changed = true;
+                }
             }
         }
     }

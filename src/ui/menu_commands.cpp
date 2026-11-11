@@ -1,6 +1,8 @@
 #include "ui/menu_commands.hpp"
 
 #include <algorithm>
+#include <iomanip>
+#include <sstream>
 #include <array>
 
 namespace igi {
@@ -96,8 +98,32 @@ bool menuNeedsCommandList(const MenuConfig &config) {
     return config.items.size() > std::max(kMaxFlatRows, room);
 }
 
+std::string formatInputValue(const ModMenuItemConfig &item, int value) {
+    if (item.inputDisplayDivisor <= 1)
+        return std::to_string(value);
+    std::ostringstream out;
+    out << std::fixed << std::setprecision(2)
+        << static_cast<double>(value) / item.inputDisplayDivisor;
+    std::string text = out.str();
+    // Trim trailing zeros so 1.75 stays "1.75", 3.50 becomes "3.5", 3.00 -> "3".
+    text.erase(text.find_last_not_of('0') + 1);
+    if (!text.empty() && text.back() == '.')
+        text.pop_back();
+    return text;
+}
+
 std::vector<int> inputSamples(const ModMenuItemConfig &item) {
     std::vector<int> samples;
+    // An explicit sample list (for example meaningful multiples of the
+    // humanplayer.qvm baseline) replaces the generated walk.
+    if (!item.inputSampleValues.empty()) {
+        samples = item.inputSampleValues;
+        if (item.inputValue >= item.inputMinimum && item.inputValue <= item.inputMaximum &&
+            std::find(samples.begin(), samples.end(), item.inputValue) == samples.end()) {
+            samples.insert(samples.begin(), item.inputValue);
+        }
+        return samples;
+    }
     const int low = item.inputMinimum;
     const int high = item.inputMaximum;
     if (high < low)
@@ -164,8 +190,8 @@ std::vector<MenuCommand> buildMenuCommands(const MenuConfig &config) {
         }
         case ModMenuItemKind::Input:
             for (const int sample : inputSamples(item)) {
-                commands.push_back({index, prefix + item.label + ": " + std::to_string(sample),
-                                    std::to_string(sample)});
+                const auto text = formatInputValue(item, sample);
+                commands.push_back({index, prefix + item.label + ": " + text, text});
             }
             break;
         case ModMenuItemKind::Action:

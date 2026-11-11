@@ -56,4 +56,7 @@ std::vector<MenuCommand> buildMenuCommands(const MenuConfig &config);
 // The retail QVM menu cannot host a text box, so a numeric input is offered as
 // discrete values instead. The ImGui frontend renders the real text box.
 std::vector<int> inputSamples(const ModMenuItemConfig &item);
+// Renders an input value with the item's display divisor (1 keeps the integer;
+// 10 renders 175 as "17.5", 100 renders 300 as "3").
+std::string formatInputValue(const ModMenuItemConfig &item, int value);
 } // namespace igi

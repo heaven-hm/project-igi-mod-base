@@ -1,4 +1,5 @@
 #include "config/menu_config.hpp"
+#include "ui/menu_commands.hpp"
 #include "logging/logging.hpp"
 #include "mod_base/menu_host.hpp"
 #include "natives/igi_hashes/hashes.hpp"
@@ -12,6 +13,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <climits>
 #include <cstddef>
 #include <cstdint>
@@ -806,12 +808,28 @@ void renderImGuiModWindow() {
             case igi::ModMenuItemKind::Input: {
                 if (index >= inputValues.size())
                     inputValues.resize(menuConfig.items.size(), 0);
-                int value = inputValues[index];
-                ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.35f);
-                if (ImGui::InputInt(item.label.c_str(), &value,
-                                    item.inputStep > 0 ? item.inputStep : 1,
-                                    item.inputStep > 0 ? item.inputStep * 10 : 100)) {
-                    inputValues[index] = std::clamp(value, item.inputMinimum, item.inputMaximum);
+                const int divisor = item.inputDisplayDivisor > 0 ? item.inputDisplayDivisor : 1;
+                if (divisor > 1) {
+                    // Authored-unit widget: edit "17.5", send 175 internally.
+                    float value = static_cast<float>(inputValues[index]) / divisor;
+                    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.35f);
+                    if (ImGui::InputFloat(item.label.c_str(), &value, 0.0f, 0.0f, "%.3g")) {
+                        const int internal = static_cast<int>(std::lround(value * divisor));
+                        inputValues[index] =
+                            std::clamp(internal, item.inputMinimum, item.inputMaximum);
+                    }
+                    ImGui::SameLine();
+                    ImGui::TextDisabled("%s",
+                                        igi::formatInputValue(item, inputValues[index]).c_str());
+                } else {
+                    int value = inputValues[index];
+                    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.35f);
+                    if (ImGui::InputInt(item.label.c_str(), &value,
+                                        item.inputStep > 0 ? item.inputStep : 1,
+                                        item.inputStep > 0 ? item.inputStep * 10 : 100)) {
+                        inputValues[index] =
+                            std::clamp(value, item.inputMinimum, item.inputMaximum);
+                    }
                 }
                 ImGui::SameLine();
                 if (ImGui::Button(("Apply##input" + item.id).c_str())) {

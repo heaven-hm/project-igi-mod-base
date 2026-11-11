@@ -54,6 +54,14 @@ struct ModMenuItemConfig {
     int inputMinimum = 0;
     int inputMaximum = 9999;
     int inputStep = 1;
+    // Internal values are integers; the user-facing display divides by this.
+    // 10 renders 175 as "17.5", 100 renders 300 as "3". Applies to the sample
+    // list entries, the command list labels and the ImGui input widget.
+    int inputDisplayDivisor = 1;
+    // Explicit sample entries for the QVM ListBox. When non-empty it replaces
+    // the generated min/step/max walk, so a control can offer meaningful
+    // multiples of a live (baseline) value instead of arbitrary steps.
+    std::vector<int> inputSampleValues;
     std::string category;
     // Optional game-thread reader used by renderers to synchronize display state
     // with a value changed outside the menu or rejected by game-side logic.

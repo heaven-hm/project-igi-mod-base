@@ -16,7 +16,7 @@ std::string MenuValues::choiceLabelFor(const ModMenuItemConfig &item, std::size_
         return index < item.values.size() ? item.values[index] : std::string{};
     if (item.kind == ModMenuItemKind::Input) {
         const auto samples = inputSamples(item);
-        return index < samples.size() ? std::to_string(samples[index]) : std::string{};
+        return index < samples.size() ? formatInputValue(item, samples[index]) : std::string{};
     }
     return {};
 }
@@ -28,7 +28,7 @@ MenuValues::MenuValues(const MenuConfig &config)
     for (std::size_t i = 0; i < items_.size(); ++i) {
         if (items_[i].kind == ModMenuItemKind::Input) {
             for (const int sample : inputSamples(items_[i]))
-                inputLabels_[i].push_back(std::to_string(sample));
+                inputLabels_[i].push_back(formatInputValue(items_[i], sample));
         }
         toggles_[i] = items_[i].defaultToggle;
         committedToggles_[i] = items_[i].defaultToggle;
@@ -143,7 +143,7 @@ bool MenuValues::resync(const MenuConfig &config) {
             items_[i].inputStep = live.inputStep;
             inputLabels_[i].clear();
             for (const int sample : inputSamples(items_[i]))
-                inputLabels_[i].push_back(std::to_string(sample));
+                inputLabels_[i].push_back(formatInputValue(items_[i], sample));
             if (valueChanged) {
                 selected_[i] = 0;
                 committedSelected_[i] = 0;
