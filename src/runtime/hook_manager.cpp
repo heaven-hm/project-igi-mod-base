@@ -522,6 +522,16 @@ bool HookManager::uninstall(bool restoreHooks) noexcept {
 #elif defined(_WIN32) && (defined(__i386__) || defined(_M_IX86))
     if (!installed_)
         return true;
+    if (retired_ && !hookBehaviorActive.load(std::memory_order_acquire)) {
+        // Already retired in place: the detours are pass-through and the frame
+        // tick left the retail list. A second teardown used to wait 5 s for a
+        // tick removal that can never run through a retired detour, then
+        // reported "hooks still resident". Everything is already quiet.
+        installed_ = false;
+        trampoline_ = nullptr;
+        log(LogLevel::Info, "IGI 1 display frame hooks were already retired; teardown is a no-op");
+        return true;
+    }
 
     // Stop draining first: an in-flight tick then observes a null scheduler and
     // returns without touching SDK state that is about to be destroyed.

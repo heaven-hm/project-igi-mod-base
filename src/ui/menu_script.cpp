@@ -75,13 +75,12 @@ bool writeMenuScript(std::ostream &out, const MenuConfig &config, bool standalon
         const int pageScreenId = igi::menuPageScreenId(config, page);
         const std::size_t firstRow = page * rowsPerPage;
         const std::size_t lastRow = std::min(firstRow + rowsPerPage, config.items.size());
-        pageOut
-            << "Task_New(" << pageScreenId << ", \"MenuScreen\", \"IGI SDK\", \"\", " << frameX
-            << ", " << screenTop << ", " << frameX + frameWidth << ", " << screenBottom
-            << ", \"IGI_SDK_Cancel() - MenuManager_PopScreen(FALSE)\", \"\", \"\", Task_New(-1, "
-               "\"MenuFrame\", \"\", \"\", "
-            << frameX << ", " << frameY << ", " << frameWidth << ", " << frameHeight
-            << ", 1, 4, 4, FALSE";
+        pageOut << "Task_New(" << pageScreenId << ", \"MenuScreen\", \"IGI SDK\", \"\", " << frameX
+                << ", " << screenTop << ", " << frameX + frameWidth << ", " << screenBottom
+                << ", \"IGI_SDK_Cancel()\", \"\", \"\", Task_New(-1, "
+                   "\"MenuFrame\", \"\", \"\", "
+                << frameX << ", " << frameY << ", " << frameWidth << ", " << frameHeight
+                << ", 1, 4, 4, FALSE";
         if (!config.title.empty()) {
             pageOut << ", Task_New(-1, \"MenuText\", \"title\", ";
             quoted(pageOut, paged ? std::string(config.title) + " (" + std::to_string(page + 1) +

@@ -284,6 +284,8 @@ struct GameRootLayout {
 static_assert(offsetof(GameRootLayout, root) == 0x44);
 #endif
 
+bool runMenuCommand(const char *resource, const char *operation);
+
 bool installMenuScriptCallbacks() {
     if (menuRegistration.active())
         return true;
@@ -326,6 +328,18 @@ bool installMenuScriptCallbacks() {
         [] {
             if (pendingTransition != MenuTransition::None)
                 return;
+            // The close button must unwind exactly like the start-key close:
+            // our screen was placed with MenuManager_RequestScreen (replace,
+            // no push), so the QVM's own MenuManager_PopScreen popped an empty
+            // stack and corrupted the manager - Escape then never opened the
+            // retail pause menu again. The leave QVM restores the pause menu
+            // (returnScreenId) or runs the retail LeaveMenus reset.
+            if (!runMenuCommand("LOCAL:mod_base/modmenu-leave.qvm", "close button")) {
+                igi::log(igi::LogLevel::Error,
+                         "internal menu close: the close button was rejected; screen left "
+                         "in place");
+                return;
+            }
             pendingTransition = MenuTransition::Closing;
             transitionDeadlineFrame = runtime.scheduler().gameHookInvocationCount() + 120;
             safeToShutdown.store(false, std::memory_order_release);

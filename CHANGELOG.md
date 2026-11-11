@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.4.9 — Close button no longer corrupts the retail MenuManager
+
+- After closing the mod menu with its own Close button and ejecting, Escape no
+  longer opened the retail pause menu. The generated screen ran
+  "IGI_SDK_Cancel() - MenuManager_PopScreen(FALSE)"; our screen is placed with
+  MenuManager_RequestScreen (replace, no push), so that PopScreen popped an
+  empty stack and corrupted the MenuManager. The start-key close was immune
+  because it runs the leave QVM (RequestScreen(returnScreenId) or the retail
+  LeaveMenus reset).
+- The generated screen now runs IGI_SDK_Cancel() only, and the Cancel callback
+  performs the same leave-QVM unwind as the start-key close before marking the
+  closing transition.
+- HookManager::uninstall is idempotent after a retire-in-place: the second
+  teardown used to wait 5 s for a frame-tick removal that can never run through
+  a retired detour and then reported "hooks still resident", leaving the mod
+  disabled; it is now an immediate no-op.
+
+
 ## 0.4.8 — Self-healing attach after a level change
 
 - The log showed the injected screen task being created after a level change,

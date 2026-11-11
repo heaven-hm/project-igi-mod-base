@@ -123,6 +123,20 @@ def check_heaven_surface() -> int:
         "the lean/peek globals must not be read or written"
     )
 
+    # The in-menu close button must unwind through the retail leave path:
+    # RequestScreen replaced the screen without pushing, so a QVM-side
+    # MenuManager_PopScreen popped an empty stack and corrupted the manager -
+    # Escape never opened the retail pause menu again after that.
+    script = _read("src/ui/menu_script.cpp")
+    assert "IGI_SDK_Cancel() - MenuManager_PopScreen" not in script, (
+        "the generated screen must not PopScreen; the Cancel callback runs the leave QVM"
+    )
+    assert "close button" in internal_host and "modmenu-leave.qvm" in internal_host, (
+        "the Cancel callback must unwind through the retail leave path"
+    )
+    assert "were already retired" in _read("src/runtime/hook_manager.cpp"), (
+        "teardown after a retire-in-place must be a no-op, not a 5 s tick-removal timeout"
+    )
     # One F5 press is enough: staged press and staged attach.
     assert "autoOpenPending" in windows_dll
     assert "menu staged to open on" in internal_host
