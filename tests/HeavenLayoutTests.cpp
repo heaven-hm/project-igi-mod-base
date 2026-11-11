@@ -153,18 +153,11 @@ int main() {
     assert(igi::menuRequiredWidth(wide) <= 780);
     assert(igi::menuLayoutX(wide) >= 8);
     assert(igi::menuLayoutX(wide) <= igi::menuLayoutX(config));
-    // Live teleport prefills use retail world units (4096 per metre), which are
-    // far outside the old +/-1,000,000 range. The range must cover map
-    // coordinates and a large prefilled value must not invalidate the menu.
-    for (const auto &item : config.items) {
-        if (item.id != "player_teleport_x" && item.id != "player_send_x")
-            continue;
-        assert(item.inputMinimum <= -100000000);
-        assert(item.inputMaximum >= 100000000);
-    }
+    // Live prefills use retail world units (4096 per metre), far outside the old
+    // +/-1,000,000 range. A large prefilled value must not invalidate the menu.
     igi::MenuConfig livePosition = config;
     for (auto &item : livePosition.items) {
-        if (item.id == "player_teleport_x" || item.id == "player_send_x")
+        if (item.kind == igi::ModMenuItemKind::Input)
             item.inputValue = 123456789;
     }
     std::vector<std::uint8_t> liveQvm;

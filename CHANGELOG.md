@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.4.3 — First-press F5, live human physics and menu surface trims
+
+- **One F5 press is enough.** A press while the level is still loading used to
+  be dropped: initialization logged "deferred until gameplay is active" and only
+  another press retried. The host now stages the press (`autoOpenPending`) and
+  retries initialization while the game loads, and the toggle stages the attach
+  (`initialAttachPending`) when gameplay is not active yet, so the menu opens
+  itself on the first active gameplay frame.
+- **humanplayer.qvm values now apply on entry.** The log showed the values being
+  typed but never a "saved" line - the separate Save click was the whole failure.
+  Selecting or typing a Human value now writes the retail globals immediately
+  (`applyHumanPhysics`); Save remains as an explicit re-apply/repair button.
+- **Custom Position removed from both Heaven menus.** The typed send X/Y/Z boxes
+  and the Custom Position action are gone; Send Player To Target and the level
+  landmark picker are the send-player paths. Heaven ships 69 controls
+  (Advanced 72).
+- Rebuilt every internal and external DLL from the shared table, so the Human
+  section (and everything else) is identical across frontends; only the UI
+  differs.
+
+
 ## 0.4.2 — Restart-safe internal menu, reliable logging and Human parity
 
 - **Internal menu after a level/game restart ("frame opens with no options"):**

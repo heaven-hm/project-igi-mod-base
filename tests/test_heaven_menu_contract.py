@@ -38,7 +38,7 @@ ids = [entry[0] for entry in defs]
 assert len(ids) == len(set(ids)), f"duplicate Heaven item IDs: {ids}"
 
 MIN_OPTIONS = 30
-NORMAL_OPTIONS = 73
+NORMAL_OPTIONS = 69
 assert MIN_OPTIONS <= len(ids) == NORMAL_OPTIONS, (
     f"normal Heaven must ship exactly {NORMAL_OPTIONS} working controls, found {len(ids)}"
 )
@@ -123,7 +123,7 @@ assert all(native in HELPERS for native in ("IGI::AI::SET_WALK", "IGI::AI::SET_R
 
 # The weapon controls are resolved by the Heaven adapter, because only the demo
 # owns the retail weapon symbol table and its ammo counts.
-adapter_id_equals = {"player_teleport_target", "player_teleport_apply", "player_send_apply"}
+adapter_id_equals = {"player_teleport_target"}
 adapter_prefix = "player_teleport_"
 adapter_full = {
     "weapon_pickup",
@@ -148,11 +148,6 @@ for item_id in ids:
     if item_id.startswith(adapter_prefix):
         assert 'id.starts_with("player_teleport_")' in HEAVEN, (
             "the coordinate boxes must share the typed-position adapter branch"
-        )
-        continue
-    if item_id.startswith("player_send_"):
-        assert 'id.starts_with("player_send_")' in HEAVEN, (
-            "the Send Player Position boxes must share the typed-position adapter branch"
         )
         continue
     if item_id in adapter_full:
@@ -295,6 +290,14 @@ assert "revertMenuState" in INTERNAL_HOST and "releaseScriptSession" in INTERNAL
 
 # Eject must never free the module from the worker thread; the game can still be
 # inside a retired detour (the End-key/F12 eject crash).
+# One F5 press must be enough: a press during a level load stages the open and
+# the menu appears on the first active gameplay frame.
+assert "autoOpenPending" in WINDOWS_DLL, (
+    "the host must retry a staged start-key press while the level loads"
+)
+assert "menu staged to open on" in INTERNAL_HOST, (
+    "the toggle must stage the attach when gameplay is not active yet"
+)
 assert "FreeLibraryAndExitThread" not in WINDOWS_DLL, (
     "eject must keep the DLL resident instead of freeing it from the worker thread"
 )
@@ -413,8 +416,9 @@ assert "drawCrosshairOverlay" in IMGUI_HOST and "crosshairActive(runtime)" in IM
 assert '"player_teleport_target"' in HEAVEN and '"landmark_target"' in HEAVEN, (
     "Heaven must offer the live-target and landmark teleport pickers"
 )
-assert '"player_send_x"' in HEAVEN and 'igi::ModMenuItemKind::Input' in HEAVEN, (
-    "the single typed-XYZ path (Send Player Position) uses numeric text boxes"
+assert not ({"player_send_x", "player_send_y", "player_send_z", "player_send_apply"} & set(ids)), (
+    "the typed Custom Position boxes must stay out; Send Player To Target and the "
+    "landmark picker are the send-player paths"
 )
 assert "teleportPlayerToTarget" in HELPERS and "teleportPlayerToPosition" in HELPERS, (
     "both teleport paths must be implemented in the helpers"
@@ -596,8 +600,9 @@ assert "requestModExit" in HELPERS and "IGI_SDK_RequestSafeUnload" in HELPERS, (
 assert "exit_mod" in dispatched and "RequestExit" in HEAVEN, (
     "Exit Mod must be a routed action in the shared Heaven menu"
 )
-assert '"Custom Position"' in HEAVEN and "Send Player To Custom XYZ" not in HEAVEN, (
-    "the typed-destination label must be exactly Custom Position"
+assert "Custom Position" not in HEAVEN and "Send Player To Custom XYZ" not in HEAVEN, (
+    "the typed Custom Position boxes were removed; Send Player To Target and the "
+    "landmark picker are the send-player paths"
 )
 assert "completeExternalShutdownOnGameThread" in IMGUI_HOST, (
     "the external host must finish an eject from the end-frame path even if the scheduler task is late"

@@ -1152,7 +1152,17 @@ bool toggleMenuScreenOnGameThread() {
         return false;
     }
     if (!IGI::GAME::GET()) {
-        igi::log(igi::LogLevel::Warning, "internal menu toggle: menu requires an active game");
+        // The game is still loading. Stage the attach now so the frame tick
+        // opens the menu as soon as gameplay starts; the user does not have to
+        // press the start key a second time after a level load.
+        if (!menuScreenAttached && !isConfiguredMenuScreenActive()) {
+            initialAttachPending.store(true, std::memory_order_release);
+            igi::log(igi::LogLevel::Info,
+                     "internal menu toggle: gameplay not active yet; menu staged to open on "
+                     "the first active gameplay frame");
+        } else {
+            igi::log(igi::LogLevel::Warning, "internal menu toggle: menu requires an active game");
+        }
         return false;
     }
     if (isConfiguredMenuScreenActive()) {

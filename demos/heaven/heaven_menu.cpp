@@ -39,11 +39,6 @@ constexpr std::array kWeaponLabels = {"Glock 17",   "MP5SD",        "Uzi",    "M
 // Selected weapon index and the ammo amount the user typed into the text box.
 std::size_t g_selectedWeapon = 0;
 int g_refillAmmo = 120;
-// Send Player Position custom destination, edited through three text fields. The
-// separate "Move Player To Position" boxes were removed: Send Player Position and
-// its Custom Position trio is the single typed-XYZ path in the menu.
-double g_sendPos[3] = {0.0, 0.0, 0.0};
-bool g_sendPosSet = false;
 // The separate DefineHumanPlayerGeneral parameters exposed by the Human
 // section. Values are display units: move/damage x100, speeds x10. Slot order
 // must match kHumanParamIds.
@@ -64,6 +59,22 @@ bool g_humanParamSet[kHumanParamCount] = {};
 // Last live block returned by the qvm; Save patches these fields so the live
 // km/h conversion factor is preserved.
 igi::HumanPlayerQvmParams g_humanParams{};
+
+// Converts the display units back to the qvm's units (slot order: move, jump
+// speed, jump height, air speed, damage, fence damage) and writes the retail
+// globals. Called on every human input change and by the Save button.
+void applyHumanPhysics(igi::Runtime &runtime) {
+    g_humanParams.moveScale = static_cast<float>(g_humanParamValue[kHumanMoveScale]) / 100.0F;
+    g_humanParams.jumpSpeedKmh = static_cast<float>(g_humanParamValue[kHumanJumpSpeed]) / 10.0F;
+    g_humanParams.jumpUpKmh = static_cast<float>(g_humanParamValue[kHumanJumpHeight]) / 10.0F;
+    g_humanParams.airSpeedKmh = static_cast<float>(g_humanParamValue[kHumanAirSpeed]) / 10.0F;
+    g_humanParams.maxDamage = static_cast<float>(g_humanParamValue[kHumanDamage]) / 100.0F;
+    g_humanParams.fenceDamage = static_cast<float>(g_humanParamValue[kHumanFenceDamage]) / 100.0F;
+    const bool saved = igi::saveLiveHumanPlayerParams(runtime, g_humanParams);
+    igi::log(saved ? igi::LogLevel::Info : igi::LogLevel::Warning,
+             saved ? "human physics saved to the live retail globals"
+                   : "human physics rejected: the live globals were unavailable");
+}
 
 // Replaced at runtime from the retail mission table, so the list only offers
 // ids that actually exist (selecting a missing id used to hang the game).
@@ -200,15 +211,6 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
          "Player",
          "PlayerSendTarget",
          {"No live target list"}},
-        {"player_send_x", igi::ModMenuItemKind::Input, "Send X", "Player", "PlayerSendX", {}},
-        {"player_send_y", igi::ModMenuItemKind::Input, "Send Y", "Player", "PlayerSendY", {}},
-        {"player_send_z", igi::ModMenuItemKind::Input, "Send Z", "Player", "PlayerSendZ", {}},
-        {"player_send_apply",
-         igi::ModMenuItemKind::Action,
-         "Custom Position",
-         "Player",
-         "PlayerSendApply",
-         {}},
 
         // Human: the DefineHumanPlayerGeneral params authored by
         // LOCAL:humanplayer/humanplayer.qsc, up to the damage/health pair. Move
@@ -609,7 +611,6 @@ bool prefillTeleportCoordinates(igi::MenuConfig &config, igi::Runtime &runtime) 
     auto *game = IGI::GAME::GET();
     if (game && game != lastGame) {
         lastGame = game;
-        g_sendPosSet = false;
         std::fill(std::begin(g_humanParamSet), std::end(g_humanParamSet), false);
     }
     std::array<double, 3> position{};
@@ -638,8 +639,6 @@ bool prefillTeleportCoordinates(igi::MenuConfig &config, igi::Runtime &runtime) 
         // The boxes now hold a real position, so Apply must accept it.
         flag = true;
     };
-    const char *const kSendIds[3] = {"player_send_x", "player_send_y", "player_send_z"};
-    fill(g_sendPos, g_sendPosSet, kSendIds);
     // Show what humanplayer.qvm actually wrote into the live BSS, converted back
     // to the authored units. moveScale > 0 means the script has run; before that
     // every global is zero and must not overwrite the configured defaults.
@@ -759,41 +758,6 @@ void runModMenu(const igi::MenuConfig &config, igi::Runtime &runtime, std::size_
         (void)heli;
         return;
     }
-    if (inRange && config.items[item].id.starts_with("player_send_") &&
-        config.items[item].id != "player_send_target" &&
-        config.items[item].id != "player_send_apply") {
-        const std::string typed(value);
-        char *end = nullptr;
-        const double coordinate = std::strtod(typed.c_str(), &end);
-        if (end == typed.c_str() || *end != '\0') {
-            igi::log(igi::LogLevel::Warning,
-                     "send coordinate rejected: '" + std::string(value) + "' is not a number");
-            return;
-        }
-        if (config.items[item].id == "player_send_x")
-            g_sendPos[0] = coordinate;
-        else if (config.items[item].id == "player_send_y")
-            g_sendPos[1] = coordinate;
-        else
-            g_sendPos[2] = coordinate;
-        g_sendPosSet = true;
-        igi::log(igi::LogLevel::Info, "send " + std::string(config.items[item].id) + " set to " +
-                                          std::to_string(coordinate));
-        return;
-    }
-    if (inRange && config.items[item].id == "player_send_apply") {
-        if (!g_sendPosSet) {
-            igi::log(igi::LogLevel::Warning,
-                     "send rejected: set at least one send X/Y/Z coordinate first");
-            return;
-        }
-        const bool placed =
-            igi::teleportPlayerToPosition(runtime, {g_sendPos[0], g_sendPos[1], g_sendPos[2]});
-        igi::log(placed ? igi::LogLevel::Info : igi::LogLevel::Warning,
-                 placed ? "send player position: moved to the typed XYZ and broadcast"
-                        : "send player position rejected: the live player was unavailable");
-        return;
-    }
     if (inRange) {
         for (std::size_t slot = 0; slot < kHumanParamCount; ++slot) {
             if (config.items[item].id != kHumanParamIds[slot])
@@ -807,25 +771,16 @@ void runModMenu(const igi::MenuConfig &config, igi::Runtime &runtime, std::size_
             }
             g_humanParamValue[slot] = typed;
             g_humanParamSet[slot] = true;
-            igi::log(igi::LogLevel::Info, "human physics: " + std::string(kHumanParamIds[slot]) +
-                                              " set to " + std::to_string(typed) + " (press Save)");
+            // Apply immediately: the retail globals take effect on this value, so
+            // selecting a jump speed/height needs no second Save click.
+            applyHumanPhysics(runtime);
             return;
         }
     }
     if (inRange && config.items[item].id == "human_save") {
-        // Convert display units back to the qvm's units. Slot order is move,
-        // jump speed, jump height, air speed, damage, fence damage.
-        g_humanParams.moveScale = static_cast<float>(g_humanParamValue[kHumanMoveScale]) / 100.0F;
-        g_humanParams.jumpSpeedKmh = static_cast<float>(g_humanParamValue[kHumanJumpSpeed]) / 10.0F;
-        g_humanParams.jumpUpKmh = static_cast<float>(g_humanParamValue[kHumanJumpHeight]) / 10.0F;
-        g_humanParams.airSpeedKmh = static_cast<float>(g_humanParamValue[kHumanAirSpeed]) / 10.0F;
-        g_humanParams.maxDamage = static_cast<float>(g_humanParamValue[kHumanDamage]) / 100.0F;
-        g_humanParams.fenceDamage =
-            static_cast<float>(g_humanParamValue[kHumanFenceDamage]) / 100.0F;
-        const bool saved = igi::saveLiveHumanPlayerParams(runtime, g_humanParams);
-        igi::log(saved ? igi::LogLevel::Info : igi::LogLevel::Warning,
-                 saved ? "human physics saved to the live retail globals"
-                       : "human physics rejected: the live globals were unavailable");
+        // Explicit re-apply of the displayed values (also repairs a partial or
+        // failed earlier write).
+        applyHumanPhysics(runtime);
         return;
     }
     if (inRange && config.items[item].id == "human_reload") {

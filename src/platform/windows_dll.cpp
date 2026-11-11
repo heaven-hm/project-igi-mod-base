@@ -25,6 +25,10 @@ struct MainThreadState {
     // The end key disables the menu without tearing anything down, so the retail
     // game keeps its own menus and the start key can bring the mod back.
     bool disabled = false;
+    // Set when the start key was pressed while gameplay was not ready (level
+    // loading). The loop then retries initialization and opens the menu on the
+    // first active gameplay frame, so one press is enough.
+    bool autoOpenPending = false;
     // True once requestShutdown has been accepted for the current unload. The
     // wait loop must not re-request cleanup every 10 ms; doing so queued the
     // game-thread shutdown multiple times and double-freed the menu resources.
@@ -144,6 +148,15 @@ void mainLoopTick(const igi::DllMenuCallbacks &callbacks, igi::hotkeys::KeyTrack
         g_state.autoStartCounter = 0;
         startRequested = true;
     }
+    // A press that arrived while the game was loading keeps trying: the menu
+    // opens itself on the first active gameplay frame.
+    if (!g_state.initialized && !startRequested && g_state.autoOpenPending &&
+        ++g_state.autoStartCounter >= 25) {
+        g_state.autoStartCounter = 0;
+        startRequested = true;
+        igi::log(igi::LogLevel::Info,
+                 "internal menu: retrying the staged start-key press while the level loads");
+    }
 
     if (startRequested) {
         if (g_state.disabled) {
@@ -158,6 +171,7 @@ void mainLoopTick(const igi::DllMenuCallbacks &callbacks, igi::hotkeys::KeyTrack
         if (!g_state.initialized) {
             if (callbacks.initialize && callbacks.initialize()) {
                 g_state.initialized = true;
+                g_state.autoOpenPending = false;
                 // Initialization deliberately leaves the menu closed; this same
                 // key press opens it once. Staging the attach during initialize
                 // plus toggling here is what produced two opens for one F5.
@@ -167,10 +181,14 @@ void mainLoopTick(const igi::DllMenuCallbacks &callbacks, igi::hotkeys::KeyTrack
                                 : "internal menu: initialized; menu opens on the next active "
                                   "gameplay frame");
             } else {
-                igi::log(igi::LogLevel::Warning,
-                         "internal menu: initialization deferred until gameplay is active");
+                g_state.autoOpenPending = true;
+                g_state.autoStartCounter = 0;
+                igi::log(igi::LogLevel::Info,
+                         "internal menu: start key staged; initialization retries while the "
+                         "level loads and the menu opens on the first active gameplay frame");
             }
         } else {
+            g_state.autoOpenPending = false;
             const bool toggled = callbacks.toggle ? callbacks.toggle() : false;
             igi::log(toggled ? igi::LogLevel::Info : igi::LogLevel::Error,
                      toggled ? "internal menu toggle: configured start key handled"
@@ -237,6 +255,7 @@ DWORD WINAPI igiSdkMainThread(void *rawModule) {
 
     g_state.initialized = false;
     g_state.shutdownRequested = false;
+    g_state.autoOpenPending = false;
     g_state.directNativeMode = config.directNativeMode;
     g_state.autoStart = validationAutoStartEnabled();
     g_state.tickMissingReported = false;
