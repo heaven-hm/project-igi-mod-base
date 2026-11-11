@@ -323,9 +323,6 @@ bool readTargetPosition(Runtime &runtime, int targetTaskId, std::array<double, 3
 // by probing down from above the requested height, so a typed Z below terrain
 // cannot place the player under the map.
 bool teleportPlayerToPosition(Runtime &runtime, const std::array<double, 3> &position);
-// Send Player Position: moves the player to the chosen live target (an AI/human,
-// any 3D object, or the player itself) and broadcasts the new body position.
-bool sendPlayerToTarget(Runtime &runtime, int targetTaskId);
 // True when the id is a live mission in the retail mission table.
 bool missionAvailable(Runtime &runtime, int missionId);
 // Mission ids and names from the retail mission table, used for the level list.

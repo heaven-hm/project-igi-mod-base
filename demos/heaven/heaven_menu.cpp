@@ -56,6 +56,11 @@ constexpr std::array<const char *, kHumanParamCount> kHumanParamIds = {
     "human_air_speed",  "human_damage",     "human_fence_damage"};
 int g_humanParamValue[kHumanParamCount] = {100, 65, 50, 65, 300, 100};
 bool g_humanParamSet[kHumanParamCount] = {};
+// Typed teleport destination and its unit. The boxes prefill from the live
+// player position each level, converted to the selected unit.
+std::array<double, 3> g_teleportPos = {0.0, 0.0, 0.0};
+bool g_teleportPosSet = false;
+bool g_teleportUnitsMetres = true;
 // Last live block returned by the qvm; Save patches these fields so the live
 // km/h conversion factor is preserved.
 igi::HumanPlayerQvmParams g_humanParams{};
@@ -191,31 +196,33 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
          "Player",
          "HumanCollision",
          {"Enabled", "Disabled"}},
-        {"player_send_position",
+        // Teleport option 1: any live object, AI, vehicle or level landmark.
+        // The three former pickers (Teleport To Target, Landmark, Send To
+        // Target) were the same move with different lists, so they are one.
+        {"teleport_target",
+         igi::ModMenuItemKind::List,
+         "Teleport To Any Object / AI",
+         "Player",
+         "TeleportTarget",
+         {"No live target list"}},
+        // Teleport option 2: typed XYZ position. The boxes prefill from the
+        // live player position in the selected unit. Positions use world units
+        // (4096 per metre) or metres; Euler is for rotations, not positions.
+        {"teleport_x", igi::ModMenuItemKind::Input, "Teleport X", "Player", "TeleportX", {}},
+        {"teleport_y", igi::ModMenuItemKind::Input, "Teleport Y", "Player", "TeleportY", {}},
+        {"teleport_z", igi::ModMenuItemKind::Input, "Teleport Z", "Player", "TeleportZ", {}},
+        {"teleport_units",
+         igi::ModMenuItemKind::List,
+         "Position Units",
+         "Player",
+         "TeleportUnits",
+         {"Metres", "World Units (native)"}},
+        {"teleport_apply",
          igi::ModMenuItemKind::Action,
-         "Send Player Position",
+         "Teleport To Position",
          "Player",
-         "PlayerSendPosition",
+         "TeleportApply",
          {}},
-        {"player_teleport_target",
-         igi::ModMenuItemKind::List,
-         "Teleport Player To Target",
-         "Player",
-         "PlayerTeleportTarget",
-         {"No live target list"}},
-
-        {"landmark_target",
-         igi::ModMenuItemKind::List,
-         "Teleport To Level Landmark",
-         "Player",
-         "PlayerLandmark",
-         {"No level landmarks"}},
-        {"player_send_target",
-         igi::ModMenuItemKind::List,
-         "Send Player To Target",
-         "Player",
-         "PlayerSendTarget",
-         {"No live target list"}},
 
         // Player/Human: the DefineHumanPlayerGeneral params authored by
         // LOCAL:humanplayer/humanplayer.qsc, up to the damage/health pair. Move
@@ -598,36 +605,33 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
 } // namespace
 
 namespace {
-// Fill the typed teleport boxes from the live player the first time the menu is
-// refreshed, so X/Y/Z never start at an unset (0,0,0). Once the user edits a
-// coordinate the typed value is kept instead of being overwritten each refresh.
+// Fill the typed teleport boxes from the live player position, converted to the
+// selected unit (metres by default, or the native world units). Positions are
+// world units or metres; Euler is for rotations, not positions.
 bool prefillTeleportCoordinates(igi::MenuConfig &config, igi::Runtime &runtime) {
     std::array<double, 3> position{};
     if (!igi::readPlayerPosition(runtime, position))
         return false;
+    const double unitScale = g_teleportUnitsMetres ? 1.0 / 4096.0 : 1.0;
     bool changed = false;
-    const auto fill = [&config, &position, &changed](double *destination, bool &flag,
-                                                     const char *const ids[3]) {
-        if (flag)
-            return;
-        for (std::size_t axis = 0; axis < position.size(); ++axis) {
-            destination[axis] = position[axis];
-            for (auto &item : config.items) {
-                if (item.id != ids[axis])
-                    continue;
-                const double clamped =
-                    std::clamp(position[axis], static_cast<double>(item.inputMinimum),
-                               static_cast<double>(item.inputMaximum));
-                const auto rounded = static_cast<int>(clamped);
-                if (item.inputValue != rounded) {
-                    item.inputValue = rounded;
-                    changed = true;
-                }
+    const char *const kIds[3] = {"teleport_x", "teleport_y", "teleport_z"};
+    for (std::size_t axis = 0; axis < 3; ++axis) {
+        g_teleportPos[axis] = position[axis];
+        const double display = position[axis] * unitScale;
+        for (auto &item : config.items) {
+            if (item.id != kIds[axis])
+                continue;
+            const int rounded = static_cast<int>(
+                std::llround(std::clamp(display, static_cast<double>(item.inputMinimum),
+                                        static_cast<double>(item.inputMaximum))));
+            if (item.inputValue != rounded) {
+                item.inputValue = rounded;
+                changed = true;
             }
         }
-        // The boxes now hold a real position, so Apply must accept it.
-        flag = true;
-    };
+    }
+    // A unit switch re-scales the same live position on the next refresh.
+    g_teleportPosSet = false;
     return changed;
 }
 
@@ -756,19 +760,64 @@ void runModMenu(const igi::MenuConfig &config, igi::Runtime &runtime, std::size_
                      "weapon ammo rejected: the retail weapon task could not be filled");
         return;
     }
-    if (inRange && config.items[item].id == "player_teleport_target") {
-        const auto targetId = igi::parseTargetId(value);
-        auto *npc = igi::selectedNpc(runtime);
-        auto *car = igi::selectedCar(runtime);
-        auto *heli = igi::selectedHeli(runtime);
-        // The menu selection decides which live object the player moves to.
-        const bool placed = igi::teleportPlayerToTarget(runtime, targetId);
+    if (inRange && config.items[item].id == "teleport_target") {
+        // Option 1: teleport to any live object, AI, vehicle or landmark.
+        const auto selected = igi::parseTargetId(value);
+        const bool placed = selected >= 0 && igi::teleportPlayerToTarget(runtime, selected);
         igi::log(placed ? igi::LogLevel::Info : igi::LogLevel::Warning,
                  placed ? "player teleported to the selected target"
-                        : "teleport rejected: select a live NPC/car/heli target first");
-        (void)npc;
-        (void)car;
-        (void)heli;
+                        : "teleport rejected: pick a live target first");
+        return;
+    }
+    if (inRange && config.items[item].id == "teleport_units") {
+        g_teleportUnitsMetres = value == "Metres";
+        // Re-scale the boxes to the new unit on the next refresh.
+        g_teleportPosSet = false;
+        igi::log(igi::LogLevel::Info,
+                 std::string("teleport position units: ") +
+                     (g_teleportUnitsMetres ? "metres (4096 units each)"
+                                            : "world units (the game's native unit)"));
+        return;
+    }
+    if (inRange &&
+        (config.items[item].id == "teleport_x" || config.items[item].id == "teleport_y" ||
+         config.items[item].id == "teleport_z")) {
+        const std::string text(value);
+        char *end = nullptr;
+        const double coordinate = std::strtod(text.c_str(), &end);
+        if (end == text.c_str() || *end != '\0') {
+            igi::log(igi::LogLevel::Warning,
+                     "teleport coordinate rejected: '" + text + "' is not a number");
+            return;
+        }
+        if (config.items[item].id == "teleport_x")
+            g_teleportPos[0] = coordinate;
+        else if (config.items[item].id == "teleport_y")
+            g_teleportPos[1] = coordinate;
+        else
+            g_teleportPos[2] = coordinate;
+        g_teleportPosSet = true;
+        igi::log(igi::LogLevel::Info,
+                 "teleport " +
+                     std::string(config.items[item].id == "teleport_x"   ? "X"
+                                 : config.items[item].id == "teleport_y" ? "Y"
+                                                                         : "Z") +
+                     " set to " + std::to_string(coordinate) + " " +
+                     (g_teleportUnitsMetres ? "metres" : "world units"));
+        return;
+    }
+    if (inRange && config.items[item].id == "teleport_apply") {
+        // Option 2: typed XYZ. Metres convert to the game's world units before
+        // the move; the ground probe keeps the body above the terrain.
+        constexpr double kMetreUnits = 4096.0;
+        std::array<double, 3> position = g_teleportPos;
+        if (g_teleportUnitsMetres)
+            for (double &axis : position)
+                axis *= kMetreUnits;
+        const bool placed = igi::teleportPlayerToPosition(runtime, position);
+        igi::log(placed ? igi::LogLevel::Info : igi::LogLevel::Warning,
+                 placed ? "player moved to the typed position"
+                        : "teleport rejected: the live player was unavailable");
         return;
     }
     if (inRange) {

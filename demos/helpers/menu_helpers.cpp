@@ -1209,26 +1209,6 @@ bool teleportPlayerToPosition(Runtime &runtime, const std::array<double, 3> &pos
     return true;
 }
 
-bool sendPlayerToTarget(Runtime &runtime, int targetTaskId) {
-    if (!requireLiveGameThread(runtime) || targetTaskId < 0)
-        return false;
-    auto *player = reinterpret_cast<IGI::Human *>(IGI::GAME::GET_PLAYER(0));
-    if (!player)
-        return false;
-    if (findLiveTask(runtime, targetTaskId) == reinterpret_cast<IGI::Task *>(player)) {
-        // Sending to the player entity means re-publishing the current position
-        // to both retail broadcast lists, not moving the body.
-        broadcastPlayerPosition(player);
-        log(LogLevel::Info, "send player position: re-sent the live player position");
-        return true;
-    }
-    if (!teleportPlayerToTarget(runtime, targetTaskId))
-        return false;
-    log(LogLevel::Info, "send player position: destination target #" +
-                            std::to_string(targetTaskId) + " reached and broadcast");
-    return true;
-}
-
 bool missionAvailable(Runtime &runtime, int missionId) {
     if (!requireLiveGameThread(runtime) || missionId <= 0)
         return false;
@@ -1721,15 +1701,11 @@ bool refreshLiveTargetOptions(MenuConfig &config, Runtime &runtime) {
     appendTargets(entities.carTargets());
     appendTargets(entities.heliTargets());
     appendTargets(objects);
-    const auto teleport =
-        replaceChoices("player_teleport_target", teleportTargets, "No live targets", -1);
-    // Send Player Position accepts the same destinations plus the player entity.
-    std::vector<LiveTarget> sendTargets;
-    sendTargets.push_back({liveTaskKey(IGI::GAME::GET_PLAYER(0)), "Player (self)"});
-    appendTargetsTo(sendTargets, teleportTargets);
-    const auto send = replaceChoices("player_send_target", sendTargets, "No live targets", -1);
-    const auto landmarks =
-        replaceChoices("landmark_target", entities.landmarkTargets(), "No level landmarks", -1);
+    // The single teleport picker: any live NPC, vehicle, world object or level
+    // landmark. The former target/landmark/send lists were three pickers for the
+    // same move.
+    appendTargets(entities.landmarkTargets());
+    const auto teleport = replaceChoices("teleport_target", teleportTargets, "No live targets", -1);
     const auto levels =
         replaceChoices("level", missionTargets(runtime), "No installed missions", -1);
     if (!npc.preservedIsLive)
@@ -1738,12 +1714,10 @@ bool refreshLiveTargetOptions(MenuConfig &config, Runtime &runtime) {
         g_selectedCarTaskId = -1;
     if (!heli.preservedIsLive)
         g_selectedHeliTaskId = -1;
-    if (npc.changed || car.changed || heli.changed || teleport.changed || send.changed ||
-        landmarks.changed || levels.changed) {
+    if (npc.changed || car.changed || heli.changed || teleport.changed || levels.changed) {
         log(LogLevel::Info, "live targets refreshed from the active game task list");
     }
-    return npc.changed || car.changed || heli.changed || teleport.changed || send.changed ||
-           landmarks.changed || levels.changed;
+    return npc.changed || car.changed || heli.changed || teleport.changed || levels.changed;
 }
 
 void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::size_t item,
@@ -1877,11 +1851,11 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
     } else if (id == "exit_mod") {
         if (!requestModExit())
             log(LogLevel::Warning, "Exit Mod: the host did not accept the unload request");
-    } else if (id == "landmark_target") {
+    } else if (id == "teleport_target") {
+        // The single picker: Level Start plus every live NPC, vehicle, world
+        // object and landmark.
         const auto selected = targetId(value).value_or(-1);
-        if (selected < 0) {
-            log(LogLevel::Warning, "teleport rejected: pick a level landmark first");
-        } else if (selected == kLevelStartTargetId) {
+        if (selected == kLevelStartTargetId) {
             std::array<double, 3> start{};
             if (readLevelStartPosition(runtime, start) &&
                 teleportPlayerToPosition(runtime, start)) {
@@ -1890,20 +1864,12 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
                 log(LogLevel::Warning,
                     "teleport rejected: the level start position is not available yet");
             }
+        } else if (selected < 0) {
+            log(LogLevel::Warning, "teleport rejected: pick a live target first");
         } else if (teleportPlayerToTarget(runtime, selected)) {
-            log(LogLevel::Info, "player teleported to level landmark " + std::string(value));
+            log(LogLevel::Info, "player teleported to target " + std::string(value));
         } else {
-            log(LogLevel::Warning, "teleport rejected: the selected landmark is no longer live");
-        }
-    } else if (id == "player_send_target") {
-        const auto selected = targetId(value).value_or(-1);
-        if (selected < 0) {
-            log(LogLevel::Warning, "send player position rejected: pick a destination first");
-        } else if (sendPlayerToTarget(runtime, selected)) {
-            log(LogLevel::Info, "send player position: destination " + std::string(value));
-        } else {
-            log(LogLevel::Warning,
-                "send player position rejected: the destination is no longer live");
+            log(LogLevel::Warning, "teleport rejected: the selected target is no longer live");
         }
     } else if (id == "world_time_preset" || id == "world_time_hour") {
         float hour = 10.0F;

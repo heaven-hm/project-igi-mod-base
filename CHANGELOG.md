@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.5.2 — Two teleport paths: one picker, one typed XYZ with units
+
+- The Player section had three pickers for the same move (Teleport To Target,
+  Teleport To Landmark, Send Player To Target); sendPlayerToTarget literally
+  called teleportPlayerToTarget plus a broadcast. They are one control now:
+  "Teleport To Any Object / AI" - every live NPC, vehicle, world object, level
+  landmark and the captured Level Start in a single list. "Send Player
+  Position" is gone too; every teleport broadcasts the new position already.
+- The typed XYZ path returned as "Teleport X/Y/Z" + "Position Units" +
+  "Teleport To Position". The three boxes prefill from the live player position
+  each level and re-scale when the unit changes. Units are Metres (default)
+  or the native World Units - positions are linear, so the correct unit terms
+  are world units vs metres (Euler angles describe rotation, not position).
+  Metres convert by the retail 4096 units per metre before the move; the
+  ground probe keeps the body above terrain either way. Heaven ships 70
+  controls.
+
+
 ## 0.5.1 — ImGui Apply no longer double-converts human values
 
 - The live log showed the two frontends feeding the adapter different string

@@ -41,7 +41,14 @@ def check_heaven_surface() -> int:
         raise SystemExit("Heaven menu has no configured items")
     if len(ids) != len(set(ids)):
         raise SystemExit(f"duplicate Heaven item ids: {ids}")
-    expected = 68
+    expected = 70
+    # Exactly two teleport paths: one merged live-target picker and typed XYZ.
+    for item_id in ("teleport_target", "teleport_x", "teleport_y", "teleport_z",
+                    "teleport_units", "teleport_apply"):
+        assert f'"{item_id}"' in heaven, f"the merged teleport surface lost {item_id}"
+    for gone in ("player_teleport_target", "landmark_target", "player_send_target",
+                 "player_send_position"):
+        assert f'"{gone}"' not in heaven, f"the duplicate teleport picker {gone} must stay removed"
     if len(ids) != expected:
         raise SystemExit(f"normal Heaven must ship exactly {expected} controls, found {len(ids)}")
 
@@ -85,6 +92,11 @@ def check_heaven_surface() -> int:
     # in the helpers' dispatcher; everything must be routed in one of the two.
     adapter_ids = adapter_full | human_params
     for item_id in ids:
+        if item_id.startswith("teleport_") and item_id != "teleport_target":
+            assert 'id == "teleport_x"' in heaven, (
+                "the typed XYZ boxes share the typed-position adapter branch"
+            )
+            continue
         in_adapter = item_id in adapter_ids and item_id in heaven
         in_dispatcher = item_id in dispatched
         if not (in_adapter or in_dispatcher):
