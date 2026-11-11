@@ -833,7 +833,12 @@ void renderImGuiModWindow() {
                 }
                 ImGui::SameLine();
                 if (ImGui::Button(("Apply##input" + item.id).c_str())) {
-                    queueMenuAction(index, std::to_string(inputValues[index]));
+                    // Send the DISPLAY string, exactly like the QVM ListBox
+                    // does. The adapter parses labels in display units and
+                    // converts by inputDisplayDivisor; sending the raw internal
+                    // integer made it apply the divisor a second time (typed 20
+                    // became move scale 2000 in the log).
+                    queueMenuAction(index, igi::formatInputValue(item, inputValues[index]));
                 }
                 break;
             }

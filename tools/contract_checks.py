@@ -113,6 +113,16 @@ def check_heaven_surface() -> int:
         )
     assert "applyHumanPhysics" in heaven, "human input changes must apply immediately"
     assert "inputDisplayDivisor" in heaven, "human values must display in authored units"
+    # Both frontends must send the DISPLAY string to the action adapter; the
+    # ImGui raw internal integer made the adapter apply the divisor twice
+    # (typed 20 became move scale 2000 in the live log).
+    imgui = _read("src/mod_base/imgui_menu_host.cpp")
+    assert 'queueMenuAction(index, std::to_string(inputValues[index]))' not in imgui, (
+        "the ImGui Apply must not send the raw internal input value"
+    )
+    assert "queueMenuAction(index, igi::formatInputValue(item, inputValues[index]))" in imgui, (
+        "the ImGui Apply must send the display string like the QVM ListBox does"
+    )
     assert "inputSampleValues" in heaven, "samples must derive from the qvm baseline"
     assert "read back" in helpers and "human physics live" in helpers, (
         "every human write must be verified with a live read-back"

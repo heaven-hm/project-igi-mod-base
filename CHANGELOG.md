@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.1 — ImGui Apply no longer double-converts human values
+
+- The live log showed the two frontends feeding the adapter different string
+  conventions: the QVM ListBox sends the displayed label ("17.5") while the
+  ImGui Apply sent the raw internal integer ("3000"). With the new
+  divisor-aware parser the ImGui path applied the divisor a second time -
+  typing 20 became move scale 2000 (and 30 became 30 on the previous build).
+  The ImGui Apply now sends the same display string the QVM does, so both
+  frontends parse identically and the write/read-back equals exactly what was
+  typed.
+
+
 ## 0.5.0 — Drop crash, qvm-unit parsing, one Read option and car adoption
 
 - **Weapon drop crash:** the held gun's world task id can be -1 (unregistered);
