@@ -91,10 +91,12 @@ targets=(
     igi_simple_mod_menu
     igi_advanced_mod_menu
     igi_heaven_mod_menu
+    igi_heaven_mod_advanced_menu
     igi_basic_mod_menu_external
     igi_simple_mod_menu_external
     igi_advanced_mod_menu_external
     igi_heaven_mod_menu_external
+    igi_heaven_mod_advanced_menu_external
 )
 
 printf '\nBuilding %d mod menu targets in %s mode...\n' "${#targets[@]}" "$configuration"
