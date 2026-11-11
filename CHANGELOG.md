@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.4 — Human physics live read-back
+
+- Every humanplayer.qvm parameter write is now verified by an immediate live
+  read-back: the retail jump state machine reads the globals directly on the
+  next jump, so the read-back value is what the game will actually use. The log
+  line changed from "human physics saved" to "human physics live (read back
+  verified): ..." and a mismatch is reported as an error instead of a false
+  success.
+- A write performed before the qvm script has ever run this level (all globals
+  zero) loads the authored baseline through HumanPlayer_LoadParameters first,
+  matching the retail order (DefineHumanPlayerGeneral then the user's values).
+  Loading after a write would revert it, so the load only happens on the
+  never-loaded path; Reload From humanplayer.qvm remains the explicit restore.
+
+
 ## 0.4.3 — First-press F5, live human physics and menu surface trims
 
 - **One F5 press is enough.** A press while the level is still loading used to

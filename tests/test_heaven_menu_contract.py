@@ -254,6 +254,13 @@ assert not re.search(r"\blean\b", HEAVEN, flags=re.IGNORECASE), (
     "the lean/peek params must not be exposed"
 )
 assert "saveLiveHumanPlayerParams" in HEAVEN and "reloadLiveHumanPlayerParams" in HEAVEN
+STORAGE_HELPERS = (ROOT / "demos/helpers/menu_helpers.cpp").read_text(encoding="utf-8")
+assert "read back" in STORAGE_HELPERS and "human physics live" in STORAGE_HELPERS, (
+    "every human write must be verified with an immediate live read-back"
+)
+assert "moveScale <= 0.0F" in STORAGE_HELPERS, (
+    "a write before the qvm ever ran must load the authored baseline first"
+)
 assert "readHumanPlayerQvmParams" in HELPERS and "writeHumanPlayerQvmParams" in HELPERS
 assert "HUMAN_PLAYER_LOAD_PARAMETERS" in HELPERS and "reloadHumanPlayerParameters" in HELPERS
 STORAGE = (ROOT / "src/runtime/qvm_param_storage.cpp").read_text(encoding="utf-8")

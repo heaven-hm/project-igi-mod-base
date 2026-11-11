@@ -1409,6 +1409,22 @@ bool saveLiveHumanPlayerParams(Runtime &runtime, const HumanPlayerQvmParams &val
             "human physics rejected: the humanplayer.qvm globals are unavailable");
         return false;
     }
+    // Retail order matters: DefineHumanPlayerGeneral (run by
+    // HumanPlayer_LoadParameters) writes these globals from the qvm script, so a
+    // write after a load would be reverted. Load only when the qvm has not run
+    // yet this level (all globals zero) to establish the authored baseline, then
+    // write the user's values on top of it.
+    if (current->moveScale <= 0.0F && current->jumpSpeedKmh <= 0.0F && current->jumpUpKmh <= 0.0F) {
+        if (!reloadLiveHumanPlayerParams(runtime)) {
+            log(LogLevel::Warning, "human physics rejected: the qvm parameters were never loaded");
+            return false;
+        }
+        current = readHumanPlayerQvmParams();
+        if (!current) {
+            log(LogLevel::Warning, "human physics rejected: the baseline read failed");
+            return false;
+        }
+    }
     // Keep the live conversion factor so the typed km/h values are written in
     // the same units the retail qvm used.
     HumanPlayerQvmParams updated = values;
@@ -1418,12 +1434,40 @@ bool saveLiveHumanPlayerParams(Runtime &runtime, const HumanPlayerQvmParams &val
         log(LogLevel::Warning, "human physics rejected: writing the retail globals failed");
         return false;
     }
-    log(LogLevel::Info, "human physics saved: move " + std::to_string(updated.moveScale) +
-                            ", jump speed " + std::to_string(updated.jumpSpeedKmh) +
-                            " km/h, jump height " + std::to_string(updated.jumpUpKmh) +
-                            " km/h, air " + std::to_string(updated.airSpeedKmh) + " km/h, damage " +
-                            std::to_string(updated.maxDamage) + ", fence damage " +
-                            std::to_string(updated.fenceDamage));
+    // Read back immediately: the retail jump state machine reads these globals
+    // directly on the next jump (humanstate.c), so the read-back IS the live
+    // value the game will use. Verifying it proves the change took effect
+    // without a level restart.
+    const auto verify = readHumanPlayerQvmParams();
+    if (!verify) {
+        log(LogLevel::Error, "human physics: write succeeded but the live read-back failed");
+        return false;
+    }
+    const auto close = [](float a, float b) {
+        return std::fabs(a - b) <= 0.001F + 0.002F * std::max(std::fabs(a), std::fabs(b));
+    };
+    if (!close(verify->moveScale, updated.moveScale) ||
+        !close(verify->jumpSpeedKmh, updated.jumpSpeedKmh) ||
+        !close(verify->jumpUpKmh, updated.jumpUpKmh) ||
+        !close(verify->airSpeedKmh, updated.airSpeedKmh) ||
+        !close(verify->maxDamage, updated.maxDamage) ||
+        !close(verify->fenceDamage, updated.fenceDamage)) {
+        log(LogLevel::Error,
+            "human physics: the read-back did not match the write (move " +
+                std::to_string(verify->moveScale) + " vs " + std::to_string(updated.moveScale) +
+                ", jump " + std::to_string(verify->jumpSpeedKmh) + " vs " +
+                std::to_string(updated.jumpSpeedKmh) + " km/h, height " +
+                std::to_string(verify->jumpUpKmh) + " vs " + std::to_string(updated.jumpUpKmh) +
+                " km/h); the game may have reloaded the qvm script");
+        return false;
+    }
+    log(LogLevel::Info, "human physics live (read back verified): move " +
+                            std::to_string(verify->moveScale) + ", jump speed " +
+                            std::to_string(verify->jumpSpeedKmh) + " km/h, jump height " +
+                            std::to_string(verify->jumpUpKmh) + " km/h, air " +
+                            std::to_string(verify->airSpeedKmh) + " km/h, damage " +
+                            std::to_string(verify->maxDamage) + ", fence damage " +
+                            std::to_string(verify->fenceDamage));
     return true;
 }
 
