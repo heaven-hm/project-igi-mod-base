@@ -1488,6 +1488,39 @@ bool reloadLiveHumanPlayerParams(Runtime &runtime) {
     return true;
 }
 
+bool captureHumanPlayerBaseline(Runtime &runtime, HumanPlayerQvmParams &baseline) {
+    if (!requireLiveGameThread(runtime))
+        return false;
+    if (!isCallableNative(IGI::HASH::HUMAN_PLAYER_LOAD_PARAMETERS,
+                          "void HumanPlayer_LoadParameters(void)")) {
+        log(LogLevel::Warning,
+            "human physics baseline rejected: HumanPlayer_LoadParameters is unavailable");
+        return false;
+    }
+    // Run the retail loader so the globals hold exactly what humanplayer.qvm
+    // authored, then read them back. This is the authoritative default set; the
+    // menu boxes must show these values, not hard-coded guesses.
+    if (!reloadHumanPlayerParameters()) {
+        log(LogLevel::Warning, "human physics baseline rejected: the qvm loader failed");
+        return false;
+    }
+    const auto params = readHumanPlayerQvmParams();
+    if (!params || params->moveScale <= 0.0F) {
+        log(LogLevel::Warning,
+            "human physics baseline rejected: the qvm globals did not initialize");
+        return false;
+    }
+    baseline = *params;
+    log(LogLevel::Info, "human physics baseline from HumanPlayer_LoadParameters: move " +
+                            std::to_string(params->moveScale) + ", jump speed " +
+                            std::to_string(params->jumpSpeedKmh) + " km/h, jump height " +
+                            std::to_string(params->jumpUpKmh) + " km/h, air " +
+                            std::to_string(params->airSpeedKmh) + " km/h, damage " +
+                            std::to_string(params->maxDamage) + ", fence damage " +
+                            std::to_string(params->fenceDamage));
+    return true;
+}
+
 bool thirdPersonCrosshairActive(Runtime &runtime) {
     if (!g_thirdPersonCrosshairEnabled.load(std::memory_order_acquire) ||
         !requireLiveGameThread(runtime) || !IGI::GAME::GET())

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.4.5 — Human defaults come from HumanPlayer_LoadParameters
+
+- The Human input boxes no longer start on hard-coded display defaults. The
+  first Human refresh of a level runs the retail `HumanPlayer_LoadParameters`
+  (0x4137A0), reads the six globals back, and logs
+  "human physics baseline from HumanPlayer_LoadParameters: ..."; the boxes
+  prefill from that baseline, which is exactly what humanplayer.qvm authored.
+- The human prefill was trapped inside the teleport prefill, which returned
+  early whenever the player-position read failed - the qvm values never reached
+  the boxes and typed writes propagated guessed defaults instead. It is now an
+  independent, level-scoped prefill (`prefillHumanControls`) hooked into
+  `refreshLiveItems`.
+- A qvm write still applies immediately with a live read-back verification, and
+  the write lands on the freshly captured baseline, so the loaded values and
+  the user's edits cannot race.
+
+
 ## 0.4.4 — Human physics live read-back
 
 - Every humanplayer.qvm parameter write is now verified by an immediate live

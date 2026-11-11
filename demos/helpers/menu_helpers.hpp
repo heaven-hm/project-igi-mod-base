@@ -348,6 +348,9 @@ bool processMissionRestart(Runtime &runtime);
 std::optional<HumanPlayerQvmParams> readLiveHumanPlayerParams(Runtime &runtime);
 bool saveLiveHumanPlayerParams(Runtime &runtime, const HumanPlayerQvmParams &values);
 bool reloadLiveHumanPlayerParams(Runtime &runtime);
+// Runs the retail HumanPlayer_LoadParameters once and reads the globals back,
+// giving the authored humanplayer.qvm defaults for the Human input boxes.
+bool captureHumanPlayerBaseline(Runtime &runtime, HumanPlayerQvmParams &baseline);
 // World clock and independent mission timer (LevelFlow, IGI-RE
 // levelflowtypes.h: nTick +0x68, startHour +0x6C, timeLimit +0x74).
 bool setWorldHour(Runtime &runtime, float hour);

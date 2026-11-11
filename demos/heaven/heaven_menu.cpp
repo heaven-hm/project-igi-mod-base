@@ -59,6 +59,11 @@ bool g_humanParamSet[kHumanParamCount] = {};
 // Last live block returned by the qvm; Save patches these fields so the live
 // km/h conversion factor is preserved.
 igi::HumanPlayerQvmParams g_humanParams{};
+// The values HumanPlayer_LoadParameters produced for the current level. The
+// input boxes prefill from this baseline, never from hard-coded guesses.
+igi::HumanPlayerQvmParams g_humanBaseline{};
+bool g_humanBaselineCaptured = false;
+void *g_humanBaselineGame = nullptr;
 
 // Converts the display units back to the qvm's units (slot order: move, jump
 // speed, jump height, air speed, damage, fence damage) and writes the retail
@@ -605,14 +610,6 @@ namespace {
 // refreshed, so X/Y/Z never start at an unset (0,0,0). Once the user edits a
 // coordinate the typed value is kept instead of being overwritten each refresh.
 bool prefillTeleportCoordinates(igi::MenuConfig &config, igi::Runtime &runtime) {
-    // A new level builds a new Game task; the old prefills and typed coordinates
-    // belong to the previous level and must not be reused.
-    static void *lastGame = nullptr;
-    auto *game = IGI::GAME::GET();
-    if (game && game != lastGame) {
-        lastGame = game;
-        std::fill(std::begin(g_humanParamSet), std::end(g_humanParamSet), false);
-    }
     std::array<double, 3> position{};
     if (!igi::readPlayerPosition(runtime, position))
         return false;
@@ -639,31 +636,49 @@ bool prefillTeleportCoordinates(igi::MenuConfig &config, igi::Runtime &runtime) 
         // The boxes now hold a real position, so Apply must accept it.
         flag = true;
     };
-    // Show what humanplayer.qvm actually wrote into the live BSS, converted back
-    // to the authored units. moveScale > 0 means the script has run; before that
-    // every global is zero and must not overwrite the configured defaults.
-    if (const auto params = igi::readLiveHumanPlayerParams(runtime);
-        params && params->moveScale > 0.0F) {
-        g_humanParams = *params;
-        const int values[kHumanParamCount] = {
-            static_cast<int>(std::lround(params->moveScale * 100.0F)),
-            static_cast<int>(std::lround(params->jumpSpeedKmh * 10.0F)),
-            static_cast<int>(std::lround(params->jumpUpKmh * 10.0F)),
-            static_cast<int>(std::lround(params->airSpeedKmh * 10.0F)),
-            static_cast<int>(std::lround(params->maxDamage * 100.0F)),
-            static_cast<int>(std::lround(params->fenceDamage * 100.0F))};
-        for (std::size_t slot = 0; slot < kHumanParamCount; ++slot) {
-            if (g_humanParamSet[slot])
+    return changed;
+}
+
+// Prefills the Human input boxes from the baseline HumanPlayer_LoadParameters
+// produces for the current level, so the boxes show the values humanplayer.qvm
+// actually authored. Runs once per level, independently of the player-position
+// prefill, and falls back to the live globals when the baseline capture is
+// unavailable (for example in a harness without the retail executable).
+bool prefillHumanControls(igi::MenuConfig &config, igi::Runtime &runtime) {
+    auto *game = IGI::GAME::GET();
+    if (game && game != g_humanBaselineGame) {
+        g_humanBaselineGame = game;
+        g_humanBaselineCaptured = false;
+        std::fill(std::begin(g_humanParamSet), std::end(g_humanParamSet), false);
+    }
+    if (!g_humanBaselineCaptured) {
+        if (!igi::captureHumanPlayerBaseline(runtime, g_humanBaseline)) {
+            // Keep the configured defaults visible instead of showing garbage;
+            // the capture retries on the next refresh.
+            return false;
+        }
+        g_humanBaselineCaptured = true;
+    }
+    g_humanParams = g_humanBaseline;
+    const int values[kHumanParamCount] = {
+        static_cast<int>(std::lround(g_humanBaseline.moveScale * 100.0F)),
+        static_cast<int>(std::lround(g_humanBaseline.jumpSpeedKmh * 10.0F)),
+        static_cast<int>(std::lround(g_humanBaseline.jumpUpKmh * 10.0F)),
+        static_cast<int>(std::lround(g_humanBaseline.airSpeedKmh * 10.0F)),
+        static_cast<int>(std::lround(g_humanBaseline.maxDamage * 100.0F)),
+        static_cast<int>(std::lround(g_humanBaseline.fenceDamage * 100.0F))};
+    bool changed = false;
+    for (std::size_t slot = 0; slot < kHumanParamCount; ++slot) {
+        if (g_humanParamSet[slot])
+            continue;
+        g_humanParamValue[slot] = values[slot];
+        for (auto &item : config.items) {
+            if (item.id != kHumanParamIds[slot])
                 continue;
-            g_humanParamValue[slot] = values[slot];
-            for (auto &item : config.items) {
-                if (item.id != kHumanParamIds[slot])
-                    continue;
-                const int clamped = std::clamp(values[slot], item.inputMinimum, item.inputMaximum);
-                if (item.inputValue != clamped) {
-                    item.inputValue = clamped;
-                    changed = true;
-                }
+            const int clamped = std::clamp(values[slot], item.inputMinimum, item.inputMaximum);
+            if (item.inputValue != clamped) {
+                item.inputValue = clamped;
+                changed = true;
             }
         }
     }
@@ -699,7 +714,8 @@ bool configureModMenu(igi::MenuConfig &config) {
     };
     config.refreshLiveItems = [](igi::MenuConfig &liveConfig, igi::Runtime &runtime) {
         const bool prefilled = prefillTeleportCoordinates(liveConfig, runtime);
-        return igi::refreshLiveTargetOptions(liveConfig, runtime) || prefilled;
+        const bool humanPrefilled = prefillHumanControls(liveConfig, runtime);
+        return igi::refreshLiveTargetOptions(liveConfig, runtime) || prefilled || humanPrefilled;
     };
     return true;
 }

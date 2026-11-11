@@ -253,6 +253,17 @@ assert all(
 assert not re.search(r"\blean\b", HEAVEN, flags=re.IGNORECASE), (
     "the lean/peek params must not be exposed"
 )
+assert "prefillHumanControls" in HEAVEN and "captureHumanPlayerBaseline" in HEAVEN, (
+    "the Human boxes must prefill from a HumanPlayer_LoadParameters baseline, not "
+    "hard-coded defaults"
+)
+assert "g_humanBaselineCaptured" in HEAVEN, "the baseline is captured once per level"
+assert "captureHumanPlayerBaseline" in HELPERS and "HumanPlayer_LoadParameters" in HELPERS, (
+    "the baseline must come from the retail qvm loader"
+)
+assert "human physics baseline from HumanPlayer_LoadParameters" in HELPERS, (
+    "the captured qvm values must be logged"
+)
 assert "saveLiveHumanPlayerParams" in HEAVEN and "reloadLiveHumanPlayerParams" in HEAVEN
 STORAGE_HELPERS = (ROOT / "demos/helpers/menu_helpers.cpp").read_text(encoding="utf-8")
 assert "read back" in STORAGE_HELPERS and "human physics live" in STORAGE_HELPERS, (
