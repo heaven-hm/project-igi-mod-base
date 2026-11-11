@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.0 — Heaven release: humanplayer physics, vehicle control and menu stability
+## 0.4.0 — Heaven release: humanplayer physics, vehicle control and menu stability
 
 Release DLLs (all Win32 x86, inject one per igi.exe session):
 `igi-heaven-mod-internal.dll` / `igi-heaven-mod-external.dll` (flagship),
