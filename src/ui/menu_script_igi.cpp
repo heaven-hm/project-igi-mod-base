@@ -4,7 +4,7 @@
 namespace igi {
 #if defined(_WIN32) && (defined(__i386__) || defined(_M_IX86))
 namespace {
-IgiScriptSymbol *findSymbol(const char *name) noexcept {
+const IgiScriptSymbol *findSymbol(const char *name) noexcept {
     using Find = const char *(__cdecl *)(const char *, IgiScriptSymbol **);
     IgiScriptSymbol *symbol = nullptr;
     return reinterpret_cast<Find>(0x004BAB80)(name, &symbol) ? symbol : nullptr;
@@ -24,8 +24,12 @@ ScriptRegistryApi igiScriptRegistryApi(NativeCaller &caller) noexcept {
         return {};
     using Register = void(__cdecl *)(const char *, ScriptCallback, void *, int);
     using Remove = void(__cdecl *)(const char *);
-    return {reinterpret_cast<Register>(0x004B8890), reinterpret_cast<Register>(0x004B88C0),
-            reinterpret_cast<Remove>(0x004B8920), contains, matches};
+    return {reinterpret_cast<Register>(0x004B8890),
+            reinterpret_cast<Register>(0x004B88C0),
+            reinterpret_cast<Remove>(0x004B8920),
+            contains,
+            matches,
+            findSymbol};
 #else
     (void)caller;
     return {};

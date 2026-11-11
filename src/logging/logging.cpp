@@ -9,12 +9,18 @@
 #include <string>
 #include <thread>
 
+#if defined(_WIN32)
+#include <windows.h>
+#endif
+
 namespace {
 std::mutex logMutex;
 igi::LogSink logSink = nullptr;
 std::FILE *logFile = nullptr;
-bool logFileInitialized = false;
+bool logPathReported = false;
 std::string logFilename = "project-igi-mod.log";
+std::string logFilenameFallback;
+std::chrono::steady_clock::time_point logOpenAttemptTime{};
 std::atomic<igi::LogLevel> minimumLevel{igi::LogLevel::Trace};
 
 const char *levelName(igi::LogLevel level) noexcept {
@@ -63,12 +69,15 @@ void setLogFile(std::string_view filename) {
         filename.find('\0') != std::string_view::npos)
         return;
     std::lock_guard lock(logMutex);
-    if (logFilename == filename)
+    if (logFilename == filename && logFile != nullptr)
         return;
     if (logFile)
         std::fclose(logFile);
     logFile = nullptr;
-    logFileInitialized = false;
+    logPathReported = false;
+    logFilenameFallback.clear();
+    // A new name must be attempted immediately, not after the retry backoff.
+    logOpenAttemptTime = std::chrono::steady_clock::time_point::min();
     logFilename.assign(filename);
 }
 
@@ -91,11 +100,47 @@ void log(LogLevel level, std::string_view message) noexcept {
 
     std::lock_guard lock(logMutex);
 
-    if (!logFileInitialized) {
-        logFileInitialized = true;
-        logFile = std::fopen(logFilename.c_str(), "ab");
+    // Open lazily and RETRY after a failure. The old one-shot latch meant a
+    // single failed open (another igi.exe still holding the file, or a different
+    // working directory after a game restart) silenced the whole session, which
+    // is exactly why no log existed for the last report.
+    if (logFile == nullptr) {
+        const auto now = std::chrono::steady_clock::now();
+        if (logOpenAttemptTime == decltype(logOpenAttemptTime)::min() ||
+            now - logOpenAttemptTime >= std::chrono::seconds(5)) {
+            logOpenAttemptTime = now;
+            logFile = std::fopen(logFilename.c_str(), "ab");
+            if (logFile != nullptr)
+                logFilenameFallback.clear();
+            if (logFile == nullptr) {
+                // Fall back to a per-process file next to the module so a locked
+                // or non-writable working directory still leaves a trail.
+                const std::string fallback =
+                    logFilename + "." +
+                    std::to_string(static_cast<unsigned long long>(
+                        std::hash<std::thread::id>{}(std::this_thread::get_id()))) +
+                    ".log";
+                logFile = std::fopen(fallback.c_str(), "ab");
+                if (logFile != nullptr)
+                    logFilenameFallback = fallback;
+            }
+        }
     }
 
+    // Report the resolved path once so a "no log file" report can be told apart
+    // from "the log lives somewhere else".
+    if (logFile != nullptr && !logPathReported) {
+        logPathReported = true;
+        const std::string path = logFilenameFallback.empty() ? logFilename : logFilenameFallback;
+        char absolute[4096]{};
+#if defined(_WIN32)
+        const auto written = ::GetFullPathNameA(path.c_str(), sizeof(absolute), absolute, nullptr);
+        if (written > 0 && written < sizeof(absolute))
+            writeLine(logFile, igi::LogLevel::Info, "log file: " + std::string(absolute));
+        else
+#endif
+            writeLine(logFile, igi::LogLevel::Info, "log file: " + path);
+    }
     if (logSink != nullptr) {
         logSink(level, message);
     }
@@ -118,6 +163,6 @@ void closeLogFile() noexcept {
         std::fclose(logFile);
         logFile = nullptr;
     }
-    logFileInitialized = false;
+    logPathReported = false;
 }
 } // namespace igi

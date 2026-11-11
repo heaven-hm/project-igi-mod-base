@@ -21,6 +21,7 @@
 #include <cstdio>
 #include <chrono>
 #include <fstream>
+#include <filesystem>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -106,6 +107,42 @@ int main() {
         log.close();
         std::remove(configPath);
         std::remove(logPath);
+    }
+    {
+        // A failed open must not silence the session: the log file is retried and
+        // falls back to a per-process name, so "no log was created" cannot happen
+        // again after a game restart left the primary file held.
+        const char *blockedName = "igi-mod-blocked-test.log";
+        std::error_code ec;
+        std::filesystem::remove(blockedName, ec);
+        std::filesystem::create_directory(blockedName);  // fopen("ab") on a dir fails
+        igi::setLogFile(blockedName);
+        igi::log(igi::LogLevel::Info, "fallback probe");
+        bool foundFallback = false;
+        for (const auto &entry : std::filesystem::directory_iterator(".")) {
+            const auto name = entry.path().filename().string();
+            if (name.rfind(std::string(blockedName) + ".", 0) != 0)
+                continue;
+            std::ifstream in(name);
+            std::stringstream contents;
+            contents << in.rdbuf();
+            foundFallback = contents.str().find("fallback probe") != std::string::npos;
+            in.close();
+            std::filesystem::remove(name);
+        }
+        std::filesystem::remove(blockedName);
+        assert(foundFallback);
+        // And once the primary path is usable again, the retry writes there.
+        igi::setLogFile("igi-mod-retry-test.log");
+        igi::log(igi::LogLevel::Info, "first attempt");
+        igi::closeLogFile();
+        {
+            std::ifstream log("igi-mod-retry-test.log");
+            std::stringstream contents;
+            contents << log.rdbuf();
+            assert(contents.str().find("first attempt") != std::string::npos);
+        }
+        std::filesystem::remove("igi-mod-retry-test.log");
         igi::setLogFile("project-igi-mod.log");
     }
     igi::MenuResourceApi resourceApi{fakeResourceLookup, fakeResourceRegister, fakeResourceFree};
@@ -129,6 +166,19 @@ int main() {
     assert(!mismatchedAlias.registerData("SDK:missing.qvm", "LOCAL:other.qvm", {1, 2, 3}, resourceApi));
     assert(!mismatchedAlias.active() && fakeResourceFreeCount == 2);
     fakeResourceHidden = false;
+    // A LOCAL:mod_base name left registered by the previous menu session must be
+    // reclaimed, otherwise the next open runs a stale QVM and shows no options.
+    // Any other namespace is never touched.
+    igi::MenuResource staleHolder;
+    assert(staleHolder.registerData("LOCAL:mod_base/modmenu.qvm", {9, 9, 9}, resourceApi));
+    igi::MenuResource reopened;
+    assert(reopened.registerData("LOCAL:mod_base/modmenu.qvm", {1, 2, 3}, resourceApi));
+    assert(reopened.active());
+    staleHolder.abandon();
+    igi::MenuResource foreignHolder;
+    fakeResourceCurrent = &fakeResourceObject;
+    assert(!foreignHolder.registerData("SDK:other.qvm", {1, 2, 3}, resourceApi));
+    fakeResourceCurrent = nullptr;
     assert(igi::MenuConfig{}.hook == igi::game::TickHook::DisplayAddFrameCallback);
     igi::Runtime runtime;
     assert(!runtime.initialize(igi::game::TickHook::TextDraw));

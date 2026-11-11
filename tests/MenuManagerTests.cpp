@@ -252,6 +252,15 @@ void externalImGuiMenuParityTest() {
     const auto externalAdvanced = readDemoSource("demos/external/advanced-mod/advanced_menu.cpp");
     assert(internalAdvanced == externalAdvanced);
 
+    // The Advanced menus must carry the humanplayer.qvm section, so neither
+    // frontend can lose it while the other keeps it.
+    for (const char *id : {"human_move_scale", "human_jump_speed", "human_jump_height",
+                          "human_air_speed", "human_damage", "human_fence_damage", "human_save",
+                          "human_reload"}) {
+        assert(internalAdvanced.find(id) != std::string::npos);
+        assert(externalAdvanced.find(id) != std::string::npos);
+    }
+
     const auto imguiHost = readDemoSource("src/mod_base/imgui_menu_host.cpp");
     assert(imguiHost.find("ImGui_ImplDX7_Init") != std::string::npos);
     assert(imguiHost.find("ImGui_ImplDX7_RenderDrawData") != std::string::npos);

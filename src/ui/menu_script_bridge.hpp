@@ -117,18 +117,6 @@ class MenuScriptCallbacks final {
 };
 
 using ScriptCallback = IgiScriptValue *(*)(IgiScriptValue *, void *, void *);
-struct ScriptRegistryApi {
-    void (*registerFunction)(const char *, ScriptCallback, void *, int) = nullptr;
-    void (*registerIntFunction)(const char *, ScriptCallback, void *, int) = nullptr;
-    void (*removeSymbol)(const char *) = nullptr;
-    bool (*containsSymbol)(const char *) = nullptr;
-    bool (*matchesSymbol)(const char *, ScriptCallback, void *) = nullptr;
-};
-
-// Available only on the validated Windows x86 game thread.
-ScriptRegistryApi igiScriptRegistryApi(NativeCaller &caller) noexcept;
-MenuScriptApi igiMenuScriptApi(NativeCaller &caller) noexcept;
-
 // Minimal recovered IGI 1 symbol fields needed for ownership verification.
 struct IgiScriptSymbol {
     int kind;
@@ -139,6 +127,23 @@ struct IgiScriptSymbol {
     const char *name;
     void *data;
 };
+
+struct ScriptRegistryApi {
+    void (*registerFunction)(const char *, ScriptCallback, void *, int) = nullptr;
+    void (*registerIntFunction)(const char *, ScriptCallback, void *, int) = nullptr;
+    void (*removeSymbol)(const char *) = nullptr;
+    bool (*containsSymbol)(const char *) = nullptr;
+    bool (*matchesSymbol)(const char *, ScriptCallback, void *) = nullptr;
+    // Reads the live symbol entry. Used to tell our own stale registration (the
+    // handler is one of our trampolines but its context object is gone) from a
+    // foreign mod's symbol, which must never be removed.
+    const IgiScriptSymbol *(*findSymbol)(const char *) = nullptr;
+};
+
+// Available only on the validated Windows x86 game thread.
+ScriptRegistryApi igiScriptRegistryApi(NativeCaller &caller) noexcept;
+MenuScriptApi igiMenuScriptApi(NativeCaller &caller) noexcept;
+
 #if defined(_WIN32) && (defined(__i386__) || defined(_M_IX86))
 static_assert(sizeof(IgiScriptSymbol) == 28);
 static_assert(offsetof(IgiScriptSymbol, handler) == 16);

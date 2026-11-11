@@ -1,6 +1,7 @@
 #include "ui/menu_resource.hpp"
 
 #include <limits>
+#include <string_view>
 #include <utility>
 
 namespace igi {
@@ -18,9 +19,21 @@ bool MenuResource::registerData(std::string name, std::string expandedName,
         data.size() > static_cast<std::size_t>(std::numeric_limits<int>::max()) || !api.isLoaded ||
         !api.registerResource || !api.freeResource)
         return false;
+    // A resource still registered under one of our OWN LOCAL:mod_base names after
+    // a level restart points at QVM memory the previous level already invalidated
+    // (or at our own freed image). Running it produces the empty frame with no
+    // options, so reclaim that name and register the fresh bytes instead. Any
+    // other namespace belongs to someone else and is never touched.
+    constexpr std::string_view kOwnedPrefix = "LOCAL:mod_base/";
+    const bool ownedName = std::string_view(name).starts_with(kOwnedPrefix) ||
+                           std::string_view(expandedName).starts_with(kOwnedPrefix);
     void *existing = nullptr;
-    if (api.isLoaded(name.c_str(), &existing))
-        return false;
+    if (api.isLoaded(name.c_str(), &existing) || api.isLoaded(expandedName.c_str(), &existing)) {
+        if (!ownedName || !existing)
+            return false;
+        api.freeResource(existing);
+        existing = nullptr;
+    }
     name_ = std::move(name);
     data_ = std::move(data);
     api_ = api;

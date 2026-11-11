@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.4.2 — Restart-safe internal menu, reliable logging and Human parity
+
+- **Internal menu after a level/game restart ("frame opens with no options"):**
+  a restart can leave the previous session's `IGI_SDK_*` script symbols and the
+  `LOCAL:mod_base/*.qvm` resource registered, so the next open skipped
+  re-registration and ran the stale script, which filled no ListBox rows.
+  - `registerMenuScriptCallbacks()` now reclaims entries whose handler is one of
+    this module's own trampolines (identified through the retail symbol table via
+    `ScriptRegistryApi::findSymbol`). A symbol owned by another module is still
+    never removed, and a registry without symbol introspection keeps the old
+    refuse-on-collision behaviour.
+  - `MenuResource::registerData()` reclaims a resource registered under a
+    `LOCAL:mod_base/` name it no longer owns; other namespaces are untouched.
+  - A close rejected by the retail manager abandons the stale session
+    (`revertMenuState()`), so the next open rebuilds the screen and resources.
+- **Log file reliability:** a failed open no longer silences the whole session.
+  The open is retried with a 5 s backoff, a new `log_file` is attempted
+  immediately, and a per-process fallback file is used when the primary path is
+  unavailable (a held file or a different working directory after a restart).
+  The resolved absolute path is logged once, so "no log" is distinguishable from
+  "the log lives elsewhere".
+- **Human section parity:** the Advanced Mod menus now generate the same
+  `DefineHumanPlayerGeneral` controls as the internal menu (move scale, jump
+  speed, jump height, air speed, damage scale, fence damage, Save, Reload, Read);
+  internal and external demo sources stay byte-identical, so only the UI differs.
+  All demo targets get `demos/` on the include path.
+- **Menu surface cleanup:** the duplicate "Move Player To Position" X/Y/Z boxes
+  were removed from Heaven; Send Player Position (live target, landmark, typed
+  `X/Y/Z` and Custom Position) is the single typed-XYZ path. Heaven now ships 73
+  controls.
+
+
 ## 0.4.1 — Start-key, pause restoration, free camera and teleport hardening
 
 - **One F5, one toggle:** both hosts now serialize start-key toggle requests with a

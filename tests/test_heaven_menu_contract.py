@@ -38,7 +38,7 @@ ids = [entry[0] for entry in defs]
 assert len(ids) == len(set(ids)), f"duplicate Heaven item IDs: {ids}"
 
 MIN_OPTIONS = 30
-NORMAL_OPTIONS = 77
+NORMAL_OPTIONS = 73
 assert MIN_OPTIONS <= len(ids) == NORMAL_OPTIONS, (
     f"normal Heaven must ship exactly {NORMAL_OPTIONS} working controls, found {len(ids)}"
 )
@@ -228,10 +228,16 @@ assert "findLiveTarget(runtime, g_selectedNpcTaskId, isNpcTask)" in HELPERS, (
     "NPC actions must resolve the selected live NPC by task identity at action time"
 )
 
-# The old read-only diagnostics were removed from the production menu.
+# The old read-only diagnostics and the duplicate typed-XYZ teleport were
+# removed from the production menu; Send Player Position is the only custom
+# coordinate path.
 assert not ({"world_level_tick", "world_flow", "world_events"} & set(ids)), (
     "Level Tick, Flow Counters and Game Events must stay out of the Heaven menu"
 )
+assert not (
+    {"player_teleport_x", "player_teleport_y", "player_teleport_z", "player_teleport_apply"}
+    & set(ids)
+), "the duplicate Move Player To Position boxes must stay out; Send Player Position already provides the typed-XYZ path"
 
 # humanplayer.qvm physics: every DefineHumanPlayerGeneral param up to the
 # damage/health pair must be read from the live BSS block and written back, with
@@ -267,6 +273,24 @@ for address, name in (
     assert address in STORAGE, f"{name} must read the retail {address} global"
 assert "0x56E1F8" not in STORAGE and "0x56E200" not in STORAGE, (
     "the lean/peek globals must not be read or written"
+)
+
+# A level/game restart can leave the previous session's IGI_SDK_* symbols and
+# LOCAL:mod_base QVM resource registered. Both must be reclaimed, or the next
+# open runs a stale script and shows a frame with no options.
+BRIDGE = (ROOT / "src/ui/menu_script_bridge.cpp").read_text(encoding="utf-8")
+RESOURCE = (ROOT / "src/ui/menu_resource.cpp").read_text(encoding="utf-8")
+assert "isOwnScriptHandler" in BRIDGE and "kOwnScriptSymbols" in BRIDGE, (
+    "stale IGI_SDK_* symbols from the previous menu session must be reclaimed"
+)
+assert "belongs to another module" in BRIDGE, (
+    "a foreign mod's script symbol must never be removed"
+)
+assert "ownedName" in RESOURCE and "LOCAL:mod_base/" in RESOURCE, (
+    "only our own LOCAL:mod_base QVM resource may be reclaimed after a restart"
+)
+assert "revertMenuState" in INTERNAL_HOST and "releaseScriptSession" in INTERNAL_HOST, (
+    "a rejected close must abandon the stale session so the next open rebuilds it"
 )
 
 # Eject must never free the module from the worker thread; the game can still be
@@ -386,11 +410,11 @@ assert "drawCrosshairOverlay" in IMGUI_HOST and "crosshairActive(runtime)" in IM
     "the ImGui host must draw the crosshair through its validated D3D7 renderer"
 )
 # Free camera: retail camera-override path with WASD flight and a clean disable.
-assert '"player_teleport_target"' in HEAVEN and '"player_teleport_apply"' in HEAVEN, (
-    "Heaven must offer both teleport styles: pick a live target or type X/Y/Z"
+assert '"player_teleport_target"' in HEAVEN and '"landmark_target"' in HEAVEN, (
+    "Heaven must offer the live-target and landmark teleport pickers"
 )
-assert '"player_teleport_x"' in HEAVEN and 'igi::ModMenuItemKind::Input' in HEAVEN, (
-    "the typed position uses numeric text boxes"
+assert '"player_send_x"' in HEAVEN and 'igi::ModMenuItemKind::Input' in HEAVEN, (
+    "the single typed-XYZ path (Send Player Position) uses numeric text boxes"
 )
 assert "teleportPlayerToTarget" in HELPERS and "teleportPlayerToPosition" in HELPERS, (
     "both teleport paths must be implemented in the helpers"

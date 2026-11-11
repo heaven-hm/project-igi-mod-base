@@ -484,25 +484,30 @@ void releaseScriptSession() {
     leaveResource.release();
 }
 
-void completeShutdownOnGameThread() {
-    if (shutdownCompleted.exchange(true, std::memory_order_acq_rel))
-        return;
-#if defined(_WIN32)
-    unregisterEndFrameCallback();
-#endif
-    releaseInjectedMenuScreen();
-    IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, "IGI SDK Mod Menu: disabled");
+void revertMenuState() {
+    if (menuBridge) {
+        menuBridge->cancel(false);
+    } else {
+        menuScreenAttached = false;
+        pendingTransition = MenuTransition::None;
+        pageSwitchInFlight = false;
+        pendingPageDelta = 0;
+        closeDeferredBehindRetailScreen = false;
+        returnScreenId = 0;
+    }
+    if (menuScreenCreated) {
+        releaseInjectedMenuScreen();
+        menuScreenCreated = false;
+    }
+    if (menuScreenAttached) {
+        menuScreenAttached = false;
+    }
     releaseScriptSession();
-    menuScreenCreated = false;
-    menuScreenAttached = false;
-    pendingTransition = MenuTransition::None;
-    pageSwitchInFlight = false;
-    closeDeferredBehindRetailScreen = false;
-    returnScreenId = 0;
-    pendingPageDelta = 0;
+    menuBridge.reset();
+    menuRegistration.stop();
+    menuCallbacks.reset();
     shutdownPending.store(false, std::memory_order_release);
     safeToShutdown.store(true, std::memory_order_release);
-    igi::log(igi::LogLevel::Info, "internal unload: game-thread cleanup finished");
 }
 
 // Applies a queued page change: the old screen is already off the retail stack,
@@ -573,7 +578,7 @@ void completeCloseTransition() {
         igi::log(igi::LogLevel::Warning, "internal menu close: unable to resume game");
     }
     if (shutdownPending.load(std::memory_order_acquire)) {
-        completeShutdownOnGameThread();
+        revertMenuState();
         return;
     }
     safeToShutdown.store(true, std::memory_order_release);
@@ -608,8 +613,9 @@ void processDeferredClose() {
                  "internal menu close: game's own screen closed; popping the injected screen now");
         return;
     }
-    // The retail stack no longer references our screen: delete our task and keep
-    // the pause the game's menu established.
+    // The retail stack no longer references our screen: delete our task and drop
+    // the whole script session, so the next open re-registers instead of running
+    // a resource the previous level already invalidated.
     releaseInjectedMenuScreen();
     menuScreenCreated = false;
     menuScreenAttached = false;
@@ -617,7 +623,7 @@ void processDeferredClose() {
     releaseScriptSession();
     (void)igi::resumeFromMenu(runtime);
     if (shutdownPending.load(std::memory_order_acquire)) {
-        completeShutdownOnGameThread();
+        revertMenuState();
         return;
     }
     safeToShutdown.store(true, std::memory_order_release);
@@ -1090,8 +1096,16 @@ bool closeMenuScreen() {
                  "touching the game's screens");
         return true;
     }
-    if (!runMenuCommand("LOCAL:mod_base/modmenu-leave.qvm", "close"))
+    if (!runMenuCommand("LOCAL:mod_base/modmenu-leave.qvm", "close")) {
+        // Close was rejected: the left and close resources are now stale for the
+        // next open and must never be handed back to the QVM again.
+        menuResource.abandon();
+        reopenResource.abandon();
+        closeResource.abandon();
+        leaveResource.abandon();
+        revertMenuState();
         return false;
+    }
     pendingTransition = MenuTransition::Closing;
     transitionDeadlineFrame = runtime.scheduler().gameHookInvocationCount() + 120;
     safeToShutdown.store(false, std::memory_order_release);
@@ -1204,6 +1218,40 @@ bool prepareMenuForLevelChange() {
 }
 } // namespace igi
 
+// Tears down the menu and releases every video/sdk resource this instance owns.
+// This is a one-shot game-thread teardown, not the per-frame attach/detach path:
+// idempotency lives here so a double RequestShutdown or a race with the next
+// open can never free or unload twice.
+void completeShutdownOnGameThread() {
+    if (shutdownCompleted.exchange(true, std::memory_order_acq_rel))
+        return;
+#if defined(_WIN32)
+    unregisterEndFrameCallback();
+#endif
+    releaseInjectedMenuScreen();
+    IGI::MISC::STATUS_MESSAGE_SHOW(nullptr, "IGI SDK Mod Menu: disabled");
+    revertMenuState();
+    gameMenu.reset();
+    if (!runtime.shutdown()) {
+        // The game can still call into this module. Keep every resource alive and
+        // let the host keep the DLL loaded.
+        igi::log(igi::LogLevel::Error,
+                 "internal shutdown: hooks still resident; keeping the module loaded");
+        return;
+    }
+    compiledMenu.clear();
+    reopenMenu.clear();
+    closeMenu.clear();
+    leaveMenu.clear();
+    menuSource.clear();
+    menuScreenCreated = false;
+    menuScreenAttached = false;
+    initialAttachPending.store(false, std::memory_order_release);
+    shutdownPending.store(false, std::memory_order_release);
+    safeToShutdown.store(true, std::memory_order_release);
+    igi::log(igi::LogLevel::Info, "internal unload: game-thread cleanup finished");
+}
+
 extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_Internal_Initialize() {
     igi::log(igi::LogLevel::Debug, "internal initialize: begin");
     menuConfig = igi::loadMenuConfig("project-igi-mod-config.ini");
@@ -1262,6 +1310,9 @@ extern "C" IGI_DEMO_EXPORT bool IGI_MenuManager_Internal_Initialize() {
         runtime.shutdown();
         compiledMenu.clear();
         menuSource.clear();
+        shutdownCompleted.store(false, std::memory_order_release);
+        revertMenuState();
+        releaseInjectedMenuScreen();
     }
     return pushed;
 }

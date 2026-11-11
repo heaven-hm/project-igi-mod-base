@@ -409,18 +409,66 @@ IgiScriptValue *restartCallback(IgiScriptValue *out, void *context, void *args) 
 }
 } // namespace
 
+namespace {
+// Every IGI_SDK_* trampoline this module can register, so a stale entry can be
+// recognised by its handler even when its context object is long gone.
+struct OwnScriptSymbol {
+    const char *name;
+    ScriptCallback handler;
+};
+bool isOwnScriptHandler(ScriptCallback handler) noexcept {
+    return handler == fillCallback || handler == getCallback || handler == setCallback ||
+           handler == getToggleCallback || handler == setToggleCallback ||
+           handler == actionCallback || handler == closeCallback || handler == applyCallback ||
+           handler == cancelCallback || handler == pageCallback || handler == restartCallback;
+}
+constexpr OwnScriptSymbol kOwnScriptSymbols[] = {
+    {"IGI_SDK_FillList", fillCallback},       {"IGI_SDK_GetList", getCallback},
+    {"IGI_SDK_SetList", setCallback},         {"IGI_SDK_GetToggle", getToggleCallback},
+    {"IGI_SDK_SetToggle", setToggleCallback}, {"IGI_SDK_Action", actionCallback},
+    {"IGI_SDK_CloseMenu", closeCallback},     {"IGI_SDK_Apply", applyCallback},
+    {"IGI_SDK_Cancel", cancelCallback},       {"IGI_SDK_Page", pageCallback},
+    {"IGI_SDK_Restart", restartCallback},
+};
+} // namespace
+
 bool registerMenuScriptCallbacks(MenuScriptCallbacks &callbacks,
                                  ScriptRegistryApi registry) noexcept {
     if (!registry.registerFunction || !registry.registerIntFunction || !registry.removeSymbol ||
         !registry.containsSymbol || !registry.matchesSymbol)
         return false;
-    if (registry.containsSymbol("IGI_SDK_FillList") || registry.containsSymbol("IGI_SDK_GetList") ||
-        registry.containsSymbol("IGI_SDK_SetList") ||
-        registry.containsSymbol("IGI_SDK_GetToggle") ||
-        registry.containsSymbol("IGI_SDK_SetToggle") || registry.containsSymbol("IGI_SDK_Action") ||
-        registry.containsSymbol("IGI_SDK_CloseMenu") || registry.containsSymbol("IGI_SDK_Apply") ||
-        registry.containsSymbol("IGI_SDK_Cancel") || registry.containsSymbol("IGI_SDK_Restart"))
-        return false;
+    // Our own names. A level restart (or a game restart that reuses the process)
+    // can leave the previous session's symbols in the retail script table: the
+    // handler is one of our trampolines but the MenuScriptCallbacks context it
+    // points at was destroyed. The screen then runs against that stale entry and
+    // fills its ListBox with nothing - the "frame opens with no options" report.
+    // Reclaim only our own entries; a foreign mod's symbol is never removed.
+    if (!registry.findSymbol) {
+        // Without symbol introspection ownership cannot be proven, so a name that
+        // already exists is never registered over.
+        for (const auto &entry : kOwnScriptSymbols) {
+            if (registry.containsSymbol(entry.name))
+                return false;
+        }
+    } else {
+        for (const auto &entry : kOwnScriptSymbols) {
+            const auto name = entry.name;
+            if (!registry.containsSymbol(name))
+                continue;
+            const IgiScriptSymbol *symbol = registry.findSymbol(name);
+            if (symbol && symbol->handler == entry.handler && symbol->data == &callbacks)
+                continue; // this session's own live registration
+            if (!symbol || !isOwnScriptHandler(symbol->handler)) {
+                log(LogLevel::Error, std::string("IGI_SDK script symbol '") + name +
+                                         "' belongs to another module; refusing to register "
+                                         "over it");
+                return false;
+            }
+            registry.removeSymbol(name);
+            log(LogLevel::Info, std::string("IGI_SDK script symbol '") + name +
+                                    "' was left by the previous menu session; re-registering");
+        }
+    }
     registry.registerFunction("IGI_SDK_FillList", fillCallback, &callbacks, 1);
     registry.registerIntFunction("IGI_SDK_GetList", getCallback, &callbacks, 1);
     registry.registerFunction("IGI_SDK_SetList", setCallback, &callbacks, 2);

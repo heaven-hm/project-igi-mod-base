@@ -39,11 +39,9 @@ constexpr std::array kWeaponLabels = {"Glock 17",   "MP5SD",        "Uzi",    "M
 // Selected weapon index and the ammo amount the user typed into the text box.
 std::size_t g_selectedWeapon = 0;
 int g_refillAmmo = 120;
-// Typed teleport coordinates and whether the player edited any of them. An
-// untouched (0,0,0) triple used to teleport the player out of the world.
-double g_teleportPos[3] = {0.0, 0.0, 0.0};
-bool g_teleportPosSet = false;
-// Send Player Position custom destination, edited through three text fields.
+// Send Player Position custom destination, edited through three text fields. The
+// separate "Move Player To Position" boxes were removed: Send Player Position and
+// its Custom Position trio is the single typed-XYZ path in the menu.
 double g_sendPos[3] = {0.0, 0.0, 0.0};
 bool g_sendPosSet = false;
 // The separate DefineHumanPlayerGeneral parameters exposed by the Human
@@ -189,30 +187,7 @@ std::vector<igi::ModMenuItemConfig> buildItems() {
          "Player",
          "PlayerTeleportTarget",
          {"No live target list"}},
-        {"player_teleport_x",
-         igi::ModMenuItemKind::Input,
-         "Position X",
-         "Player",
-         "PlayerPosX",
-         {}},
-        {"player_teleport_y",
-         igi::ModMenuItemKind::Input,
-         "Position Y",
-         "Player",
-         "PlayerPosY",
-         {}},
-        {"player_teleport_z",
-         igi::ModMenuItemKind::Input,
-         "Position Z",
-         "Player",
-         "PlayerPosZ",
-         {}},
-        {"player_teleport_apply",
-         igi::ModMenuItemKind::Action,
-         "Move Player To Position",
-         "Player",
-         "PlayerTeleportApply",
-         {}},
+
         {"landmark_target",
          igi::ModMenuItemKind::List,
          "Teleport To Level Landmark",
@@ -634,7 +609,6 @@ bool prefillTeleportCoordinates(igi::MenuConfig &config, igi::Runtime &runtime) 
     auto *game = IGI::GAME::GET();
     if (game && game != lastGame) {
         lastGame = game;
-        g_teleportPosSet = false;
         g_sendPosSet = false;
         std::fill(std::begin(g_humanParamSet), std::end(g_humanParamSet), false);
     }
@@ -664,10 +638,7 @@ bool prefillTeleportCoordinates(igi::MenuConfig &config, igi::Runtime &runtime) 
         // The boxes now hold a real position, so Apply must accept it.
         flag = true;
     };
-    const char *const kTeleportIds[3] = {"player_teleport_x", "player_teleport_y",
-                                         "player_teleport_z"};
     const char *const kSendIds[3] = {"player_send_x", "player_send_y", "player_send_z"};
-    fill(g_teleportPos, g_teleportPosSet, kTeleportIds);
     fill(g_sendPos, g_sendPosSet, kSendIds);
     // Show what humanplayer.qvm actually wrote into the live BSS, converted back
     // to the authored units. moveScale > 0 means the script has run; before that
@@ -786,41 +757,6 @@ void runModMenu(const igi::MenuConfig &config, igi::Runtime &runtime, std::size_
         (void)npc;
         (void)car;
         (void)heli;
-        return;
-    }
-    if (inRange && config.items[item].id == "player_teleport_apply") {
-        if (!g_teleportPosSet) {
-            igi::log(igi::LogLevel::Warning,
-                     "teleport rejected: set at least one X/Y/Z coordinate first");
-            return;
-        }
-        const bool placed = igi::teleportPlayerToPosition(
-            runtime, {g_teleportPos[0], g_teleportPos[1], g_teleportPos[2]});
-        igi::log(placed ? igi::LogLevel::Info : igi::LogLevel::Warning,
-                 placed ? "player moved to the typed position"
-                        : "teleport rejected: the live player was unavailable");
-        return;
-    }
-    if (inRange && config.items[item].id.starts_with("player_teleport_") &&
-        config.items[item].id != "player_teleport_target" &&
-        config.items[item].id != "player_teleport_apply") {
-        const std::string typed(value);
-        char *end = nullptr;
-        const double coordinate = std::strtod(typed.c_str(), &end);
-        if (end == typed.c_str() || *end != '\0') {
-            igi::log(igi::LogLevel::Warning,
-                     "teleport coordinate rejected: '" + std::string(value) + "' is not a number");
-            return;
-        }
-        if (config.items[item].id == "player_teleport_x")
-            g_teleportPos[0] = coordinate;
-        else if (config.items[item].id == "player_teleport_y")
-            g_teleportPos[1] = coordinate;
-        else
-            g_teleportPos[2] = coordinate;
-        g_teleportPosSet = true;
-        igi::log(igi::LogLevel::Info, "teleport " + std::string(config.items[item].id) +
-                                          " set to " + std::to_string(coordinate));
         return;
     }
     if (inRange && config.items[item].id.starts_with("player_send_") &&
