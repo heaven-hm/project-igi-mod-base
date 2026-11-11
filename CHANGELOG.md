@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.5.3 — Teleport crash on id-less objects and typed XYZ unit consistency
+
+- The game crashed teleporting to target #142191460 - an address-derived key for
+  a task with no script id (dropped gun / vehicle part class). The probe
+  succeeded and the game died right after. The merged picker now admits only
+  script-identified targets (ids < 4096, plus the Level Start key), and the
+  teleport action refuses address-keyed targets with a clear log line.
+- Typed XYZ could mix units across axes: X/Y were edited in metres while Z held
+  the previous world-units value, so the ground probe correctly refused
+  (requested point far below terrain). The destination is now stored in world
+  units internally; the boxes display it in the selected unit, edits convert
+  into world units, a unit switch only re-scales the display, and Apply moves
+  without re-converting. User edits are kept across refreshes (the old prefill
+  overwrote them every frame).
+
+
 ## 0.5.2 — Two teleport paths: one picker, one typed XYZ with units
 
 - The Player section had three pickers for the same move (Teleport To Target,

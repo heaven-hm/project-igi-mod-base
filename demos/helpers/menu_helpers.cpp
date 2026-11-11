@@ -1693,8 +1693,15 @@ bool refreshLiveTargetOptions(MenuConfig &config, Runtime &runtime) {
             const bool duplicate = std::any_of(
                 teleportTargets.begin(), teleportTargets.end(),
                 [&target](const LiveTarget &existing) { return existing.taskId == target.taskId; });
-            if (!duplicate)
-                teleportTargets.push_back(target);
+            if (duplicate)
+                continue;
+            // Teleporting crashed on address-keyed tasks: tasks without a
+            // script id (dropped guns, vehicle parts) are not safe positions.
+            // Only script-identified targets enter the picker; Level Start keeps
+            // its special key.
+            if (target.taskId >= 4096 && target.taskId != kLevelStartTargetId)
+                continue;
+            teleportTargets.push_back(target);
         }
     };
     appendTargets(entities.npcTargets());
@@ -1864,6 +1871,9 @@ void executeMenuNativeAction(const MenuConfig &config, Runtime &runtime, std::si
                 log(LogLevel::Warning,
                     "teleport rejected: the level start position is not available yet");
             }
+        } else if (selected >= 4096 && selected != kLevelStartTargetId) {
+            log(LogLevel::Warning,
+                "teleport rejected: the selected object has no world position id");
         } else if (selected < 0) {
             log(LogLevel::Warning, "teleport rejected: pick a live target first");
         } else if (teleportPlayerToTarget(runtime, selected)) {

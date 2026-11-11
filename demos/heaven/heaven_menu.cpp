@@ -56,8 +56,9 @@ constexpr std::array<const char *, kHumanParamCount> kHumanParamIds = {
     "human_air_speed",  "human_damage",     "human_fence_damage"};
 int g_humanParamValue[kHumanParamCount] = {100, 65, 50, 65, 300, 100};
 bool g_humanParamSet[kHumanParamCount] = {};
-// Typed teleport destination and its unit. The boxes prefill from the live
-// player position each level, converted to the selected unit.
+// Typed teleport destination in the game's WORLD UNITS (the internal truth; the
+// boxes display it in the selected unit). One unit for all three axes, so a
+// metres Z can never mix with a world-units X.
 std::array<double, 3> g_teleportPos = {0.0, 0.0, 0.0};
 bool g_teleportPosSet = false;
 bool g_teleportUnitsMetres = true;
@@ -609,15 +610,20 @@ namespace {
 // selected unit (metres by default, or the native world units). Positions are
 // world units or metres; Euler is for rotations, not positions.
 bool prefillTeleportCoordinates(igi::MenuConfig &config, igi::Runtime &runtime) {
-    std::array<double, 3> position{};
-    if (!igi::readPlayerPosition(runtime, position))
-        return false;
+    // Seed the world-unit destination from the live player once per level; after
+    // a user edit the typed values are kept and only re-displayed in the
+    // selected unit.
+    if (!g_teleportPosSet) {
+        std::array<double, 3> position{};
+        if (!igi::readPlayerPosition(runtime, position))
+            return false;
+        g_teleportPos = position;
+    }
     const double unitScale = g_teleportUnitsMetres ? 1.0 / 4096.0 : 1.0;
     bool changed = false;
     const char *const kIds[3] = {"teleport_x", "teleport_y", "teleport_z"};
     for (std::size_t axis = 0; axis < 3; ++axis) {
-        g_teleportPos[axis] = position[axis];
-        const double display = position[axis] * unitScale;
+        const double display = g_teleportPos[axis] * unitScale;
         for (auto &item : config.items) {
             if (item.id != kIds[axis])
                 continue;
@@ -630,8 +636,6 @@ bool prefillTeleportCoordinates(igi::MenuConfig &config, igi::Runtime &runtime) 
             }
         }
     }
-    // A unit switch re-scales the same live position on the next refresh.
-    g_teleportPosSet = false;
     return changed;
 }
 
@@ -770,9 +774,9 @@ void runModMenu(const igi::MenuConfig &config, igi::Runtime &runtime, std::size_
         return;
     }
     if (inRange && config.items[item].id == "teleport_units") {
+        // The stored position stays in world units; only the display converts.
         g_teleportUnitsMetres = value == "Metres";
-        // Re-scale the boxes to the new unit on the next refresh.
-        g_teleportPosSet = false;
+        (void)prefillTeleportCoordinates(const_cast<igi::MenuConfig &>(config), runtime);
         igi::log(igi::LogLevel::Info,
                  std::string("teleport position units: ") +
                      (g_teleportUnitsMetres ? "metres (4096 units each)"
@@ -790,12 +794,15 @@ void runModMenu(const igi::MenuConfig &config, igi::Runtime &runtime, std::size_
                      "teleport coordinate rejected: '" + text + "' is not a number");
             return;
         }
+        // The box is in the selected unit; store world units so the axes can
+        // never mix units.
+        const double worldUnits = g_teleportUnitsMetres ? coordinate * 4096.0 : coordinate;
         if (config.items[item].id == "teleport_x")
-            g_teleportPos[0] = coordinate;
+            g_teleportPos[0] = worldUnits;
         else if (config.items[item].id == "teleport_y")
-            g_teleportPos[1] = coordinate;
+            g_teleportPos[1] = worldUnits;
         else
-            g_teleportPos[2] = coordinate;
+            g_teleportPos[2] = worldUnits;
         g_teleportPosSet = true;
         igi::log(igi::LogLevel::Info,
                  "teleport " +
@@ -809,12 +816,7 @@ void runModMenu(const igi::MenuConfig &config, igi::Runtime &runtime, std::size_
     if (inRange && config.items[item].id == "teleport_apply") {
         // Option 2: typed XYZ. Metres convert to the game's world units before
         // the move; the ground probe keeps the body above the terrain.
-        constexpr double kMetreUnits = 4096.0;
-        std::array<double, 3> position = g_teleportPos;
-        if (g_teleportUnitsMetres)
-            for (double &axis : position)
-                axis *= kMetreUnits;
-        const bool placed = igi::teleportPlayerToPosition(runtime, position);
+        const bool placed = igi::teleportPlayerToPosition(runtime, g_teleportPos);
         igi::log(placed ? igi::LogLevel::Info : igi::LogLevel::Warning,
                  placed ? "player moved to the typed position"
                         : "teleport rejected: the live player was unavailable");

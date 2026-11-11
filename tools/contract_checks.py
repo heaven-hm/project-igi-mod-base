@@ -136,6 +136,23 @@ def check_heaven_surface() -> int:
         "the ImGui Apply must send the display string like the QVM ListBox does"
     )
     assert "inputSampleValues" in heaven, "samples must derive from the qvm baseline"
+    # Teleport crash guard: address-keyed tasks (id-less heap objects such as
+    # dropped guns and vehicle parts) crashed the teleport; only script-identified
+    # targets enter the picker and the action refuses them.
+    helpers = _read("demos/helpers/menu_helpers.cpp")
+    assert "not safe positions" in helpers and "kLevelStartTargetId" in helpers, (
+        "the teleport picker must exclude id-less heap tasks"
+    )
+    assert "the selected object has no world position id" in helpers, (
+        "the teleport action must refuse address-keyed targets"
+    )
+    # The typed XYZ is stored in world units, so the axes can never mix units.
+    assert "coordinate * 4096.0 : coordinate" in heaven, (
+        "typed XYZ edits must convert the selected unit into stored world units"
+    )
+    assert "teleportPlayerToPosition(runtime, g_teleportPos)" in heaven, (
+        "Apply must use the stored world-unit position without re-converting"
+    )
     assert "read back" in helpers and "human physics live" in helpers, (
         "every human write must be verified with a live read-back"
     )
