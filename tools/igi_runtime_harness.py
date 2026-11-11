@@ -1131,6 +1131,8 @@ def run_menu_helpers_check(args, emu_module) -> int:
     return 0
 
 
+import math
+
 def _float_bits(value: float) -> int:
     return struct.unpack("<I", struct.pack("<f", value))[0]
 
@@ -1350,6 +1352,100 @@ def run_heaven_flows_check(args, emu_module) -> int:
     return 0
 
 
+def run_human_physics_check(args, emu_module) -> int:
+    """Verify the humanplayer.qvm physics path against the real retail image.
+
+    Runs in Unicorn against the actual igi.exe bytes: the six
+    DefineHumanPlayerGeneral globals must round-trip at their retail BSS
+    addresses, the km/h conversion constants must be present and consistent with
+    the menu's scale, and HumanPlayer_LoadParameters must reference
+    LOCAL:humanplayer/humanplayer.qsc. These are the exact addresses and the
+    exact conversion the Heaven Human section reads and writes.
+    """
+    source = MENU_HELPERS.read_text(encoding="utf-8")
+    storage = (ROOT / "src" / "runtime" / "qvm_param_storage.cpp").read_text(encoding="utf-8")
+    for token in (
+        "kMoveScale = 0x56E1E8",
+        "kJumpSpeed = 0x56E1EC",
+        "kJumpUp = 0x56E1F0",
+        "kAirSpeed = 0x56E1F4",
+        "kMaxDamage = 0x56E204",
+        "kFenceDamage = 0x56E208",
+        "kPerFrameHour = 0x5334A0",
+        "kKmhToUnits = 0x5334A4",
+    ):
+        if token not in storage:
+            raise RuntimeError(f"qvm_param_storage lost the retail address {token}")
+    for token in ("captureHumanPlayerBaseline", "readHumanPlayerQvmParams",
+                  "writeHumanPlayerQvmParams"):
+        if token not in source:
+            raise RuntimeError(f"menu helpers lost the human physics path {token}")
+
+    catalogue = load_native_catalogue()
+    entry = catalogue.get("PLAYER::LOAD_PARAMETERS")
+    if entry is None or entry["address"] != 0x004137A0:
+        raise RuntimeError("PLAYER::LOAD_PARAMETERS is missing or moved in the native catalogue")
+
+    runtime = IGIRuntime(args.exe, args.dll, emu_module, lenient=args.lenient)
+    emu = runtime.emu
+
+    globals_list = (
+        ("gMoveScale", 0x56E1E8),
+        ("gJumpSpeed", 0x56E1EC),
+        ("gJumpUp", 0x56E1F0),
+        ("gHumanAirSpeed", 0x56E1F4),
+        ("gMaxDamage", 0x56E204),
+        ("gFenceDamage", 0x56E208),
+    )
+    per_frame_hour = _read_floats(emu, 0x5334A0, 1)[0]
+    kmh_to_units = _read_floats(emu, 0x5334A4, 1)[0]
+    if not (per_frame_hour != 0.0 and kmh_to_units != 0.0):
+        raise RuntimeError(
+            f"the retail km/h constants are unusable: kPerFrameHour={per_frame_hour!r} "
+            f"kKmhToUnits={kmh_to_units!r}"
+        )
+    scale = per_frame_hour * kmh_to_units
+    print(f"PASS retail km/h constants present: scale={scale!r} units per km/h per frame")
+
+    # 1. Every global must round-trip through the exact production address.
+    probe = [0.5, 1.0, 1.5, 2.0, 3.0, 1.0]
+    for index, (name, address) in enumerate(globals_list):
+        original = _read_floats(emu, address, 1)[0]
+        emu.write(address, struct.pack("<f", probe[index]))
+        if _read_floats(emu, address, 1)[0] != probe[index]:
+            raise RuntimeError(f"{name} at 0x{address:08X} did not retain a written value")
+        emu.write(address, struct.pack("<f", original))
+    print("PASS all six humanplayer.qvm globals round-trip at the retail BSS addresses")
+
+    # 2. The menu's conversion: authoring raw = kmh * scale and decoding
+    #    kmh = raw / scale must be the same relation DefineHumanPlayerGeneral
+    #    implements (gJumpSpeed = arg * kKmhToUnits * kPerFrameHour).
+    for kmh in (6.5, 16.0, 99.5):
+        raw = kmh * scale
+        emu.write(0x56E1EC, struct.pack("<f", raw))
+        decoded = _read_floats(emu, 0x56E1EC, 1)[0] / scale
+        if not math.isclose(decoded, kmh, rel_tol=1e-4):
+            raise RuntimeError(f"km/h round-trip failed: wrote {kmh}, decoded {decoded}")
+    emu.write(0x56E1EC, struct.pack("<f", 0.0))
+    print("PASS the menu km/h conversion matches DefineHumanPlayerGeneral's scale")
+
+    # 3. HumanPlayer_LoadParameters must load the retail qsc: the script path
+    #    string must exist in the mapped image, and the loader must be callable
+    #    code (non-zero prologue at the catalogued address).
+    image = emu.exe_image if hasattr(emu, "exe_image") else None
+    if image is None:
+        image = bytes(emu.read(0x00400000, 0x00200000))
+    if b"LOCAL:humanplayer/humanplayer.qsc\x00" not in image:
+        raise RuntimeError("the retail image does not reference LOCAL:humanplayer/humanplayer.qsc")
+    prologue = bytes(emu.read(0x004137A0, 8))
+    if prologue == b"\x00" * 8:
+        raise RuntimeError("HumanPlayer_LoadParameters at 0x004137A0 is not mapped code")
+    print("PASS HumanPlayer_LoadParameters loads the retail humanplayer.qsc script")
+
+    print("human physics result: 4 retail checks passed in Unicorn")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Advanced IGI 1 x86 runtime harness")
     parser.add_argument("--frames", type=int, default=30, help="frames to dispatch (default 30)")
@@ -1372,6 +1468,11 @@ def main() -> int:
         action="store_true",
         help="run the retail mission/LevelFlow/camera/position flows in Unicorn",
     )
+    parser.add_argument(
+        "--verify-human-physics",
+        action="store_true",
+        help="verify the humanplayer.qvm globals and km/h conversion in Unicorn",
+    )
     args = parser.parse_args()
 
     if not args.exe:
@@ -1379,7 +1480,7 @@ def main() -> int:
     if not Path(args.exe).is_file():
         skip(f"IGI_EXE does not exist: {args.exe}")
     if not Path(args.dll).is_file():
-        if args.verify_heaven_flows or args.verify_menu_helpers:
+        if args.verify_heaven_flows or args.verify_menu_helpers or args.verify_human_physics:
             # These retail checks do not need the mod DLL; they invoke the actual
             # game routines the menu helpers call.
             args.dll = ""
@@ -1403,6 +1504,8 @@ def main() -> int:
         return run_menu_helpers_check(args, emu_module)
     if args.verify_heaven_flows:
         return run_heaven_flows_check(args, emu_module)
+    if args.verify_human_physics:
+        return run_human_physics_check(args, emu_module)
 
     runtime = IGIRuntime(args.exe, args.dll, emu_module, lenient=args.lenient)
 

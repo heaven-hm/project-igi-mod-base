@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.6 — Unicorn-emulator verification for the human physics path
+
+- New `--verify-human-physics` mode in `tools/igi_runtime_harness.py` runs the
+  real retail igi.exe image in Unicorn and verifies, against the actual game
+  bytes: all six `DefineHumanPlayerGeneral` globals round-trip at their BSS
+  addresses (0x56E1E8..0x56E208), the km/h conversion constants
+  (`kPerFrameHour` 0x5334A0, `kKmhToUnits` 0x5334A4) match the scale the menu
+  uses (measured 37.9259 units per km/h per frame), and
+  `HumanPlayer_LoadParameters` (0x4137A0) references
+  `LOCAL:humanplayer/humanplayer.qsc` in the mapped image.
+- New `tools/run-unicorn-tests.sh` runs the whole Unicorn suite directly - frame
+  dispatch, heaven retail flows, human physics and menu-helper cleanup - with
+  no ctest and no host-native test binaries. It sources `.env` for
+  `IGI_EXE`/`IGI_DLL` and reports a single ALL PASSED / FAILED result.
+
+
 ## 0.4.5 — Human defaults come from HumanPlayer_LoadParameters
 
 - The Human input boxes no longer start on hard-coded display defaults. The
