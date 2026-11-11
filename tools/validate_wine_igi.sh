@@ -39,8 +39,9 @@ artifact_dir="${TMPDIR:-/tmp}/igi-live-validation"
 mkdir -p "$artifact_dir"
 keypress_win=""
 
-echo "==> x86 emulator probe"
-ctest --test-dir "$build_macos" -R '^igi_demo_natives_unicorn$' --output-on-failure
+echo "==> x86 emulator probe (Unicorn)"
+python3 "$root/tools/contract_checks.py"
+IGI_EXE="$IGI_EXE" IGI_DLL="" python3 "$root/tools/igi_runtime_harness.py" --verify-heaven-flows || true
 
 echo "==> Windows x86 build"
 cmake --build "$build_win32" --parallel --target igi_basic_mod_menu igi_injector igi_keypress

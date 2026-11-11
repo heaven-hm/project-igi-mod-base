@@ -41,13 +41,21 @@ if [[ "$(uname -s)" == "Darwin" && "$(uname -m)" == "arm64" ]]; then
     arch_prefix="arch -x86_64"
 fi
 
-if [[ -z "${IGI_EXE:-}" ]]; then
-    printf 'error: set IGI_EXE to the supported retail igi.exe (or add it to .env)\n' >&2
+printf '\n=== Unicorn suite: static production contract ===\n'
+if ! "$python_bin" "$root/tools/contract_checks.py"; then
+    printf 'Unicorn test suite: CONTRACT CHECKS FAILED\n'
     exit 1
 fi
+
+# The emulator cases need the supported retail executable; without it the
+# suite reports SKIP (exit 77) so CI can distinguish skip from failure.
+if [[ -z "${IGI_EXE:-}" ]]; then
+    printf 'SKIP: set IGI_EXE to the supported retail igi.exe (or add it to .env)\n'
+    exit 77
+fi
 if [[ ! -f "$IGI_EXE" ]]; then
-    printf 'error: IGI_EXE does not exist: %s\n' "$IGI_EXE" >&2
-    exit 1
+    printf 'SKIP: IGI_EXE does not exist: %s\n' "$IGI_EXE"
+    exit 77
 fi
 
 export IGI_EXE

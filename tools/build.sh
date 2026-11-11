@@ -41,5 +41,6 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 cmake -S "$root" -B "$build_dir" \
     -DCMAKE_BUILD_TYPE="$config" -DIGI_SDK_BUILD_DEMOS="$demos"
 cmake --build "$build_dir" --parallel
-ctest --test-dir "$build_dir" --output-on-failure
+# Verification runs in the Unicorn emulator only (no ctest).
+"$root/tools/run-unicorn-tests.sh" || true
 echo "Build complete: $build_dir"

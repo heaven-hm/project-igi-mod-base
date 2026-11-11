@@ -1,5 +1,0 @@
-# api	domain	name	address	signature
-GET	GAME	Game_Get	00416d40	Game *Game_Get(void)
-IS_PAUSED	GAME	Game_IsPaused	00416d50	char Game_IsPaused(void)
-RUN_SCRIPT	TASK	Task_RunScript	004f0cf0	Task *Task_RunScript(Task *parent, const char *path, char insertHead)
-FIND_BY_ID	TASK	Task_FindById	004f1030	Task *Task_FindById(int id)

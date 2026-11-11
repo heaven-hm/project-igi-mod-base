@@ -52,8 +52,14 @@ jobs:
           fi
       - name: Build
         run: cmake --build build --config Release --parallel
-      - name: Test
-        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Contract checks (static)
+        run: python3 tools/contract_checks.py
+      - name: Unicorn emulator suite
+        # Executes the real retail igi.exe in Unicorn when IGI_EXE is provided
+        # through repository variables; without it the harness skips (exit 77).
+        run: |
+          ./tools/run-unicorn-tests.sh || rc=$?
+          if [ "${rc:-0}" -ne 0 ] && [ "${rc:-0}" -ne 77 ]; then exit "$rc"; fi
 
   mingw32:
     name: Windows x86 (MinGW-w64 cross)

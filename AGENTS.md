@@ -31,7 +31,7 @@ Keep the public mod API in `src/mod_base`, common implementation in `src/{config
 python3 tools/format_cpp.py --check
 cmake -S . -B build-macos-verify -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 cmake --build build-macos-verify --parallel
-ctest --test-dir build-macos-verify --output-on-failure
+tools/run-unicorn-tests.sh
 ```
 
 For a Windows DLL, build with `tools/build-win32-dll.sh --release --target <target>` and use paths supplied through environment variables or command-line arguments for the live-game checks.
